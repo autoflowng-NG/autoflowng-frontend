@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Search, Zap, Plug, Globe, Database, MessageSquare, Star, CheckCircle2, ChevronRight, Filter } from "lucide-react";
-import { api } from "../lib/api";
+import api from "../lib/api";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 

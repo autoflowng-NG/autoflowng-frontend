@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Zap, MousePointerClick, ChevronRight, Copy, Check } from "lucide-react";
-import { api } from "../lib/api";
+import api from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";

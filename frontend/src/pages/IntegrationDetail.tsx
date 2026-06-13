@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, Copy, Zap, Play, Eye, EyeOff, RefreshCw } from "lucide-react";
-import { api } from "../lib/api";
+import api from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";

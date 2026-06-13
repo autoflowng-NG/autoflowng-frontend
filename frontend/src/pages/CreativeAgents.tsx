@@ -7,8 +7,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import PageTransition from '../components/PageTransition';
-import Reveal         from '../components/Reveal';
+import { PageTransition } from '../components/PageTransition';
+import { Reveal } from '../components/Reveal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

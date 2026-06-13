@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Webhook, Copy, Check, RefreshCw, Play, ArrowRight, Clock, Eye, Loader2 } from "lucide-react";
-import { api } from "../lib/api";
+import api from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
