@@ -1,31 +1,33 @@
-/**
- * AutoFlowNG — Landing Page
- *
- * The marketing landing page has been moved to the /landing directory
- * (Next.js 16 with the new UI design).
- *
- * This file is kept as a placeholder. The Vite SPA (this frontend/)
- * handles authenticated app routes only. Unauthenticated users at "/"
- * are redirected to the Login page.
- *
- * To run the new landing page:
- *   cd landing && npm run dev
- *
- * Deploy landing/ as a separate Vercel project pointing to your domain root (autoflowng.com),
- * and frontend/ as the app subdomain (app.autoflowng.com).
- */
-
-import { useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { Navigation } from "@/components/landing/navigation";
+import { HeroSection } from "@/components/landing/hero-section";
+import { FeaturesSection } from "@/components/landing/features-section";
+import { HowItWorksSection } from "@/components/landing/how-it-works-section";
+import { InfrastructureSection } from "@/components/landing/infrastructure-section";
+import { MetricsSection } from "@/components/landing/metrics-section";
+import { IntegrationsSection } from "@/components/landing/integrations-section";
+import { SecuritySection } from "@/components/landing/security-section";
+import { DevelopersSection } from "@/components/landing/developers-section";
+import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { PricingSection } from "@/components/landing/pricing-section";
+import { CtaSection } from "@/components/landing/cta-section";
+import { FooterSection } from "@/components/landing/footer-section";
 
 export default function Landing() {
-  const [, navigate] = useLocation();
-
-  useEffect(() => {
-    // In the SPA context, unauthenticated root visits go to login.
-    // The actual marketing landing page lives in /landing (Next.js).
-    navigate('/login', { replace: true });
-  }, [navigate]);
-
-  return null;
+  return (
+    <main className="relative min-h-screen overflow-x-hidden bg-background">
+      <Navigation />
+      <HeroSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <InfrastructureSection />
+      <MetricsSection />
+      <IntegrationsSection />
+      <SecuritySection />
+      <DevelopersSection />
+      <TestimonialsSection />
+      <PricingSection />
+      <CtaSection />
+      <FooterSection />
+    </main>
+  );
 }
