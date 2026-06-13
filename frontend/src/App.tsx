@@ -1,6 +1,11 @@
 import { lazy, Suspense } from "react";
+import { Component, ReactNode } from "react";
+class LandingErrorBoundary extends Component<{children:ReactNode},{hasError:boolean}> {
+  state={hasError:false};
+  static getDerivedStateFromError(){return{hasError:true};}
+  render(){return this.state.hasError?<div className="text-white p-8">Error loading page. <a href="/" className="text-amber-500">Reload</a></div>:this.props.children;}
+}
 /**
-import { LandingErrorBoundary } from "./components/LandingErrorBoundary";
  * AutoFlowNG — App Router (Phase 13B)
  *
  * Phase 6.5 additions:
