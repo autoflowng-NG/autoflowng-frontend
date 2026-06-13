@@ -96,7 +96,7 @@ export default function Plans() {
         setGeo(geoData);
 
         // Fetch pricing for detected region
-        const planRes = await fetch(\`/api/billing/plans?region=\${geoData.country_code}\`).catch(() => null);
+        const planRes = await fetch(`/api/billing/plans?region=${geoData.country_code}`).catch(() => null);
         if (planRes?.ok) {
           const planData = await planRes.json();
           if (planData?.plans) {
