@@ -23,7 +23,7 @@ import { LandingErrorBoundary } from "./components/LandingErrorBoundary";
  */
 
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { hasRole, type PlatformRole } from './lib/rbac';
 import { CriticalAlertToaster } from './components/CriticalAlertToaster';
