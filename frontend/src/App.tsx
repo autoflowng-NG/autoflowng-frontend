@@ -1,4 +1,6 @@
 /**
+import { lazy, Suspense } from "react";
+import { LandingErrorBoundary } from "./components/LandingErrorBoundary";
  * AutoFlowNG — App Router (Phase 13B)
  *
  * Phase 6.5 additions:
@@ -20,8 +22,7 @@
  * All Phase 1–12.5 routes preserved unchanged.
  */
 
-import { lazy, Suspense }
-import { LandingErrorBoundary } from "./components/LandingErrorBoundary"; from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
