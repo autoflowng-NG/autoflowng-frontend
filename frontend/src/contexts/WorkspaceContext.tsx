@@ -73,7 +73,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
 
 const API = (
   import.meta.env?.VITE_API_URL ||
-  'https://autoflowng-backend-production.up.railway.app'
+  'https://autoflowng-backend-production-dfa9.up.railway.app'
 ).replace(/\/$/, '');
 
 function authHeaders(): Record<string, string> {

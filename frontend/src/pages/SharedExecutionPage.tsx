@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import { RefreshCw, Clock, GitBranch, Zap, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { formatDuration } from "../hooks/useExecutionStream";
 
-const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production.up.railway.app")
+const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production-dfa9.up.railway.app")
   .replace(/\/$/, "");
 
 const STATUS_COLOR: Record<string, string> = {

@@ -28,7 +28,7 @@ import {
 /* ── Constants ──────────────────────────────────────────────────────── */
 const WS_BASE_URL = (
   import.meta.env?.VITE_API_URL ||
-  "https://autoflowng-backend-production.up.railway.app"
+  "https://autoflowng-backend-production-dfa9.up.railway.app"
 )
   .replace(/^https?/, (p: string) => (p === "https" ? "wss" : "ws"))
   .replace(/\/$/, "");

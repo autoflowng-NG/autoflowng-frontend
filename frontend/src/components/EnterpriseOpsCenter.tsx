@@ -21,7 +21,7 @@ import { useWorkspaceSwitch } from "../hooks/useOrgWorkflows";
 import { useAuth } from "../contexts/AuthContext";
 import { HEALTH_TIER_COLOR } from "../contexts/ExecutionHistoryContext";
 
-const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production.up.railway.app")
+const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production-dfa9.up.railway.app")
   .replace(/\/$/, "");
 
 async function apiFetch(path: string, token: string, opts: RequestInit = {}) {

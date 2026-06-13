@@ -8,7 +8,7 @@
  *   - adminAPI: Preserved for backward compatibility, now uses JWT auth
  */
 
-const BASE_URL = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production.up.railway.app").replace(/\/$/, "");
+const BASE_URL = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production-dfa9.up.railway.app").replace(/\/$/, "");
 const TIMEOUT_MS = 30_000;
 const TOKEN_KEY = "autoflowng_token";
 

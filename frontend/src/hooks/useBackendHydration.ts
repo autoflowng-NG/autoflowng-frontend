@@ -22,7 +22,7 @@ import { useWebSocketContext } from "../contexts/WebSocketContext";
 import { useExecutionHistory }  from "../contexts/ExecutionHistoryContext";
 import { useReplayBuffer }      from "./useReplayBuffer";
 
-const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production.up.railway.app")
+const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production-dfa9.up.railway.app")
   .replace(/\/$/, "");
 
 async function apiFetch(path: string, token: string) {
