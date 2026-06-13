@@ -139,7 +139,8 @@ function WorkflowBuilderWrapper() {
 
 export default function App() {
   return (
-    <WorkspaceProvider>
+    <AuthProvider>
+        <WorkspaceProvider>
     <BrowserRouter>
       <CriticalAlertToaster />
       <Suspense fallback={<Spinner />}>
@@ -263,5 +264,6 @@ export default function App() {
       </Suspense>
     </BrowserRouter>
     </WorkspaceProvider>
+      </AuthProvider>
   );
 }
