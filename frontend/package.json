@@ -1,7 +1,7 @@
 {
   "name": "autoflowng-frontend",
   "version": "38.0.0",
-  "description": "AutoFlowNG React SPA \u2014 Vite, TypeScript, TailwindCSS, shadcn/ui",
+  "description": "AutoFlowNG React SPA — Vite, TypeScript, TailwindCSS, shadcn/ui",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -45,6 +45,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.1",
     "framer-motion": "^11.15.0",
+    "i18next": "^23.11.0",
     "input-otp": "^1.4.1",
     "lucide-react": "^0.468.0",
     "next-themes": "^0.4.3",
@@ -52,6 +53,7 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.1",
+    "react-i18next": "^14.1.2",
     "react-resizable-panels": "^2.1.7",
     "react-router-dom": "^6.28.0",
     "recharts": "^2.14.1",
@@ -59,9 +61,8 @@
     "tailwind-merge": "^2.5.5",
     "tw-animate-css": "^1.2.5",
     "vaul": "^1.1.1",
-    "zod": "^3.24.1",
-    "i18next": "^23.11.0",
-    "react-i18next": "^14.1.2"
+    "wouter": "^3.10.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
