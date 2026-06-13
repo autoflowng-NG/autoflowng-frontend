@@ -25,6 +25,7 @@ import { LandingErrorBoundary } from "./components/LandingErrorBoundary";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 import { hasRole, type PlatformRole } from './lib/rbac';
 import { CriticalAlertToaster } from './components/CriticalAlertToaster';
 
@@ -140,6 +141,7 @@ function WorkflowBuilderWrapper() {
 export default function App() {
   return (
     <AuthProvider>
+        <WebSocketProvider>
         <WorkspaceProvider>
     <BrowserRouter>
       <CriticalAlertToaster />
@@ -264,6 +266,7 @@ export default function App() {
       </Suspense>
     </BrowserRouter>
     </WorkspaceProvider>
+      </WebSocketProvider>
       </AuthProvider>
   );
 }
