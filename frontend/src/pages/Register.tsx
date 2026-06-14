@@ -110,7 +110,7 @@ export default function Register() {
 
           <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>
             Already have an account?{" "}
-            <button onClick={() => nav("/login")} data-testid="link-login" style={{ background: "none", border: "none", color: "#38BDF8", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0 }}>
+            <button onClick={() => nav("/login")} type="button" data-testid="link-login" style={{ background: "none", border: "none", color: "#38BDF8", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0 }}>
               Sign in
             </button>
           </div>

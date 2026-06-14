@@ -82,7 +82,7 @@ export default function Login() {
           </form>
           <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>
             Don't have an account?{" "}
-            <button onClick={() => nav("/register")} data-testid="link-register" style={{ background: "none", border: "none", color: "#00C896", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0 }}>
+            <button onClick={() => nav("/register")} type="button" data-testid="link-register" style={{ background: "none", border: "none", color: "#00C896", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0 }}>
               Sign up
             </button>
           </div>
