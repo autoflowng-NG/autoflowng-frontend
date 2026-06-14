@@ -7,17 +7,16 @@ const integrations = [
   { name: "Instagram", category: "Social", color: "#E1306C", icon: "https://cdn.simpleicons.org/instagram" },
   { name: "TikTok", category: "Social", color: "#FFFFFF", icon: "https://cdn.simpleicons.org/tiktok/FFFFFF" },
   { name: "X (Twitter)", category: "Social", color: "#FFFFFF", icon: "https://cdn.simpleicons.org/x/FFFFFF" },
-  { name: "LinkedIn", category: "Social", color: "#0A66C2", icon: "https://cdn.simpleicons.org/linkedin" },
+  { name: "LinkedIn", category: "Social", color: "#0A66C2", icon: "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/linkedin.svg" },
   { name: "WhatsApp", category: "Messaging", color: "#25D366", icon: "https://cdn.simpleicons.org/whatsapp" },
   { name: "Telegram", category: "Messaging", color: "#229ED9", icon: "https://cdn.simpleicons.org/telegram" },
   { name: "Discord", category: "Messaging", color: "#5865F2", icon: "https://cdn.simpleicons.org/discord" },
-  { name: "Slack", category: "Messaging", color: "#4A154B", icon: "https://cdn.simpleicons.org/slack" },
+  { name: "Slack", category: "Messaging", color: "#4A154B", icon: "https://cdn.jsdelivr.net/npm/simple-icons@11/icons/slack.svg" },
   { name: "Google Sheets", category: "Productivity", color: "#34A853", icon: "https://cdn.simpleicons.org/googlesheets" },
   { name: "Gmail", category: "Productivity", color: "#EA4335", icon: "https://cdn.simpleicons.org/gmail" },
   { name: "Google Drive", category: "Productivity", color: "#4285F4", icon: "https://cdn.simpleicons.org/googledrive" },
   { name: "Notion", category: "Productivity", color: "#FFFFFF", icon: "https://cdn.simpleicons.org/notion/FFFFFF" },
-  { name: "Salesforce", category: "CRM", color: "#00A1E0", icon: "https://cdn.simpleicons.org/salesforce" },
-  { name: "Webhooks", category: "Automation", color: "#00C896", icon: "https://cdn.simpleicons.org/webhooks" },
+  { name: "Salesforce", category: "CRM", color: "#00A1E0", icon: "https://cdn.jsdelivr.net/npm/simple-icons@11/icons/salesforce.svg" },
 ];
 
 export function IntegrationsSection() {
