@@ -11,7 +11,7 @@ const cspMetaPlugin = {
   transformIndexHtml(html: string): string {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' https://challenges.cloudflare.com",
+      "script-src 'self' https://challenges.cloudflare.com", "media-src 'self' https://hebbkx1anhila5yf.public.blob.vercel-storage.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "connect-src 'self' wss: https://api.paystack.co",
