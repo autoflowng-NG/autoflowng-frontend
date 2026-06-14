@@ -102,8 +102,12 @@ const MediaCloudPage = lazy(() => import('./pages/MediaCloudPage'));
 const Phase45OpsCenter = lazy(() => import('./pages/Phase45OpsCenter'));
 
 const Spinner = () => (
-  <div className="min-h-screen bg-black flex items-center justify-center">
-    <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+  <div className="min-h-screen bg-[#04060F] flex flex-col items-center justify-center gap-4">
+    <div className="relative w-12 h-12">
+      <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+      <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    </div>
+    <p className="text-xs font-mono text-muted-foreground tracking-widest uppercase">Loading</p>
   </div>
 );
 

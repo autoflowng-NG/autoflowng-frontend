@@ -11,11 +11,15 @@ import { Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
 
 interface LoginForm { email: string; password: string; }
 
+// Preload Register chunk on Login mount
+const preloadRegister = () => import("./Register");
+
 export default function Login() {
   const [, nav] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
   const [showPw, setShowPw] = useState(false);
+  React.useEffect(() => { preloadRegister(); }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
