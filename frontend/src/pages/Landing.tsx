@@ -1,8 +1,32 @@
+import { Navigation } from "@/components/landing/navigation";
+import { HeroSection } from "@/components/landing/hero-section";
+import { FeaturesSection } from "@/components/landing/features-section";
+import { HowItWorksSection } from "@/components/landing/how-it-works-section";
+import { InfrastructureSection } from "@/components/landing/infrastructure-section";
+import { MetricsSection } from "@/components/landing/metrics-section";
+import { IntegrationsSection } from "@/components/landing/integrations-section";
+import { SecuritySection } from "@/components/landing/security-section";
+import { DevelopersSection } from "@/components/landing/developers-section";
+import { PricingSection } from "@/components/landing/pricing-section";
+import { CtaSection } from "@/components/landing/cta-section";
+import { FooterSection } from "@/components/landing/footer-section";
+
 export default function Landing() {
   return (
-    <div style={{ color: "white", padding: 40, fontFamily: "monospace", background: "#040606" }}>
-      <h1 style={{ color: "#00C896" }}>AutoFlowNG</h1>
-      <p>Landing page loading...</p>
-    </div>
+    <main className="relative min-h-screen overflow-x-hidden bg-background">
+      <Navigation />
+      <HeroSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <InfrastructureSection />
+      <MetricsSection />
+      <IntegrationsSection />
+      <SecuritySection />
+        <TestimonialsSection />
+      <DevelopersSection />
+      <PricingSection />
+      <CtaSection />
+      <FooterSection />
+    </main>
   );
 }

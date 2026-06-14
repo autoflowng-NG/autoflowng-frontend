@@ -7,14 +7,14 @@ const PLAN_DEFS = [
     id: "basic",
     name: "Basic",
     color: "#38BDF8",
-    features: ["20 active workflows", "25K events/month", "10 video jobs/month", "3 AI agents", "Email support"],
+    features: ["20 active workflows", "25K events/month", "5 video jobs/month", "3 AI agents", "Email support"],
     icon: "⚡",
   },
   {
     id: "pro",
     name: "Pro",
     color: "#00C896",
-    features: ["Unlimited workflows", "100K events/month", "30 video jobs/month", "10 AI agents", "Priority support", "No watermark"],
+    features: ["Unlimited workflows", "100K events/month", "10 video jobs/month", "10 AI agents", "Priority support", "No watermark"],
     icon: "🚀",
     popular: true,
   },
@@ -22,7 +22,7 @@ const PLAN_DEFS = [
     id: "business",
     name: "Business",
     color: "#A78BFA",
-    features: ["Unlimited everything", "1M events/month", "60 video jobs/month", "Unlimited AI agents", "24/7 support", "SLA guarantee", "No watermark"],
+    features: ["Unlimited everything", "1M events/month", "15 video jobs/month", "Unlimited AI agents", "24/7 support", "SLA guarantee", "No watermark"],
     icon: "💎",
   },
 ];
@@ -145,7 +145,7 @@ export function PricingSection() {
           {PLAN_DEFS.map((plan, i) => (
             <div
               key={plan.id}
-              className={`relative rounded-2xl border transition-all duration-700 flex flex-col ${
+              className={`relative rounded-2xl border transition-all duration-700 flex flex-col overflow-visible ${
                 plan.popular
                   ? "border-primary/40 bg-card shadow-[0_0_40px_rgba(0,200,150,0.1)]"
                   : "border-border bg-card/50 hover:border-primary/20"
@@ -200,7 +200,7 @@ export function PricingSection() {
               </div>
 
               {/* CTA */}
-              <div className="p-8 pt-0">
+              <div className="p-8 pt-0 mt-auto">
                 <button
                   onClick={() => navigate("/register")}
                   className={`w-full py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-all group ${
@@ -219,7 +219,7 @@ export function PricingSection() {
 
         {/* Footer note */}
         <p className="text-center text-xs text-muted-foreground font-mono mt-10">
-          All plans include a 7-day free trial · No credit card required
+          All plans include a 3-day free trial · No credit card required
         </p>
       </div>
     </section>

@@ -1,236 +1,71 @@
+import { useEffect, useRef, useState } from "react";
 
-import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
-
-const testimonials = [
-  {
-    quote: "Our agents handle 80% of our customer support tickets autonomously. The ROI was immediate.",
-    author: "Sarah Chen",
-    role: "CTO",
-    company: "Meridian Labs",
-    metric: { value: "80%", label: "Ticket resolution" },
-  },
-  {
-    quote: "We deployed research agents that work 24/7. They surface insights we'd never find manually.",
-    author: "Marcus Webb",
-    role: "Head of Research",
-    company: "Flux Systems",
-    metric: { value: "10x", label: "Research output" },
-  },
-  {
-    quote: "The multi-agent orchestration is incredible. Complex workflows that took weeks now run in hours.",
-    author: "Elena Rodriguez",
-    role: "VP Engineering",
-    company: "Beacon AI",
-    metric: { value: "40x", label: "Faster workflows" },
-  },
-  {
-    quote: "Security was our biggest concern. The sandboxing and audit trails gave us full confidence.",
-    author: "James Liu",
-    role: "CISO",
-    company: "Prism Analytics",
-    metric: { value: "0", label: "Security incidents" },
-  },
+const FALLBACK = [
+  { name: "Amara O.", role: "Marketing Lead", company: "Fincra", text: "AutoFlowNG cut our campaign turnaround from 3 days to 4 hours. The AI agents just handle it.", avatar: "AO" },
+  { name: "Tunde B.", role: "CTO", company: "Paystack Labs", text: "We automated our entire onboarding email sequence in one afternoon. Remarkable platform.", avatar: "TB" },
+  { name: "Chisom E.", role: "Founder", company: "CreatorStack", text: "The video production pipeline is insane. 15 videos a month, zero manual editing.", avatar: "CE" },
+  { name: "Malik R.", role: "Head of Ops", company: "Flutterwave", text: "Multi-workspace support means every team has their own automations. Game changer.", avatar: "MR" },
+  { name: "Sade A.", role: "Product Manager", company: "Interswitch", text: "Went live in 2 days. The workflow builder is genuinely intuitive.", avatar: "SA" },
+  { name: "Emeka N.", role: "DevOps Engineer", company: "Andela", text: "BullMQ integration is rock solid. Haven't had a failed job in production in weeks.", avatar: "EN" },
 ];
 
+const COLORS = ["#00DC82","#3B9EFF","#A855F7","#F59E0B","#EC4899","#00DC82"];
+
+interface Testimonial { name: string; role: string; company: string; text: string; avatar: string; }
+
 export function TestimonialsSection() {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [items, setItems] = useState<Testimonial[]>(FALLBACK);
   const [isVisible, setIsVisible] = useState(false);
-  const [direction, setDirection] = useState<"left" | "right">("right");
   const sectionRef = useRef<HTMLElement>(null);
+  const BACKEND_URL = import.meta.env.VITE_API_URL || "https://autoflowng-backend-production-dfa9.up.railway.app";
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.1 }
-    );
+    fetch(`${BACKEND_URL}/api/testimonials/approved`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.testimonials?.length) setItems(d.testimonials); })
+      .catch(() => {});
+  }, []);
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) setIsVisible(true); }, { threshold: 0.1 });
     if (sectionRef.current) observer.observe(sectionRef.current);
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDirection("right");
-      setActiveIndex((prev) => (prev + 1) % testimonials.length);
-    }, 8000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const goTo = (index: number) => {
-    setDirection(index > activeIndex ? "right" : "left");
-    setActiveIndex(index);
-  };
-
-  const goPrev = () => {
-    setDirection("left");
-    setActiveIndex((prev) => (prev - 1 + testimonials.length) % testimonials.length);
-  };
-
-  const goNext = () => {
-    setDirection("right");
-    setActiveIndex((prev) => (prev + 1) % testimonials.length);
-  };
-
-  const activeTestimonial = testimonials[activeIndex];
-
   return (
-    <section ref={sectionRef} className="relative py-32 lg:py-40 bg-foreground text-background overflow-hidden">
-      {/* ASCII background pattern */}
-      <div suppressHydrationWarning className="absolute inset-0 font-mono text-[10px] text-background/[0.02] leading-tight overflow-hidden whitespace-pre select-none">
-        {Array.from({ length: 60 }, (_, i) =>
-          Array.from({ length: 100 }, (_, j) =>
-            ((i * 73 + j * 31) % 10) > 6 ? '"' : ' '
-          ).join("")
-        ).join("\n")}
-      </div>
-
-      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-20">
-          <div>
-            <span className="inline-flex items-center gap-3 text-sm font-mono text-background/40 mb-4">
-              <span className="w-12 h-px bg-background/20" />
-              Testimonials
-            </span>
-            <h2 className={`text-4xl lg:text-5xl font-display transition-all duration-1000 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-            }`}>
-              Trusted by teams
-              <span className="text-background/40"> worldwide.</span>
-            </h2>
-          </div>
-          
-          {/* Navigation arrows */}
-          <div className="hidden lg:flex items-center gap-2">
-            <button
-              onClick={goPrev}
-              className="p-4 border border-background/20 hover:bg-background/10 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={goNext}
-              className="p-4 border border-background/20 hover:bg-background/10 transition-colors"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </div>
+    <section ref={sectionRef} className="relative py-32 overflow-hidden">
+      <div className="absolute inset-0 bg-background" />
+      <div className="relative z-10 max-w-[1200px] mx-auto px-6 lg:px-8">
+        <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+          <p className="text-xs font-mono text-primary tracking-[0.2em] uppercase mb-4">Testimonials</p>
+          <h2 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
+            Trusted by builders
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+            Teams across Africa and beyond use AutoFlowNG to move faster.
+          </p>
         </div>
-
-        {/* Main content - Split layout */}
-        <div className="grid lg:grid-cols-12 gap-12 lg:gap-20">
-          {/* Quote side */}
-          <div className="lg:col-span-7 relative">
-            {/* Large quote mark */}
-            <span className="absolute -left-4 -top-8 text-[200px] font-display text-background/5 leading-none select-none">
-              &ldquo;
-            </span>
-            
-            <div className="relative">
-              <blockquote 
-                key={activeIndex}
-                className="text-3xl lg:text-4xl xl:text-5xl font-display leading-[1.2] tracking-tight animate-fadeSlideIn"
-              >
-                {activeTestimonial.quote}
-              </blockquote>
-
-              {/* Author */}
-              <div className="mt-12 flex items-center gap-6">
-                <div className="w-14 h-14 rounded-full bg-background/10 flex items-center justify-center">
-                  <span className="font-display text-xl">
-                    {activeTestimonial.author.charAt(0)}
-                  </span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {items.map((t, i) => (
+            <div
+              key={t.name}
+              className={`bg-card/50 border border-border/50 rounded-2xl p-6 flex flex-col gap-4 transition-all duration-700 hover:border-primary/30 hover:bg-card/80 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
+              style={{ transitionDelay: `${i * 100 + 200}ms` }}
+            >
+              <p className="text-muted-foreground text-sm leading-relaxed flex-1">"{t.text}"</p>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0" style={{ background: COLORS[i % COLORS.length] }}>
+                  {t.avatar}
                 </div>
                 <div>
-                  <p className="text-lg font-medium">{activeTestimonial.author}</p>
-                  <p className="text-background/60">
-                    {activeTestimonial.role}, {activeTestimonial.company}
-                  </p>
+                  <p className="text-sm font-semibold text-foreground">{t.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{t.role} · {t.company}</p>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Metric cards side */}
-          <div className="lg:col-span-5 flex flex-col justify-center gap-6">
-            {/* Active metric - Large */}
-            <div 
-              key={`metric-${activeIndex}`}
-              className="p-10 border border-background/20 bg-background/5 animate-fadeSlideIn"
-            >
-              <span className="text-7xl lg:text-8xl font-display block mb-4">
-                {activeTestimonial.metric.value}
-              </span>
-              <span className="text-lg text-background/60">
-                {activeTestimonial.metric.label}
-              </span>
-            </div>
-
-            {/* Progress indicators */}
-            <div className="flex gap-2">
-              {testimonials.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => goTo(idx)}
-                  className="flex-1 h-1 bg-background/20 overflow-hidden"
-                >
-                  <div 
-                    className={`h-full bg-background transition-all duration-300 ${
-                      idx === activeIndex ? "w-full" : idx < activeIndex ? "w-full opacity-50" : "w-0"
-                    }`}
-                    style={idx === activeIndex ? { animation: "progress 8s linear forwards" } : {}}
-                  />
-                </button>
-              ))}
-            </div>
-
-            {/* Company list */}
-            <div className="mt-4 pt-6 border-t border-background/10">
-              <span className="text-xs font-mono text-background/30 uppercase tracking-widest block mb-4">
-                Featured companies
-              </span>
-              <div className="flex flex-wrap gap-3">
-                {testimonials.map((t, idx) => (
-                  <button
-                    key={t.company}
-                    onClick={() => goTo(idx)}
-                    className={`px-4 py-2 text-sm border transition-all ${
-                      idx === activeIndex 
-                        ? "border-background/40 text-background" 
-                        : "border-background/10 text-background/40 hover:border-background/30"
-                    }`}
-                  >
-                    {t.company}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeSlideIn {
-          from {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        .animate-fadeSlideIn {
-          animation: fadeSlideIn 0.5s ease-out forwards;
-        }
-        @keyframes progress {
-          from { width: 0%; }
-          to { width: 100%; }
-        }
-      `}</style>
     </section>
   );
 }

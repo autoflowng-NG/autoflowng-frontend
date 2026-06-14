@@ -27,8 +27,12 @@ const cspMetaPlugin = {
   },
 };
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), cspMetaPlugin],
+export default defineConfig(({ command }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(command === 'build' ? [cspMetaPlugin] : []),
+  ],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
@@ -50,4 +54,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

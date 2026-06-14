@@ -47,7 +47,7 @@ export function Navigation() {
         >
           {/* Logo */}
           <a href="#" className="flex items-center gap-2 group">
-            <img src="/autoflowng-logo.png" alt="AutoFlowNG" className={`transition-all duration-500 ${isScrolled ? "h-6" : "h-8"}`} />
+            <img src="/af-logo.svg" alt="AutoFlowNG" className={`transition-all duration-500 ${isScrolled ? "h-6 w-6" : "h-8 w-8"}`} />
             <span className={`font-display tracking-tight font-bold transition-all duration-500 ${isScrolled ? "text-lg text-primary" : "text-xl text-primary"}`}>AutoFlowNG</span>
           </a>
 
