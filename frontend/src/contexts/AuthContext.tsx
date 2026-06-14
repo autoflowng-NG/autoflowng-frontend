@@ -55,10 +55,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = await authAPI.login({ email, password });
-    tokenStore.set(data.token);
-    setUser(data.user);
-    return data;
+    try {
+      const data = await authAPI.login({ email, password });
+      tokenStore.set(data.token);
+      setUser(data.user);
+      return data;
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status;
+      const msg = err?.message || err?.response?.data?.error || "";
+
+      if (!navigator.onLine) {
+        throw new Error("No internet connection. Please check your network.");
+      } else if (status === 401 || msg.toLowerCase().includes("invalid")) {
+        throw new Error("Incorrect email or password. Please try again.");
+      } else if (status === 404) {
+        throw new Error("No account found with this email. Please sign up.");
+      } else if (status === 429) {
+        throw new Error("Too many login attempts. Please wait a few minutes.");
+      } else if (status === 403) {
+        throw new Error("Your account has been suspended. Contact support.");
+      } else if (status >= 500) {
+        throw new Error("Server error. Please try again in a moment.");
+      } else {
+        throw new Error(msg || "Login failed. Please try again.");
+      }
+    }
   }, []);
 
   const register = useCallback(async (formData: any) => {
