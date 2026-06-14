@@ -7,16 +7,16 @@ const integrations = [
   { name: "Instagram", category: "Social", color: "#E1306C", icon: "https://cdn.simpleicons.org/instagram" },
   { name: "TikTok", category: "Social", color: "#FFFFFF", icon: "https://cdn.simpleicons.org/tiktok/FFFFFF" },
   { name: "X (Twitter)", category: "Social", color: "#FFFFFF", icon: "https://cdn.simpleicons.org/x/FFFFFF" },
-  { name: "LinkedIn", category: "Social", color: "#0A66C2", icon: "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/linkedin.svg" },
+  { name: "LinkedIn", category: "Social", color: "#0A66C2", icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%230A66C2' d='M0 1.146C0 .513.526 0 1.175 0h13.65C15.474 0 16 .513 16 1.146v13.708c0 .633-.526 1.146-1.175 1.146H1.175C.526 16 0 15.487 0 14.854zm4.943 12.248V6.169H2.542v7.225zm-1.2-8.212c.837 0 1.358-.554 1.358-1.248-.015-.709-.52-1.248-1.342-1.248S2.4 3.226 2.4 3.934c0 .694.521 1.248 1.327 1.248zm4.908 8.212V9.359c0-.216.016-.432.08-.586.173-.431.568-.878 1.232-.878.869 0 1.216.662 1.216 1.634v3.865h2.401V9.25c0-2.22-1.184-3.252-2.764-3.252-1.274 0-1.845.7-2.165 1.193v.025h-.016l.016-.025V6.169h-2.4c.03.678 0 7.225 0 7.225z'/%3E%3C/svg%3E" },
   { name: "WhatsApp", category: "Messaging", color: "#25D366", icon: "https://cdn.simpleicons.org/whatsapp" },
   { name: "Telegram", category: "Messaging", color: "#229ED9", icon: "https://cdn.simpleicons.org/telegram" },
   { name: "Discord", category: "Messaging", color: "#5865F2", icon: "https://cdn.simpleicons.org/discord" },
-  { name: "Slack", category: "Messaging", color: "#4A154B", icon: "https://cdn.jsdelivr.net/npm/simple-icons@11/icons/slack.svg" },
+  { name: "Slack", category: "Messaging", color: "#4A154B", icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234A154B' d='M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z'/%3E%3C/svg%3E" },
   { name: "Google Sheets", category: "Productivity", color: "#34A853", icon: "https://cdn.simpleicons.org/googlesheets" },
   { name: "Gmail", category: "Productivity", color: "#EA4335", icon: "https://cdn.simpleicons.org/gmail" },
   { name: "Google Drive", category: "Productivity", color: "#4285F4", icon: "https://cdn.simpleicons.org/googledrive" },
   { name: "Notion", category: "Productivity", color: "#FFFFFF", icon: "https://cdn.simpleicons.org/notion/FFFFFF" },
-  { name: "Salesforce", category: "CRM", color: "#00A1E0", icon: "https://cdn.jsdelivr.net/npm/simple-icons@11/icons/salesforce.svg" },
+  { name: "Salesforce", category: "CRM", color: "#00A1E0", icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300A1E0' d='M10.005 4.08C10.91 3.116 12.19 2.5 13.617 2.5c1.89 0 3.54 1.048 4.415 2.605a5.83 5.83 0 0 1 2.302-.474c3.226 0 5.841 2.614 5.841 5.84 0 3.227-2.615 5.842-5.841 5.842a5.83 5.83 0 0 1-1.316-.15 4.364 4.364 0 0 1-3.878 2.363 4.35 4.35 0 0 1-1.993-.48A4.832 4.832 0 0 1 8.69 21.5a4.836 4.836 0 0 1-4.637-3.46 4.112 4.112 0 0 1-.878.095C1.421 18.135 0 16.714 0 14.96c0-1.114.573-2.09 1.434-2.658a4.948 4.948 0 0 1-.252-1.566C1.182 7.9 3.814 5.27 7.053 5.27c1.066 0 2.067.284 2.927.783z'/%3E%3C/svg%3E" },
 ];
 
 export function IntegrationsSection() {
@@ -156,7 +156,7 @@ export function IntegrationsSection() {
         }`}>
           <div className="flex flex-wrap gap-12">
             {[
-              { value: "16+", label: "Integrations" },
+              { value: "15", label: "Integrations" },
               { value: "OAuth", label: "Auth built-in" },
               { value: "Real-time", label: "Sync & webhooks" },
             ].map((stat) => (
