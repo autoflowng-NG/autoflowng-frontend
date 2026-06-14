@@ -53,7 +53,6 @@ export default function Register() {
       <GradientMesh />
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 440 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <button onClick={() => nav("/")} style={{ position: "absolute", top: 24, left: 24, display: "flex", alignItems: "center", gap: 6, color: "rgba(232,238,255,0.5)", fontSize: 13, fontFamily: "'DM Sans',sans-serif", background: "none", border: "none", cursor: "pointer" }}>
             ← Back
           </button>
           <Logo size="md" onClick={() => nav("/")} />

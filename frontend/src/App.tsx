@@ -27,7 +27,7 @@ class LandingErrorBoundary extends Component<{children:ReactNode},{hasError:bool
  * All Phase 1–12.5 routes preserved unchanged.
  */
 
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
@@ -155,6 +155,7 @@ export default function App() {
     <BrowserRouter>
       <CriticalAlertToaster />
       <Suspense fallback={<Spinner />}>
+        <GlobalBackButton />
         <Routes>
           {/* Public */}
           <Route path="/login"    element={<Login />} />

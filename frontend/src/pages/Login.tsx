@@ -49,7 +49,6 @@ export default function Login() {
       <GradientMesh />
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-              <button onClick={() => nav("/")} style={{ position: "absolute", top: 20, left: 20, display: "flex", alignItems: "center", gap: 6, color: "rgba(232,238,255,0.6)", fontSize: 13, fontFamily: "'DM Sans',sans-serif", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", zIndex: 10 }}>← Back</button>
           <Logo size="md" onClick={() => nav("/")} />
           <p style={{ marginTop: 16, fontSize: 14, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>Sign in to your workspace</p>
         </div>
@@ -83,7 +82,7 @@ export default function Login() {
           </form>
           <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>
             Don't have an account?{" "}
-            <button onClick={() => nav("/register")} data-testid="link-register" style={{ background: "none", border: "none", color: "#00C896", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0 }}>
+            <button onClick={() => { import("./Register").then(() => nav("/register")); }} data-testid="link-register" style={{ background: "none", border: "none", color: "#00C896", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0 }}>
               Sign up
             </button>
           </div>
