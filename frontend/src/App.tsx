@@ -136,26 +136,6 @@ function SuperAdminRoute({ children }: { children: React.ReactNode }) {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
-function LandingRoute() {
-  const { user } = useAuth();
-  if (user) return <Navigate to="/dashboard" replace />;
-  return <LandingErrorBoundary><Landing /></LandingErrorBoundary>;
-}
-
-function WorkflowBuilderWrapper() {
-  const { id } = useParams();
-  return <WorkflowBuilder id={id || ''} />;
-}
-
-export default function App() {
-  return (
-    <AuthProvider>
-        <WebSocketProvider>
-        <WorkspaceProvider>
-    <BrowserRouter>
-      <CriticalAlertToaster />
-      <Suspense fallback={<Spinner />}>
-
 function GlobalBackButton() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -184,6 +164,25 @@ function GlobalBackButton() {
   );
 }
 
+function LandingRoute() {
+  const { user } = useAuth();
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <LandingErrorBoundary><Landing /></LandingErrorBoundary>;
+}
+
+function WorkflowBuilderWrapper() {
+  const { id } = useParams();
+  return <WorkflowBuilder id={id || ''} />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+        <WebSocketProvider>
+        <WorkspaceProvider>
+    <BrowserRouter>
+      <CriticalAlertToaster />
+      <Suspense fallback={<Spinner />}>
         <GlobalBackButton />
         <Routes>
           {/* Public */}
