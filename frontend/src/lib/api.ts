@@ -55,7 +55,7 @@ async function request(path: string, { method = "GET", body, params, headers = {
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") throw { message: "Request timed out. Please try again.", status: 408, data: {} };
-    throw { message: "Network error. Check your connection.", status: 0, data: {} };
+    throw { message: err.message || "Unable to reach server.", status: 0, data: {} };
   } finally {
     clearTimeout(timeoutId);
   }
