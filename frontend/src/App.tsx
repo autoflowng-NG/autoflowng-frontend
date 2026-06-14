@@ -155,6 +155,35 @@ export default function App() {
     <BrowserRouter>
       <CriticalAlertToaster />
       <Suspense fallback={<Spinner />}>
+
+function GlobalBackButton() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const noBack = ["/","/login","/register","/dashboard","/workflows",
+    "/automations","/connections","/intelligence","/profile",
+    "/referrals","/wallet","/settings","/ai-chat","/marketplace",
+    "/credentials","/node-library","/webhooks","/analytics",
+    "/reports","/plans","/appeals"];
+  if (noBack.some(r => location.pathname === r) || location.pathname.startsWith("/share/")) return null;
+  return (
+    <button
+      onClick={() => navigate(-1)}
+      style={{
+        position:"fixed",top:20,left:20,zIndex:9999,
+        display:"flex",alignItems:"center",gap:6,
+        background:"rgba(255,255,255,0.06)",
+        border:"1px solid rgba(255,255,255,0.12)",
+        borderRadius:10,padding:"8px 14px",
+        color:"rgba(232,238,255,0.7)",fontSize:13,
+        fontFamily:"'DM Sans',sans-serif",cursor:"pointer",
+        backdropFilter:"blur(8px)",transition:"all 0.2s"
+      }}
+      onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.12)")}
+      onMouseLeave={e=>(e.currentTarget.style.background="rgba(255,255,255,0.06)")}
+    >← Back</button>
+  );
+}
+
         <GlobalBackButton />
         <Routes>
           {/* Public */}
