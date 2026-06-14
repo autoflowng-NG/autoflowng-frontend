@@ -53,8 +53,6 @@ export default function Register() {
       <GradientMesh />
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 440 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-            ← Back
-          </button>
           <Logo size="md" onClick={() => nav("/")} />
           <p style={{ marginTop: 12, fontSize: 14, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>Start your 3-day free trial</p>
         </div>
