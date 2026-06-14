@@ -153,8 +153,8 @@ export function PricingSection() {
               style={{ transitionDelay: `${i * 100 + 200}ms` }}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="bg-primary text-black text-xs font-bold px-3 py-1 rounded-full font-mono flex items-center gap-1">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+                  <span className="text-xs font-bold px-3 py-1 rounded-full font-mono flex items-center gap-1" style={{ backgroundColor: "#00DC82", color: "#000000" }}>
                     <Zap className="w-3 h-3" /> MOST POPULAR
                   </span>
                 </div>
@@ -205,9 +205,10 @@ export function PricingSection() {
                   onClick={() => navigate("/register")}
                   className={`w-full py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-all group ${
                     plan.popular
-                      ? "bg-primary text-black hover:bg-primary/90"
+                      ? "hover:opacity-90"
                       : "border border-primary/20 text-primary hover:border-primary hover:bg-primary/5"
                   }`}
+                  style={plan.popular ? { backgroundColor: "#00DC82", color: "#000000" } : undefined}
                 >
                   Get started
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
