@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../contexts/AuthContext";
 import { PageTransition } from "../components/PageTransition";
@@ -13,7 +13,7 @@ import { Eye, EyeOff, ArrowRight, AlertCircle, Check } from "lucide-react";
 interface RegForm { name: string; email: string; password: string; referralCode?: string; }
 
 export default function Register() {
-  const [, nav] = useLocation();
+  const nav = useNavigate();
   const { register: authRegister } = useAuth();
   const { toast } = useToast();
   const [showPw, setShowPw] = useState(false);

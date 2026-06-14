@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../contexts/AuthContext";
 import { PageTransition } from "../components/PageTransition";
@@ -14,7 +14,8 @@ interface LoginForm { email: string; password: string; }
 
 
 export default function Login() {
-  const [, nav] = useLocation();
+  const nav = useNavigate();
+  const navigate = nav;
   const { login } = useAuth();
   const { toast } = useToast();
   const [showPw, setShowPw] = useState(false);
