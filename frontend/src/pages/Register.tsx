@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../contexts/AuthContext";
 import { PageTransition } from "../components/PageTransition";
+import { BackButton } from '../components/BackButton';
 import { Logo } from "../components/Logo";
 import { GradientMesh } from "../components/GradientMesh";
 import { MagneticCursor } from "../components/MagneticCursor";
@@ -46,6 +47,7 @@ export default function Register() {
 
   return (
     <PageTransition variant="bloom">
+      <BackButton />
     <div style={{ minHeight: "100vh", background: "#04060F", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", padding: "24px" }}>
       <MagneticCursor />
       <GradientMesh />

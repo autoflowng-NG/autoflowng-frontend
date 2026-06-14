@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../contexts/AuthContext";
 import { PageTransition } from "../components/PageTransition";
+import { BackButton } from '../components/BackButton';
 import { Logo } from "../components/Logo";
 import { GradientMesh } from "../components/GradientMesh";
 import { MagneticCursor } from "../components/MagneticCursor";
@@ -42,11 +43,13 @@ export default function Login() {
 
   return (
     <PageTransition variant="bloom">
+      <BackButton />
     <div style={{ minHeight: "100vh", background: "#04060F", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", padding: "24px" }}>
       <MagneticCursor />
       <GradientMesh />
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <button onClick={() => nav("/")} style={{ position: "absolute", top: 20, left: 20, display: "flex", alignItems: "center", gap: 6, color: "rgba(232,238,255,0.6)", fontSize: 13, fontFamily: "'DM Sans',sans-serif", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", zIndex: 10 }}>← Back</button>
           <Logo size="md" onClick={() => nav("/")} />
           <p style={{ marginTop: 16, fontSize: 14, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>Sign in to your workspace</p>
         </div>
