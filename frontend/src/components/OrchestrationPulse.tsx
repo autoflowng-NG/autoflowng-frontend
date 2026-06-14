@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useWebSocketContext } from "../contexts/WebSocketContext";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 interface Pulse {
