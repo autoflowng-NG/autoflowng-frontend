@@ -75,17 +75,12 @@ const IntegrationHealth   = lazy(() => import('./pages/IntegrationHealth'));
 // ── Phase 14: Analytics & Reports ────────────────────────────────────────────
 const AnalyticsCenter     = lazy(() => import('./pages/AnalyticsCenter'));
 const ReportsCenter       = lazy(() => import('./pages/ReportsCenter'));
-
+const KnowledgeHub    = lazy(() => import('./pages/KnowledgeHub'));
 // ── Phase 8: Enterprise Runtime Intelligence Dashboard ───────────────────────
 const RuntimeDashboard    = lazy(() => import('./pages/RuntimeDashboard'));
 
 // ── Phase 13: Queue Mission Control ──────────────────────────────────────────
 const QueueMissionControl = lazy(() => import('./pages/QueueMissionControl'));
-
-// — Phase 14: Analytics & Reports ─────────────────────────────────────────
-const AnalyticsCenter  = lazy(() => import('./pages/AnalyticsCenter'));
-const ReportsCenter    = lazy(() => import('./pages/ReportsCenter'));
-const KnowledgeHub     = lazy(() => import('./pages/KnowledgeHub'));  // ← ADD THIS
 
 // ── Phase 16: Autonomous Operations Center ───────────────────────────────────
 const AutonomousOpsCenter = lazy(() => import('./pages/AutonomousOpsCenter'));
