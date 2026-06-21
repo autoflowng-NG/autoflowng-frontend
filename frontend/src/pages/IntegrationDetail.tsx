@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, Copy, Zap, Play, Eye, EyeOff, RefreshCw } from "lucide-react";
-import api from "../lib/api";
+import api, { API_BASE_URL } from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
@@ -45,7 +45,10 @@ export default function IntegrationDetail() {
 
   const handleOAuth = () => {
     const token = localStorage.getItem("autoflowng_token");
-    window.open(`${(api as any).baseUrl || ""}/api/integrations/${id}/oauth/start`, "_blank", "width=600,height=700");
+    window.open(
+      `${API_BASE_URL}/api/integrations/${id}/oauth/start?token=${encodeURIComponent(token || "")}`,
+      "_blank", "width=600,height=700"
+    );
   };
 
   const handleTest = async () => {
