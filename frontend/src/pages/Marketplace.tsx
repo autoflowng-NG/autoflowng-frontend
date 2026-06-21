@@ -46,7 +46,7 @@ export default function Marketplace() {
 
   const { data: connsData } = useQuery({
     queryKey: ["connections"],
-    queryFn: () => (api as any).get("/connect"),
+    queryFn: () => (api as any).get("/connections"),
   });
 
   const connected = useMemo(() => {
