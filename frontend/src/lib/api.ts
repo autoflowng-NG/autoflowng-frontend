@@ -152,14 +152,12 @@ export const automationsAPI = {
 export const aiAPI = {
   chat:            (data: any)   => api.post("/ai/chat", data),
   knowledge:       (data: any)   => api.post("/ai/knowledge", data),
-  // Task 1 + Task 2: Explore — grounded AI search using Gemini web grounding
+  // Task 1 + Task 2: Explore — grounded AI search using web search grounding
   globalKnowledge: (data: { query: string; category?: string; lang?: string }) =>
-    api.post("/ai/chat", {
+    api.post("/ai/knowledge", {
       messages: [{ role: "user", content: data.query }],
-      system: data.category && data.category !== "all"
-        ? `You are a knowledgeable AI assistant. Focus your answer specifically on the topic of: ${data.category}. Answer thoroughly with facts, context, and relevant details.`
-        : "You are a knowledgeable AI assistant. Answer thoroughly with facts, context, and relevant details.",
-      session_id: "explore",
+      mode: "general",
+      lang: data.lang,
     }),
   generate:        (data: any)   => api.post("/ai/autoflowng-ai", data),
   status:          ()            => api.get("/ai/status"),
@@ -180,13 +178,13 @@ export const aiAPI = {
 };
 
 export const connectionsAPI = {
-  list:       ()           => api.get("/connect"),
-  disconnect: (platform: string) => api.delete(`/connect/${platform}`),
-  whatsapp:   (data: any)  => api.post("/connect/whatsapp", data),
-  telegram:   (data: any)  => api.post("/connect/telegram", data),
-  notify:     (data: any)  => api.post("/telegram/notify", data),
+  list:       ()           => api.get("/connections"),
+  disconnect: (platform: string) => api.delete(`/connections/${platform}`),
+  whatsapp:   (data: any)  => api.post("/connections/whatsapp", data),
+  telegram:   (data: any)  => api.post("/connections/telegram", data),
+  notify:     (data: any)  => api.post("/connections/telegram/notify", data),
   oauthUrl:   (platform: string, token: string) =>
-    `${BASE_URL}/api/connect/${platform}?token=${encodeURIComponent(token)}`,
+    `${BASE_URL}/api/connections/${platform}?token=${encodeURIComponent(token)}`,
 };
 
 export const paymentsAPI = {
