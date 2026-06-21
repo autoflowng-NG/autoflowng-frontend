@@ -35,7 +35,10 @@ function MessageBubble({ msg }: { msg: Msg }) {
       {/* Bubble */}
       <div style={{ maxWidth: "75%", position: "relative", group: "1" } as any}>
         <div style={{ background: isUser ? "rgba(56,189,248,0.08)" : "rgba(167,139,250,0.06)", border: `1px solid ${isUser ? "rgba(56,189,248,0.15)" : "rgba(167,139,250,0.12)"}`, borderRadius: isUser ? "16px 4px 16px 16px" : "4px 16px 16px 16px", padding: "12px 16px", color: "#E8EEFF", fontSize: 14, lineHeight: 1.65, fontFamily: "'DM Sans',sans-serif", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {msg.content}
+          {/* defensive: render only if content is a real string — prevents a repeat of
+              "Minified React error #31" crashing the whole page if any future code
+              path ever sets msg.content to a non-string value again */}
+          {typeof msg.content === "string" ? msg.content : "[Unable to display this message]"}
         </div>
         <button onClick={copy} style={{ position: "absolute", top: 8, right: isUser ? "auto" : -32, left: isUser ? -32 : "auto", background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(232,238,255,0.4)", opacity: 0, transition: "opacity 0.18s" }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = "1"}
@@ -81,7 +84,27 @@ export default function AIChat() {
         messages: [{ role: "user", content }],
         session_id: session,
       });
-      const reply = res?.reply || res?.text || res?.message || res?.content || "I couldn't generate a response. Please try again.";
+      // fixed: the real backend response shape for /api/ai/chat is
+      // { content: [{ type: "text", text: "..." }], engine, cached, duration_ms }
+      // (Anthropic-style content-block array) — res?.content here was an
+      // array of objects, not a string, and got passed straight into the
+      // message list, which then rendered it directly as a React child at
+      // line ~38 below, throwing "Minified React error #31: Objects are not
+      // valid as a React child" and crashing the whole page to a blank
+      // white screen. None of the other fallback fields (reply/text/message)
+      // ever matched this backend's actual field name, so this exact path
+      // was hit on every single message sent.
+      let reply = "I couldn't generate a response. Please try again.";
+      if (typeof res?.reply === "string") reply = res.reply;
+      else if (typeof res?.text === "string") reply = res.text;
+      else if (typeof res?.message === "string") reply = res.message;
+      else if (Array.isArray(res?.content)) {
+        // Real shape: extract and join all text-type content blocks
+        const textBlocks = res.content.filter((b: any) => b?.type === "text" && typeof b?.text === "string");
+        if (textBlocks.length > 0) reply = textBlocks.map((b: any) => b.text).join("\n\n");
+      } else if (typeof res?.content === "string") {
+        reply = res.content;
+      }
       setMsgs(ms => [...ms, { role: "assistant", content: reply, id: `a${Date.now()}` }]);
     } catch (e: any) {
       toast({ title: "AI Error", description: e?.message || "Could not reach AI service", variant: "destructive" });
