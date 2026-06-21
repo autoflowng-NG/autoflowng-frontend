@@ -17,6 +17,11 @@
  */
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+// Fix (Bug 2): IntegrationDetail.tsx needs the backend's absolute base URL to
+// open OAuth popups (Railway), but BASE_URL was a module-private constant —
+// `(api as any).baseUrl` it was reaching for doesn't exist on the `api` object,
+// so it silently evaluated to "" and OAuth popups opened a relative (Vercel) URL.
+export const API_BASE_URL = BASE_URL;
 const TIMEOUT_MS = 30_000;
 const TOKEN_KEY = "autoflowng_token";
 
@@ -183,6 +188,9 @@ export const connectionsAPI = {
   whatsapp:   (data: any)  => api.post("/connections/whatsapp", data),
   telegram:   (data: any)  => api.post("/connections/telegram", data),
   notify:     (data: any)  => api.post("/connections/telegram/notify", data),
+  // Fix (Bug 1D): the "webhook" platform card had fields but no matching API
+  // helper, so Connections.tsx's handleConnect() found `fn` null and did nothing.
+  webhook:    (data: any)  => api.post("/connections/webhook", data),
   oauthUrl:   (platform: string, token: string) =>
     `${BASE_URL}/api/connections/${platform}?token=${encodeURIComponent(token)}`,
 };
