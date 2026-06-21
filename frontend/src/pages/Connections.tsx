@@ -114,7 +114,13 @@ function ConnectionCard({ platform, connected, onConnect, onDisconnect }: any) {
     }
     setLoading(true);
     try {
-      const fn = p.id === "whatsapp" ? connectionsAPI.whatsapp : p.id === "telegram" ? connectionsAPI.telegram : null;
+      // Fix (Bug 1D): whatsapp/telegram had dedicated helpers, but "webhook" fell
+      // through to `fn = null` and the button silently did nothing. webhook now
+      // has its own connectionsAPI.webhook() helper.
+      const fn = p.id === "whatsapp" ? connectionsAPI.whatsapp
+               : p.id === "telegram" ? connectionsAPI.telegram
+               : p.id === "webhook"  ? connectionsAPI.webhook
+               : null;
       if (fn) { await fn(formData); onConnect(); setShowForm(false); toast({ title: `${p.label} connected!` }); }
     } catch (e: any) {
       toast({ title: "Error", description: e?.message, variant: "destructive" });
@@ -179,10 +185,20 @@ function ConnectionCard({ platform, connected, onConnect, onDisconnect }: any) {
 }
 
 export default function Connections() {
-  const { data: conns = [], refetch } = useQuery({
+  // Fix (Bug 9): connectionsAPI.list() can resolve to an object (e.g. an error
+  // payload) instead of an array when the request fails partway — the old
+  // `d.connections || d.platforms || []` fallback only helps when those fields
+  // are missing entirely, not when one of them exists but isn't an array.
+  // Array.isArray() here, plus the conns/all guards below, make every .filter()/
+  // .find()/.map() on this page safe regardless of what the API returns.
+  const { data: rawConns, refetch } = useQuery({
     queryKey: queryKeys.connections,
-    queryFn: () => connectionsAPI.list().then((d: any) => d.connections || d.platforms || []),
+    queryFn: () => connectionsAPI.list().then((d: any) => {
+      const result = d?.connections ?? d?.platforms ?? d;
+      return Array.isArray(result) ? result : [];
+    }),
   });
+  const conns: any[] = Array.isArray(rawConns) ? rawConns : [];
   const { toast } = useToast();
 
   const handleDisconnect = async (platform: string) => {
@@ -195,9 +211,9 @@ export default function Connections() {
     }
   };
 
-  const connected = (conns as any[]).filter((c: any) => c.connected);
+  const connected = conns.filter((c: any) => c.connected);
   const all = PLATFORMS.map(p => {
-    const existing = (conns as any[]).find((c: any) => c.platform === p.id || c.id === p.id);
+    const existing = conns.find((c: any) => c.platform === p.id || c.id === p.id);
     return { ...p, ...(existing || {}), connected: existing?.connected ?? false };
   });
 

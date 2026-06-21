@@ -104,6 +104,9 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
         // H3
         if (line.startsWith("### "))
           return <h3 key={i} style={{ fontSize: 14, fontWeight: 700, color: color, fontFamily: "'Syne',sans-serif", margin: "12px 0 4px" }}>{line.slice(4)}</h3>;
+        // H4 (Fix Bug 8: previously unhandled, fell through to a plain paragraph)
+        if (line.startsWith("#### "))
+          return <h4 key={i} style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.6)", fontFamily: "'DM Mono',monospace", margin: "10px 0 3px", letterSpacing: "0.04em", textTransform: "uppercase" }}>{line.slice(5)}</h4>;
         // Horizontal rule
         if (line.startsWith("---"))
           return <hr key={i} style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.07)", margin: "14px 0" }} />;
@@ -135,7 +138,12 @@ function formatInline(text: string, color: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, `<strong style="color:#E8EEFF">$1</strong>`)
     .replace(/\*(.+?)\*/g, `<em>$1</em>`)
-    .replace(/\`(.+?)\`/g, `<code style="background:rgba(255,255,255,0.07);padding:1px 6px;border-radius:4px;font-family:'DM Mono',monospace;font-size:12px;color:${color}">$1</code>`);
+    .replace(/\`(.+?)\`/g, `<code style="background:rgba(255,255,255,0.07);padding:1px 6px;border-radius:4px;font-family:'DM Mono',monospace;font-size:12px;color:${color}">$1</code>`)
+    // Fix (Bug 8): markdown links like [text](url) were rendered as raw text —
+    // this turns them into clickable anchors. Must run after the **/*/` passes
+    // above so bold/italic/code markers inside link text are already converted.
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+      `<a href="$2" target="_blank" rel="noopener noreferrer" style="color:${color};text-decoration:underline;opacity:0.85">$1</a>`);
 }
 
 // ── Category Pill ─────────────────────────────────────────────────────────────
