@@ -9,7 +9,7 @@
  *
  * Task additions:
  *   - aiAPI.globalKnowledge: Explore page grounded AI search
- *   - aiAPI.imageEdit: pixel-level image editing via Replicate
+ *   - aiAPI.imageEdit: pixel-level image editing via fal.ai
  *   - videoGenAPI: Phase 32 video generation endpoints
  *   - videoStyleAPI: Phase 31 style conversion endpoints
  *   - animationAPI: Phase 30 image animation endpoints
@@ -166,7 +166,7 @@ export const aiAPI = {
     }),
   generate:        (data: any)   => api.post("/ai/autoflowng-ai", data),
   status:          ()            => api.get("/ai/status"),
-  // Task 6: pixel-level image editing via Replicate
+  // Task 6: pixel-level image editing via fal.ai
   imageEdit: (data: {
     imageUrl: string;
     prompt: string;
