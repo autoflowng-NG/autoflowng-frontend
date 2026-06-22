@@ -62,7 +62,7 @@ function DragDropUpload({
       if (data.error) throw new Error(data.error);
       const result: UploadedAsset = {
         name:      file.name,
-        publicUrl: data.public_url || data.url || '',
+        publicUrl: data.public_url || data.presigned_url || data.url || '',
         assetId:   data.pipeline_asset_id ? String(data.pipeline_asset_id) : (data.id ? String(data.id) : ''),
         projectId: data.pipeline_project_id ? String(data.pipeline_project_id) : '',
       };
