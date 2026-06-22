@@ -62,7 +62,7 @@ function DragDropUpload({
       if (data.error) throw new Error(data.error);
       const result: UploadedAsset = {
         name:      file.name,
-        publicUrl: data.public_url || data.presigned_url || data.url || '',
+        publicUrl: data.public_url || data.url || '',
         assetId:   data.pipeline_asset_id ? String(data.pipeline_asset_id) : (data.id ? String(data.id) : ''),
         projectId: data.pipeline_project_id ? String(data.pipeline_project_id) : '',
       };
@@ -151,7 +151,7 @@ interface AgentJob {
   created_at: string;
 }
 
-type ActiveTab = 'thumbnail' | 'seo' | 'video' | 'style' | 'animation' | 'edit';
+type ActiveTab = 'thumbnail' | 'seo' | 'video' | 'style' | 'animation' | 'edit' | 'generate';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -228,6 +228,7 @@ export default function CreativeAgents() {
     { id: 'video',     label: 'Video',       emoji: '🎬' },
     { id: 'style',     label: 'Style',       emoji: '✨' },
     { id: 'animation', label: 'Animation',   emoji: '🌀' },
+    { id: 'generate',  label: 'Generate',    emoji: '✏️' },
     { id: 'edit',      label: 'Image Edit',  emoji: '🖼️' },
   ];
 
@@ -256,6 +257,7 @@ export default function CreativeAgents() {
           {activeTab === 'style'      && <StyleTab     token={token} />}
           {activeTab === 'animation'  && <AnimationTab token={token} />}
           {activeTab === 'edit'       && <ImageEditTab token={token} />}
+          {activeTab === 'generate'   && <ImageGenerateTab token={token} />}
         </div>
 
         {/* Media Cloud Link */}
@@ -1307,7 +1309,104 @@ function ImageEditTab({ token }: { token: string }) {
   );
 }
 
-// ── SEO Result Display ────────────────────────────────────────────────────────
+// ── Task: Image Generate Tab (text-to-image, no source image required) ───────
+
+function ImageGenerateTab({ token }: { token: string }) {
+  const [prompt,         setPrompt]         = useState('');
+  const [negativePrompt, setNegativePrompt] = useState('');
+  const [aspectRatio,    setAspectRatio]    = useState<'square' | 'portrait' | 'landscape' | 'widescreen'>('square');
+  const [loading,        setLoading]        = useState(false);
+  const [result,         setResult]         = useState<{ outputUrl: string; provider: string; model: string } | null>(null);
+  const [error,          setError]          = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prompt.trim()) return;
+    setLoading(true); setResult(null); setError(null);
+    try {
+      const data = await aiAPI.imageGenerate({ prompt: prompt.trim(), negativePrompt, aspectRatio });
+      if (data.outputUrl) {
+        setResult({ outputUrl: data.outputUrl, provider: data.provider || 'replicate', model: data.model || 'stable-diffusion' });
+      } else {
+        throw new Error(data.error || 'No output returned');
+      }
+    } catch (err: any) { setError(err?.message || 'Image generation failed'); } finally { setLoading(false); }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div style={s.infoBox}>
+        ✏️ <strong>Generate</strong> creates a brand-new image purely from a text description — no source image needed. Just describe what you want to see.
+      </div>
+
+      <div style={s.fieldGroup}>
+        <label style={s.label}>Prompt</label>
+        <textarea
+          style={{ ...s.textarea, minHeight: 80 }}
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          maxLength={500}
+          placeholder="Describe the image you want — e.g. 'A cozy coffee shop interior at sunset, warm lighting, photorealistic'"
+          required
+        />
+      </div>
+
+      <div style={s.fieldGroup}>
+        <label style={s.label}>Negative Prompt (optional)</label>
+        <input
+          style={s.input}
+          value={negativePrompt}
+          onChange={e => setNegativePrompt(e.target.value)}
+          placeholder="Things to avoid — e.g. 'blurry, low quality, text, watermark'"
+        />
+      </div>
+
+      <div style={s.fieldGroup}>
+        <label style={s.label}>Aspect Ratio</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+          {([
+            { id: 'square',     label: 'Square (1:1)' },
+            { id: 'portrait',   label: 'Portrait (3:4)' },
+            { id: 'landscape',  label: 'Landscape (4:3)' },
+            { id: 'widescreen', label: 'Widescreen (16:9)' },
+          ] as const).map(opt => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setAspectRatio(opt.id)}
+              style={{
+                padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                background: aspectRatio === opt.id ? 'rgba(0,200,150,0.15)' : 'rgba(255,255,255,0.04)',
+                color: aspectRatio === opt.id ? '#00C896' : 'rgba(232,238,255,0.4)',
+                fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace",
+                transition: 'all 0.15s',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading
+        ? <div style={s.loadingBox}><div style={{ fontSize: 28, marginBottom: 8 }}>✏️</div>AI is generating your image… this may take up to 2 minutes.</div>
+        : <button type="submit" style={prompt.trim() ? s.submitBtn : s.disabledBtn} disabled={!prompt.trim()}>Generate Image</button>
+      }
+
+      {error && <div style={s.errorBox}>{error}</div>}
+
+      {result && (
+        <div style={{ marginTop: 20 }}>
+          <img src={result.outputUrl} alt="Generated" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 360, marginBottom: 12 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'rgba(232,238,255,0.35)', fontFamily: "'DM Mono',monospace" }}>via {result.provider} · {result.model}</span>
+            <a href={result.outputUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: '#00C896', textDecoration: 'none', fontFamily: "'DM Sans',sans-serif" }}>⬇️ Download</a>
+          </div>
+        </div>
+      )}
+    </form>
+  );
+}
 
 function SEOResultExpanded({ data }: { data: any }) {
   const platforms = ['youtube', 'tiktok', 'instagram'].filter(p => data?.[p]);
