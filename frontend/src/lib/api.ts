@@ -174,6 +174,13 @@ export const aiAPI = {
     strength?: number;
     guidanceScale?: number;
   }) => api.post("/ai/image-edit", data),
+  // Text-to-image generation — no source image required
+  imageGenerate: (data: {
+    prompt: string;
+    negativePrompt?: string;
+    aspectRatio?: 'square' | 'portrait' | 'landscape' | 'widescreen';
+    guidanceScale?: number;
+  }) => api.post("/ai/image-generate", data),
   sessions:  {
     list:    ()            => api.get("/ai/sessions"),
     delete:  (id: string)  => api.delete(`/ai/sessions/${id}`),
@@ -411,21 +418,10 @@ export const animationAPI = {
 
 // ── Media Cloud asset picker helpers (for Creative Agents tabs) ───────────────
 export const mediaCloudAPI = {
-  // FIX: /ai/media-cloud/library and /ai/media-cloud/assets/:id never existed —
-  // routes/phases/phase43.js only implements /health. The real listing/detail
-  // endpoints live at /api/asset-library (see routes/asset-library.js), which
-  // also uses different query param names (q, asset_type) than this helper
-  // was sending (search, type).
   listAssets: (params?: { search?: string; type?: string; status?: string; page?: number; limit?: number }) =>
-    api.get("/asset-library", { params: {
-      q:          params?.search,
-      asset_type: params?.type,
-      status:     params?.status,
-      page:       params?.page,
-      limit:      params?.limit,
-    } }),
+    api.get("/ai/media-cloud/library", { params: params as any }),
   getAsset:   (assetId: string) =>
-    api.get(`/asset-library/${assetId}`),
+    api.get(`/ai/media-cloud/assets/${assetId}`),
 };
 
 // ── Quick Generate: auto-create pipeline + media_library_assets in one call ───
