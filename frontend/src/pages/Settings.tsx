@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { authAPI } from "../lib/api";
 import { NotificationPreferences } from "../components/NotificationPreferences";
@@ -6,7 +6,7 @@ import { PageTransition } from "../components/PageTransition";
 import { useAuth } from "../contexts/AuthContext";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
-import { User, Lock, Bell, Shield, Trash2, Check, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { User, Lock, Bell, Shield, Trash2, Check, Eye, EyeOff, AlertCircle, Camera, Phone, MapPin, FileText } from "lucide-react";
 
 const TABS = [
   { id: "profile",   label: "Profile",   icon: User },
@@ -16,16 +16,69 @@ const TABS = [
 ];
 
 function ProfileTab() {
-  const { user, updateUser, refreshUser } = useAuth();
+  const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const { register, handleSubmit, formState: { errors } } = useForm({ defaultValues: { name: user?.name || "", email: user?.email || "" } });
+  const [uploading, setUploading] = useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
 
-  const onSubmit = async (data: any) => {
+  // Extended profile state
+  const [profile, setProfile] = useState({
+    name:     user?.name  || "",
+    email:    user?.email || "",
+    phone:    (user as any)?.phone    || "",
+    location: (user as any)?.location || "",
+    address:  (user as any)?.address  || "",
+    bio:      (user as any)?.bio      || "",
+  });
+  const [avatarUrl, setAvatarUrl] = useState<string | null>((user as any)?.avatar_url || null);
+
+  // Fetch full profile on mount so extended fields are loaded
+  React.useEffect(() => {
+    const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
+    fetch("/api/profile/me", { credentials: "include", headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        setProfile({ name: d.name || "", email: d.email || "", phone: d.phone || "", location: d.location || "", address: d.address || "", bio: d.bio || "" });
+        setAvatarUrl(d.avatar_url || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("avatar", file);
+      const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
+      const res = await fetch("/api/profile/me/avatar", {
+        method: "POST", credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setAvatarUrl(data.avatar_url);
+      toast({ title: "Profile photo updated!" });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e?.message, variant: "destructive" });
+    } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      const res: any = await authAPI.updateProfile(data);
-      updateUser(res.user || data);
+      const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
+      const res = await fetch("/api/profile/me", {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: profile.name, phone: profile.phone, location: profile.location, address: profile.address, bio: profile.bio }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Save failed"); }
+      updateUser({ ...user, name: profile.name } as any);
       toast({ title: "Profile updated!" });
     } catch (e: any) {
       toast({ title: "Error", description: e?.message, variant: "destructive" });
@@ -34,38 +87,106 @@ function ProfileTab() {
 
   const inp: React.CSSProperties = {
     width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
-    borderRadius: 10, padding: "11px 14px", color: "#E8EEFF", fontSize: 14,
+    borderRadius: 10, padding: "11px 14px 11px 36px", color: "#E8EEFF", fontSize: 14,
     fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box",
   };
+  const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8, textTransform: "uppercase" as const };
+
+  const iconWrap: React.CSSProperties = { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(232,238,255,0.3)", pointerEvents: "none" };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <div>
+      {/* Avatar row */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, padding: "20px", background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.05)" }}>
-        <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#00C896,#38BDF8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#04060F", flexShrink: 0 }}>
-          {(user?.name || user?.email || "?")[0].toUpperCase()}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="Avatar" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover" }} />
+          ) : (
+            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg,#00C896,#38BDF8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800, color: "#04060F" }}>
+              {(profile.name || profile.email || "?")[0].toUpperCase()}
+            </div>
+          )}
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+            style={{ position: "absolute", bottom: -2, right: -2, width: 22, height: 22, borderRadius: "50%", background: "#00C896", border: "2px solid #080A14", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <Camera size={11} color="#04060F" />
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarChange} />
         </div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>{user?.name || "Your Name"}</div>
-          <div style={{ fontSize: 12, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace" }}>{user?.email}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>{profile.name || "Your Name"}</div>
+          <div style={{ fontSize: 12, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace" }}>{profile.email}</div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(0,200,150,0.1)", border: "1px solid rgba(0,200,150,0.2)", borderRadius: 100, padding: "2px 8px", marginTop: 4, fontSize: 10, fontWeight: 700, color: "#00C896", fontFamily: "'DM Mono',monospace" }}>
-            {(user?.plan || "FREE").toUpperCase()}
+            {((user?.plan || "FREE") as string).toUpperCase()}
           </div>
         </div>
       </div>
+
+      {/* Name + Email row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8, textTransform: "uppercase" }}>Full name</label>
-          <input data-testid="input-name" style={inp} {...register("name", { required: true })} onFocus={e => e.target.style.borderColor = "rgba(0,200,150,0.4)"} onBlur={e => e.target.style.borderColor = ""} />
+          <label style={lbl}>Full name</label>
+          <div style={{ position: "relative" }}>
+            <span style={iconWrap}><User size={14} /></span>
+            <input data-testid="input-name" style={inp} value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
+              onFocus={e => e.target.style.borderColor = "rgba(0,200,150,0.4)"} onBlur={e => e.target.style.borderColor = ""} />
+          </div>
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8, textTransform: "uppercase" }}>Email</label>
-          <input data-testid="input-email" type="email" style={inp} {...register("email", { required: true })} onFocus={e => e.target.style.borderColor = "rgba(0,200,150,0.4)"} onBlur={e => e.target.style.borderColor = ""} />
+          <label style={lbl}>Email</label>
+          <div style={{ position: "relative" }}>
+            <span style={iconWrap}><User size={14} /></span>
+            <input data-testid="input-email" type="email" style={{ ...inp, opacity: 0.6, cursor: "not-allowed" }} value={profile.email} readOnly title="Email cannot be changed here" />
+          </div>
         </div>
       </div>
-      <button type="submit" data-testid="button-save-profile" disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8, background: "#00C896", border: "none", borderRadius: 10, padding: "11px 22px", color: "#04060F", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+
+      {/* Phone + Location row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div>
+          <label style={lbl}>Phone</label>
+          <div style={{ position: "relative" }}>
+            <span style={iconWrap}><Phone size={14} /></span>
+            <input style={inp} placeholder="+234 800 000 0000" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
+              onFocus={e => e.target.style.borderColor = "rgba(0,200,150,0.4)"} onBlur={e => e.target.style.borderColor = ""} />
+          </div>
+        </div>
+        <div>
+          <label style={lbl}>Location</label>
+          <div style={{ position: "relative" }}>
+            <span style={iconWrap}><MapPin size={14} /></span>
+            <input style={inp} placeholder="City, Country" value={profile.location} onChange={e => setProfile(p => ({ ...p, location: e.target.value }))}
+              onFocus={e => e.target.style.borderColor = "rgba(0,200,150,0.4)"} onBlur={e => e.target.style.borderColor = ""} />
+          </div>
+        </div>
+      </div>
+
+      {/* Address */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={lbl}>Address</label>
+        <div style={{ position: "relative" }}>
+          <span style={iconWrap}><MapPin size={14} /></span>
+          <input style={inp} placeholder="Full mailing address" value={profile.address} onChange={e => setProfile(p => ({ ...p, address: e.target.value }))}
+            onFocus={e => e.target.style.borderColor = "rgba(0,200,150,0.4)"} onBlur={e => e.target.style.borderColor = ""} />
+        </div>
+      </div>
+
+      {/* Bio */}
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ ...lbl, display: "flex", justifyContent: "space-between" }}>
+          <span><FileText size={11} style={{ display: "inline", marginRight: 4 }} />Bio</span>
+          <span style={{ fontWeight: 400, opacity: 0.5 }}>{profile.bio.length}/500</span>
+        </label>
+        <textarea style={{ ...inp, paddingLeft: 14, resize: "vertical", minHeight: 88, lineHeight: 1.6 }}
+          placeholder="Tell us about yourself…" value={profile.bio}
+          onChange={e => setProfile(p => ({ ...p, bio: e.target.value.slice(0, 500) }))}
+          onFocus={e => (e.target as any).style.borderColor = "rgba(0,200,150,0.4)"}
+          onBlur={e => (e.target as any).style.borderColor = ""} />
+      </div>
+
+      <button data-testid="button-save-profile" onClick={handleSave} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8, background: "#00C896", border: "none", borderRadius: 10, padding: "11px 22px", color: "#04060F", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
         <Check size={14} /> {saving ? "Saving…" : "Save changes"}
       </button>
-    </form>
+    </div>
   );
 }
 
