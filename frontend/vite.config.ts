@@ -20,11 +20,13 @@ export default defineConfig(() => ({
     sourcemap: false,
     rollupOptions: {
       output: {
+        // Removed 'charts' (recharts) and 'motion' (framer-motion) from manual chunks.
+        // When these are split into separate chunks, a network hiccup on Vercel causes
+        // "Failed to fetch dynamically imported module" errors that crash the whole page.
+        // Keeping only the stable vendor chunk (react core) and ui primitives.
         manualChunks: {
           vendor: ['react', 'react-dom'],
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', 'lucide-react'],
-          charts: ['recharts'],
-          motion: ['framer-motion'],
         },
       },
     },
