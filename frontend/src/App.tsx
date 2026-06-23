@@ -35,6 +35,14 @@ import { OrgProvider } from './contexts/OrgContext';
 import { ExecutionHistoryProvider } from './contexts/ExecutionHistoryContext';
 import { hasRole, type PlatformRole } from './lib/rbac';
 import { CriticalAlertToaster } from './components/CriticalAlertToaster';
+// BUGFIX: the shadcn <Toaster /> (driven by the useToast() hook used across
+// the whole app — Workflows.tsx, Automations.tsx, etc.) was never mounted.
+// CriticalAlertToaster is a *separate* component with its own state source
+// (system-wide critical alerts) and does not render useToast() toasts.
+// Result: every toast({ title, description }) call anywhere in the app
+// (success confirmations AND error messages) updated state with nothing
+// listening to render it — so failures were completely silent on screen.
+import { Toaster } from './components/ui/toaster';
 import AppShell from './components/AppShell';
 
 // ── Existing lazy imports (Phases 1–12.5, unchanged) ──────────────────────────
@@ -210,6 +218,7 @@ function AppProviders() {
         <ExecutionHistoryProvider>
     <BrowserRouter>
       <CriticalAlertToaster />
+      <Toaster />
       <Suspense fallback={<Spinner />}>
         <GlobalBackButton />
         <Routes>
