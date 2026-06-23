@@ -378,10 +378,16 @@ export const onboardingAPI = {
     api.patch("/onboarding/state", data),
 };
 
+// BUGFIX (Bug 3): The old routes (/integrations/google-drive/connect|status|disconnect)
+// never existed in backend/routes/integrations.js — all three returned 404. Also,
+// "google-drive" (hyphen) didn't match the backend's "google_drive" (underscore) key.
+// Rewritten to reuse the existing generic integration endpoints instead.
+// NOTE: `connect` must NOT be called via api.get() — the backend does a res.redirect()
+// to Google's consent screen. Use window.open() in GoogleDriveCard (see Connections.tsx).
 export const googleDriveAPI = {
-  connect:    () => api.get("/integrations/google-drive/connect"),
-  status:     () => api.get("/integrations/google-drive/status"),
-  disconnect: () => api.post("/integrations/google-drive/disconnect", {}),
+  connect:    () => `${API_BASE_URL}/api/integrations/google_drive/oauth/start`,  // returns URL string for window.open
+  status:     () => api.get("/integrations/google_drive"),                         // { integration: { connected, connection, ... } }
+  disconnect: () => api.delete("/integrations/google_drive/disconnect"),
 };
 
 // ── Task 5: Phase 30/31/32 Creative Studio APIs ───────────────────────────────
