@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { adminAPI } from "../lib/api";
+import { adminAPI, approvalsAPI } from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Activity, CreditCard, Zap, ShieldCheck, Search, Settings2, CheckCircle2, XCircle, MessageSquare, BarChart2, Star, LifeBuoy } from "lucide-react";
+import { Users, Activity, CreditCard, Zap, ShieldCheck, Search, Settings2, CheckCircle2, XCircle, MessageSquare, BarChart2, Star, LifeBuoy, Clock } from "lucide-react";
 import MFAEnforcementBanner from "../components/MFAEnforcement";
 import OperationalAlertsBadge from "../components/OperationalAlertsBadge";
 import { useAuth } from "../contexts/AuthContext";
@@ -12,6 +12,11 @@ import { useAuth } from "../contexts/AuthContext";
 import AdminAssistant from "../components/AdminAssistant";
 import TestimonialsModerationPanel from "../components/TestimonialsModerationPanel";
 import SupportAdminDashboard from "../components/SupportAdminDashboard";
+
+const WITHDRAWAL_APPROVAL_THRESHOLD = parseInt(
+  (import.meta as any).env?.VITE_WITHDRAWAL_APPROVAL_THRESHOLD ?? "50000",
+  10,
+);
 
 const TABS = [
   { id: "overview",     label: "Overview",     icon: BarChart2 },
@@ -56,6 +61,22 @@ function UsersTab() {
   const users = (data as any)?.users || [];
   const { toast } = useToast();
 
+  // Live clock for inline user local time — ticks every minute
+  const [rowClock, setRowClock] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setRowClock(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getUserLocalTime = (tz: string | null | undefined): string | null => {
+    if (!tz) return null;
+    try {
+      return new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit", minute: "2-digit", timeZone: tz,
+      }).format(rowClock);
+    } catch { return null; }
+  };
+
   const updatePlan = useMutation({
     mutationFn: ({ id, plan }: { id: string; plan: string }) => adminAPI.updatePlan(id, plan),
     onSuccess: () => { toast({ title: "Plan updated!" }); refetch(); },
@@ -96,6 +117,12 @@ function UsersTab() {
                 <option value="business">Business</option>
               </select>
               <div style={{ fontSize: 10, fontWeight: 700, color: u.is_active !== false ? "#00C896" : "#FB7185", fontFamily: "'DM Mono',monospace" }}>{u.is_active !== false ? "ACTIVE" : "INACTIVE"}</div>
+              {(() => { const t = getUserLocalTime(u.timezone); return t ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(56,189,248,0.07)", border: "1px solid rgba(56,189,248,0.15)", borderRadius: 6, padding: "3px 7px", flexShrink: 0 }}>
+                  <Clock size={9} color="#38BDF8" />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#38BDF8", fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{t}</span>
+                </div>
+              ) : null; })()}
             </div>
           ))
         }
@@ -130,6 +157,8 @@ function WithdrawalsTab() {
   const { data, refetch } = useQuery({ queryKey: ["admin", "withdrawals"], queryFn: () => adminAPI.withdrawals() });
   const withdrawals = (data as any)?.withdrawals || [];
   const { toast } = useToast();
+  const [approvalModal, setApprovalModal] = useState<{ id: string; amount: number; email: string } | null>(null);
+  const [approvalReason, setApprovalReason] = useState("");
 
   const updateW = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => adminAPI.updateWithdrawal(id, status),
@@ -137,30 +166,94 @@ function WithdrawalsTab() {
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
+  const requestApproval = useMutation({
+    mutationFn: (data: { action_type: string; target_type: string; target_id: string; reason: string }) =>
+      approvalsAPI.create(data),
+    onSuccess: () => {
+      toast({ title: "Approval request submitted", description: "A Super Admin will review this shortly." });
+      setApprovalModal(null);
+      setApprovalReason("");
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {withdrawals.length === 0 ? <div style={{ textAlign: "center", padding: "32px", color: "rgba(232,238,255,0.25)", fontSize: 13 }}>No withdrawals</div> :
-        withdrawals.map((w: any) => (
-          <div key={w.id} data-testid={`admin-withdrawal-${w.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: "#E8EEFF" }}>{w.user_email || w.email || "Unknown"}</div>
-              <div style={{ fontSize: 11, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>₦{(w.amount || 0).toLocaleString()} · {w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}</div>
-            </div>
-            {w.status === "pending" && (
-              <div style={{ display: "flex", gap: 6 }}>
-                <button data-testid={`approve-withdrawal-${w.id}`} onClick={() => updateW.mutate({ id: w.id, status: "approved" })} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(0,200,150,0.1)", border: "1px solid rgba(0,200,150,0.2)", borderRadius: 7, padding: "5px 10px", color: "#00C896", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                  <CheckCircle2 size={11} /> Approve
-                </button>
-                <button data-testid={`reject-withdrawal-${w.id}`} onClick={() => updateW.mutate({ id: w.id, status: "rejected" })} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(251,113,133,0.1)", border: "1px solid rgba(251,113,133,0.2)", borderRadius: 7, padding: "5px 10px", color: "#FB7185", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                  <XCircle size={11} /> Reject
-                </button>
+    <>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {withdrawals.length === 0 ? <div style={{ textAlign: "center", padding: "32px", color: "rgba(232,238,255,0.25)", fontSize: 13 }}>No withdrawals</div> :
+          withdrawals.map((w: any) => {
+            const amount = w.amount || 0;
+            const needsApproval = amount >= WITHDRAWAL_APPROVAL_THRESHOLD;
+            return (
+              <div key={w.id} data-testid={`admin-withdrawal-${w.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: "#E8EEFF" }}>{w.user_email || w.email || "Unknown"}</div>
+                  <div style={{ fontSize: 11, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>
+                    ₦{amount.toLocaleString()} · {w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}
+                    {needsApproval && <span style={{ color: "#FBBF24", marginLeft: 6 }}>· requires Super Admin approval</span>}
+                  </div>
+                </div>
+                {w.status === "pending" && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {needsApproval ? (
+                      <button
+                        data-testid={`approve-withdrawal-${w.id}`}
+                        onClick={() => setApprovalModal({ id: w.id, amount, email: w.user_email || w.email || "Unknown" })}
+                        style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 7, padding: "5px 10px", color: "#FBBF24", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                        <CheckCircle2 size={11} /> Request Approval
+                      </button>
+                    ) : (
+                      <button
+                        data-testid={`approve-withdrawal-${w.id}`}
+                        onClick={() => updateW.mutate({ id: w.id, status: "approved" })}
+                        style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(0,200,150,0.1)", border: "1px solid rgba(0,200,150,0.2)", borderRadius: 7, padding: "5px 10px", color: "#00C896", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                        <CheckCircle2 size={11} /> Approve
+                      </button>
+                    )}
+                    <button
+                      data-testid={`reject-withdrawal-${w.id}`}
+                      onClick={() => updateW.mutate({ id: w.id, status: "rejected" })}
+                      style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(251,113,133,0.1)", border: "1px solid rgba(251,113,133,0.2)", borderRadius: 7, padding: "5px 10px", color: "#FB7185", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                      <XCircle size={11} /> Reject
+                    </button>
+                  </div>
+                )}
+                <div style={{ fontSize: 10, fontWeight: 700, color: w.status === "approved" ? "#00C896" : w.status === "rejected" ? "#FB7185" : "#FBBF24", fontFamily: "'DM Mono',monospace" }}>{(w.status || "PENDING").toUpperCase()}</div>
               </div>
-            )}
-            <div style={{ fontSize: 10, fontWeight: 700, color: w.status === "approved" ? "#00C896" : w.status === "rejected" ? "#FB7185" : "#FBBF24", fontFamily: "'DM Mono',monospace" }}>{(w.status || "PENDING").toUpperCase()}</div>
+            );
+          })
+        }
+      </div>
+
+      {/* Approval request modal */}
+      {approvalModal && (
+        <>
+          <div onClick={() => setApprovalModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(4,6,15,0.8)", zIndex: 2000, backdropFilter: "blur(4px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "#08091A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 24, zIndex: 2001, width: 400, display: "flex", flexDirection: "column", gap: 14, fontFamily: "'DM Sans',sans-serif" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>Request Withdrawal Approval</div>
+            <div style={{ fontSize: 13, color: "rgba(232,238,255,0.6)", lineHeight: 1.5 }}>
+              Withdrawal of <strong style={{ color: "#FBBF24" }}>₦{approvalModal.amount.toLocaleString()}</strong> by <strong style={{ color: "#E8EEFF" }}>{approvalModal.email}</strong> requires Super Admin approval (threshold: ₦{WITHDRAWAL_APPROVAL_THRESHOLD.toLocaleString()}).
+            </div>
+            <textarea
+              value={approvalReason}
+              onChange={e => setApprovalReason(e.target.value)}
+              placeholder="Reason / justification for this withdrawal…"
+              rows={3}
+              style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "9px 14px", color: "#E8EEFF", fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box", resize: "vertical" as any }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setApprovalModal(null)} style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", color: "rgba(232,238,255,0.6)" }}>Cancel</button>
+              <button
+                onClick={() => requestApproval.mutate({ action_type: "approve_withdrawal", target_type: "withdrawal", target_id: approvalModal.id, reason: approvalReason })}
+                disabled={!approvalReason.trim() || requestApproval.isPending}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", color: "#FBBF24", opacity: (!approvalReason.trim() || requestApproval.isPending) ? 0.5 : 1 }}>
+                Submit Request
+              </button>
+            </div>
           </div>
-        ))
-      }
-    </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -184,7 +277,13 @@ const TAB_CONTENT: Record<string, React.FC> = { overview: OverviewTab, users: Us
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [clockTime, setClockTime] = useState(() => new Date());
   const Content = TAB_CONTENT[activeTab] || OverviewTab;
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <PageTransition variant="slide">
@@ -200,7 +299,15 @@ export default function Admin() {
               <h1 style={{ fontSize: "1.6rem", fontWeight: 900, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", color: "#E8EEFF" }}>Control Center</h1>
             </div>
           </div>
-          <OperationalAlertsBadge onClick={() => window.location.href = '/financial-integrity'} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.15)", borderRadius: 8, padding: "5px 10px" }}>
+              <Clock size={11} color="#FB7185" />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#FB7185", fontFamily: "'DM Mono',monospace", letterSpacing: "0.05em" }}>
+                {clockTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+            </div>
+            <OperationalAlertsBadge onClick={() => window.location.href = '/financial-integrity'} />
+          </div>
         </div>
         {/* Phase 10D: MFA enforcement banner */}
         {(() => { const { user } = useAuth(); return <MFAEnforcementBanner role={user?.role} className="mb-4" />; })()}

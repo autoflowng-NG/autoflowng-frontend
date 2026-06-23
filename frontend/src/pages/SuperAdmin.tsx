@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { superAdminAPI } from "../lib/api";
+import { superAdminAPI, approvalsAPI } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import {
   canDo, getRoleBadge, STAFF_ROLES, ALL_PLATFORM_ROLES,
@@ -23,7 +23,7 @@ import {
   BarChart2, Globe, CheckCircle2, XCircle, MessageSquare,
   RefreshCw, Lock, Unlock, ClipboardList, Crown,
   Phone, MapPin, FileText, X as XIcon, Loader2,
-  Megaphone, Video, LifeBuoy,
+  Megaphone, Video, LifeBuoy, Clock,
 } from "lucide-react";
 import PaystackBalanceWidget from "../components/PaystackBalanceWidget";
 import MFAEnforcementBanner from "../components/MFAEnforcement";
@@ -115,7 +115,30 @@ function UserProfileDrawer({ userId, onClose }: UserProfileDrawerProps) {
     enabled:  !!userId,
   });
 
+  // Live clock for per-user local time — ticks every minute
+  const [drawerClock, setDrawerClock] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setDrawerClock(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (!userId) return null;
+
+  // Compute the user's current local time from their stored IANA timezone.
+  // Returns e.g. "3:42 PM (Africa/Lagos)" or "Timezone unknown" if tz is absent/invalid.
+  const formatUserLocalTime = (tz: string | null | undefined): string => {
+    if (!tz) return "Timezone unknown";
+    try {
+      const time = new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: tz,
+      }).format(drawerClock);
+      return `${time} (${tz})`;
+    } catch {
+      return "Timezone unknown";
+    }
+  };
 
   const p = (data as any) || {};
   const initials = (p.name || p.email || "?")
@@ -221,6 +244,7 @@ function UserProfileDrawer({ userId, onClose }: UserProfileDrawerProps) {
                   { label: "Connections",     value: p.connections ?? "—" },
                   { label: "Total Paid",      value: formatCurrency(p.total_paid) },
                   { label: "Status",          value: p.is_active === false ? "Suspended" : "Active" },
+                  { label: "Local Time",      value: formatUserLocalTime(p.timezone) },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 2 }}>{label.toUpperCase()}</div>
@@ -330,6 +354,9 @@ function UsersTab({ userRole }: { userRole: string }) {
     onError:    (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
+  const [approvalModal, setApprovalModal] = useState<{ userId: string; email: string; action: "suspend" | "unsuspend" } | null>(null);
+  const [approvalReason, setApprovalReason] = useState("");
+
   const suspend = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason?: string }) => superAdminAPI.suspendUser(id, reason),
     onSuccess:  () => { toast({ title: "User suspended" }); qc.invalidateQueries({ queryKey: ["super-admin", "users"] }); },
@@ -340,6 +367,17 @@ function UsersTab({ userRole }: { userRole: string }) {
     mutationFn: (id: string) => superAdminAPI.unsuspendUser(id),
     onSuccess:  () => { toast({ title: "User reactivated" }); qc.invalidateQueries({ queryKey: ["super-admin", "users"] }); },
     onError:    (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const submitApproval = useMutation({
+    mutationFn: (data: { action_type: string; target_type: string; target_id: string; reason: string }) =>
+      approvalsAPI.create(data),
+    onSuccess: () => {
+      toast({ title: "Approval request submitted", description: "A Super Admin will review this shortly." });
+      setApprovalModal(null);
+      setApprovalReason("");
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
   const canManage  = canDo(userRole, "manage_users");
@@ -397,14 +435,28 @@ function UsersTab({ userRole }: { userRole: string }) {
 
             {canSuspend && (
               u.is_active === false ? (
-                <button onClick={() => unsuspend.mutate(u.id)}
+                <button
+                  onClick={() => {
+                    if (isSuperAdmin(userRole)) {
+                      unsuspend.mutate(u.id);
+                    } else {
+                      setApprovalModal({ userId: String(u.id), email: u.email, action: "unsuspend" });
+                    }
+                  }}
                   style={{ ...S.btn("56,189,248"), color: "#38BDF8" }}>
-                  <Unlock size={10} /> Restore
+                  <Unlock size={10} /> {isSuperAdmin(userRole) ? "Restore" : "Request Restore"}
                 </button>
               ) : (
-                <button onClick={() => { if (window.confirm(`Suspend ${u.email}?`)) suspend.mutate({ id: u.id }); }}
+                <button
+                  onClick={() => {
+                    if (isSuperAdmin(userRole)) {
+                      if (window.confirm(`Suspend ${u.email}?`)) suspend.mutate({ id: u.id });
+                    } else {
+                      setApprovalModal({ userId: String(u.id), email: u.email, action: "suspend" });
+                    }
+                  }}
                   style={{ ...S.btn("251,113,133"), color: "#FB7185" }}>
-                  <Lock size={10} /> Suspend
+                  <Lock size={10} /> {isSuperAdmin(userRole) ? "Suspend" : "Request Suspend"}
                 </button>
               )
             )}
@@ -426,6 +478,56 @@ function UsersTab({ userRole }: { userRole: string }) {
       )}
 
       <UserProfileDrawer userId={viewingUserId} onClose={() => setViewingUserId(null)} />
+
+      {/* Approval request modal for non-super_admin users */}
+      {approvalModal && (
+        <>
+          <div
+            onClick={() => setApprovalModal(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(4,6,15,0.8)", zIndex: 2000, backdropFilter: "blur(4px)" }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "#08091A", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: 24, zIndex: 2001,
+            width: 400, display: "flex", flexDirection: "column", gap: 14,
+            fontFamily: "'DM Sans',sans-serif",
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>
+              Request {approvalModal.action === "suspend" ? "Suspension" : "Restoration"}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(232,238,255,0.6)", lineHeight: 1.5 }}>
+              You are requesting to <strong style={{ color: "#E8EEFF" }}>
+                {approvalModal.action === "suspend" ? "suspend" : "restore"}
+              </strong> <strong style={{ color: "#E8EEFF" }}>{approvalModal.email}</strong>.
+              A Super Admin will review and execute this action.
+            </div>
+            <textarea
+              value={approvalReason}
+              onChange={e => setApprovalReason(e.target.value)}
+              placeholder="Reason for this request…"
+              rows={3}
+              style={{ ...S.input, resize: "vertical" as any }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setApprovalModal(null)} style={{ ...S.btn("255,255,255"), color: "rgba(232,238,255,0.6)" }}>
+                Cancel
+              </button>
+              <button
+                onClick={() => submitApproval.mutate({
+                  action_type: approvalModal.action === "suspend" ? "suspend_user" : "unsuspend_user",
+                  target_type: "user",
+                  target_id: approvalModal.userId,
+                  reason: approvalReason,
+                })}
+                disabled={!approvalReason.trim() || submitApproval.isPending}
+                style={{ ...S.btn("245,158,11"), color: "#F59E0B", opacity: (!approvalReason.trim() || submitApproval.isPending) ? 0.5 : 1 }}>
+                Submit Request
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -804,6 +906,189 @@ function AdminAITab() {
   );
 }
 
+// ── Approvals Tab ─────────────────────────────────────────────────────────────
+
+function ApprovalsTab() {
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState("pending");
+  const [declineModal, setDeclineModal] = useState<{ id: number } | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["approvals", statusFilter],
+    queryFn: () => approvalsAPI.list({ status: statusFilter || undefined }),
+    refetchInterval: 30_000,
+  });
+
+  const requests = (data as any)?.requests || [];
+
+  const approve = useMutation({
+    mutationFn: (id: number) => approvalsAPI.approve(id),
+    onSuccess: () => { toast({ title: "Approved and executed" }); refetch(); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const decline = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      approvalsAPI.decline(id, reason),
+    onSuccess: () => {
+      toast({ title: "Request declined" });
+      setDeclineModal(null);
+      setDeclineReason("");
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const ACTION_LABELS: Record<string, string> = {
+    suspend_user:       "Suspend User",
+    unsuspend_user:     "Restore User",
+    delete_user:        "Delete User",
+    update_plan:        "Change Plan",
+    approve_withdrawal: "Approve Withdrawal",
+    reject_withdrawal:  "Reject Withdrawal",
+    issue_refund:       "Issue Refund",
+  };
+
+  const statusColor = (s: string) =>
+    s === "pending" ? "#FBBF24" : s === "approved" ? "#00C896" : "#FB7185";
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={S.select}>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="declined">Declined</option>
+          <option value="">All</option>
+        </select>
+        <span style={S.muted}>{requests.length} request{requests.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      {isLoading ? (
+        <div style={{ textAlign: "center", padding: 40 }}>
+          <Loader2 size={24} color="#00C896" style={{ animation: "spin 1s linear infinite" }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : requests.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px", color: "rgba(232,238,255,0.25)", fontSize: 13 }}>
+          No requests found
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {requests.map((r: any) => (
+            <div key={r.id} style={{ ...S.glass, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>
+                      {ACTION_LABELS[r.action_type] || r.action_type}
+                    </span>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700,
+                      color: statusColor(r.status),
+                      background: `${statusColor(r.status)}18`,
+                      borderRadius: 100, padding: "2px 7px",
+                      fontFamily: "'DM Mono',monospace",
+                    }}>
+                      {(r.status || "").toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginBottom: 6 }}>
+                    Requested by{" "}
+                    <strong style={{ color: "#E8EEFF" }}>
+                      {r.requester_name || r.requester_email || `User #${r.requested_by}`}
+                    </strong>
+                    {r.target_type && r.target_id && ` · Target: ${r.target_type} #${r.target_id}`}
+                  </div>
+                  {r.reason && (
+                    <div style={{
+                      fontSize: 12, color: "rgba(232,238,255,0.7)",
+                      background: "rgba(255,255,255,0.03)",
+                      borderRadius: 8, padding: "7px 10px",
+                      fontStyle: "italic", lineHeight: 1.5,
+                    }}>
+                      "{r.reason}"
+                    </div>
+                  )}
+                  {r.decision_reason && (
+                    <div style={{ fontSize: 11, color: "#FB7185", marginTop: 6 }}>
+                      Decline reason: {r.decision_reason}
+                    </div>
+                  )}
+                  <div style={{ ...S.muted, marginTop: 6 }}>
+                    {new Date(r.created_at).toLocaleString()}
+                    {r.decided_at && ` · Decided ${new Date(r.decided_at).toLocaleString()} by ${r.decider_name || `#${r.decided_by}`}`}
+                  </div>
+                </div>
+                {r.status === "pending" && (
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => approve.mutate(r.id)}
+                      disabled={approve.isPending}
+                      style={{ ...S.btn("0,200,150"), color: "#00C896", opacity: approve.isPending ? 0.5 : 1 }}>
+                      <CheckCircle2 size={10} /> Approve
+                    </button>
+                    <button
+                      onClick={() => setDeclineModal({ id: r.id })}
+                      style={{ ...S.btn("251,113,133"), color: "#FB7185" }}>
+                      <XCircle size={10} /> Decline
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Decline reason modal */}
+      {declineModal && (
+        <>
+          <div
+            onClick={() => setDeclineModal(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(4,6,15,0.8)", zIndex: 2000, backdropFilter: "blur(4px)" }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "#08091A", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: 24, zIndex: 2001,
+            width: 380, display: "flex", flexDirection: "column", gap: 14,
+            fontFamily: "'DM Sans',sans-serif",
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>
+              Decline Request
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(232,238,255,0.6)" }}>
+              Provide a reason for declining this request:
+            </div>
+            <textarea
+              value={declineReason}
+              onChange={e => setDeclineReason(e.target.value)}
+              placeholder="Reason for declining…"
+              rows={3}
+              style={{ ...S.input, resize: "vertical" as any }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setDeclineModal(null)}
+                style={{ ...S.btn("255,255,255"), color: "rgba(232,238,255,0.6)" }}>
+                Cancel
+              </button>
+              <button
+                onClick={() => decline.mutate({ id: declineModal.id, reason: declineReason })}
+                disabled={!declineReason.trim() || decline.isPending}
+                style={{ ...S.btn("251,113,133"), color: "#FB7185", opacity: (!declineReason.trim() || decline.isPending) ? 0.5 : 1 }}>
+                Decline
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -819,6 +1104,7 @@ const TABS = [
   { id: "support",      label: "Support",      icon: LifeBuoy,     minRole: "admin"       },
   { id: "ai",           label: "Admin AI",     icon: MessageSquare,minRole: "admin"       },
   { id: "sa-assistant", label: "SA Assistant", icon: Crown,        minRole: "super_admin" },
+  { id: "approvals",    label: "Approvals",    icon: CheckCircle2, minRole: "super_admin" },
 ];
 
 
@@ -829,8 +1115,22 @@ export default function SuperAdmin() {
   const { user } = useAuth();
   const userRole = user?.role ?? "user";
   const [activeTab, setActiveTab] = useState("overview");
+  const [clockTime, setClockTime] = useState(() => new Date());
 
   useStaffHeartbeat();
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const { data: pendingApprovalsData } = useQuery({
+    queryKey: ["approvals-badge", "pending"],
+    queryFn: () => approvalsAPI.list({ status: "pending" }),
+    refetchInterval: 30_000,
+    enabled: isSuperAdmin(userRole),
+  });
+  const pendingCount: number = (pendingApprovalsData as any)?.requests?.length ?? 0;
 
   const visibleTabs = TABS.filter(t => hasRole(userRole, t.minRole as PlatformRole));
 
@@ -848,6 +1148,7 @@ export default function SuperAdmin() {
       case "demo-video":   return <DemoVideoManager />;
       case "support":      return <SupportAdminDashboard />;
       case "sa-assistant": return <SuperAdminAssistant />;
+      case "approvals":    return <ApprovalsTab />;
       default:             return <OverviewTab />;
     }
   };
@@ -865,13 +1166,19 @@ export default function SuperAdmin() {
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em" }}>
-                PLATFORM CONTROL — PHASE 10D
+                PLATFORM CONTROL
               </div>
               <h1 style={{ fontSize: "1.55rem", fontWeight: 900, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", color: "#E8EEFF", margin: 0 }}>
                 Super Admin
               </h1>
             </div>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 8, padding: "5px 10px" }}>
+                <Clock size={11} color="#F59E0B" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", fontFamily: "'DM Mono',monospace", letterSpacing: "0.05em" }}>
+                  {clockTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+              </div>
               <OperationalAlertsBadge onClick={() => window.location.href = '/financial-integrity'} />
               <RoleBadge role={userRole} />
             </div>
@@ -881,6 +1188,12 @@ export default function SuperAdmin() {
         </Reveal>
 
         <Reveal delay={30}>
+          <style>{`
+            @keyframes badge-pulse {
+              0%, 100% { opacity: 1; transform: scale(1); }
+              50%       { opacity: 0.75; transform: scale(0.92); }
+            }
+          `}</style>
           <div style={{ display: "flex", gap: 5, marginBottom: 22, flexWrap: "wrap" }}>
             {visibleTabs.map(t => {
               const Icon = t.icon;
@@ -899,6 +1212,21 @@ export default function SuperAdmin() {
                     fontFamily: "'DM Sans',sans-serif", transition: "all 0.16s",
                   }}>
                   <Icon size={13} /> {t.label}
+                  {t.id === "approvals" && pendingCount > 0 && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      minWidth: 16, height: 16, borderRadius: 100,
+                      background: active ? "#F59E0B" : "#FB7185",
+                      color: "#04060F",
+                      fontSize: 9, fontWeight: 900,
+                      fontFamily: "'DM Mono',monospace",
+                      padding: "0 4px",
+                      lineHeight: 1,
+                      animation: "badge-pulse 2s ease-in-out infinite",
+                    }}>
+                      {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
