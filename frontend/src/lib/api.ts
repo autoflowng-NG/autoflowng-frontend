@@ -279,6 +279,23 @@ export const superAdminAPI = {
     api.post("/super-admin/broadcast", data),
 };
 
+// ── Phase 10D+: Approval Requests API ─────────────────────────────────────────
+export const approvalsAPI = {
+  list: (params?: { status?: string }) =>
+    api.get("/approvals", { params: params as any }),
+  create: (data: {
+    action_type: string;
+    target_type: string;
+    target_id: string;
+    payload?: Record<string, any>;
+    reason: string;
+  }) => api.post("/approvals", data),
+  approve: (id: string | number) =>
+    api.patch(`/approvals/${id}/approve`),
+  decline: (id: string | number, decision_reason: string) =>
+    api.patch(`/approvals/${id}/decline`, { decision_reason }),
+};
+
 export const runsAPI = {
   recent: (limit = 60) =>
     api.get("/analytics", { params: { range: "30d" } })
