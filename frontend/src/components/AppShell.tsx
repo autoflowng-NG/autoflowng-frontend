@@ -93,9 +93,10 @@ function SidebarContent({
   // Build nav list based on role
   const allNav = [
     ...NAV,
-    // Support+ sees legacy Admin panel
-    ...(isSupport(role) || (user as any)?.is_admin ? ADMIN_NAV : []),
-    // Admin+ sees Super Admin dashboard
+    // Support+ (but NOT super_admin) sees the Admin panel.
+    // super_admin goes directly to Super Admin — showing both is redundant.
+    ...(!isSuperAdmin(role) && (isSupport(role) || (user as any)?.is_admin) ? ADMIN_NAV : []),
+    // super_admin only: Super Admin + Queue Control
     ...(isSuperAdmin(role) ? SUPER_ADMIN_NAV : []),
   ];
 
