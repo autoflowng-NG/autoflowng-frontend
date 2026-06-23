@@ -70,10 +70,26 @@ export default function IntegrationDetail() {
     fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box",
   };
 
+  // Per-integration field overrides — more descriptive than the generic auth-type labels
+  const INTEGRATION_FIELDS: Record<string, { name: string; label: string; type: string }[]> = {
+    telegram:    [{ name: "apiKey", label: "Bot Token",        type: "password" }],
+    discord:     [{ name: "apiKey", label: "Bot Token",        type: "password" }],
+    openai:      [{ name: "apiKey", label: "OpenAI API Key",   type: "password" }],
+    anthropic:   [{ name: "apiKey", label: "Anthropic API Key",type: "password" }],
+    stripe:      [{ name: "apiKey", label: "Secret Key",       type: "password" }],
+    sendgrid:    [{ name: "apiKey", label: "SendGrid API Key", type: "password" }],
+    mailchimp:   [{ name: "apiKey", label: "Mailchimp API Key",type: "password" }],
+    twilio:      [{ name: "apiKey", label: "Auth Token",       type: "password" }],
+    airtable:    [{ name: "apiKey", label: "Personal Access Token", type: "password" }],
+    notion:      [{ name: "apiKey", label: "Integration Token",type: "password" }],
+    hubspot:     [{ name: "apiKey", label: "Private App Token",type: "password" }],
+    shopify:     [{ name: "apiKey", label: "Admin API Token",  type: "password" }],
+  };
+
   const AUTH_FIELDS: Record<string, { name: string; label: string; type: string }[]> = {
-    api_key:      [{ name: "apiKey",   label: "API Key",   type: "password" }],
+    api_key:      [{ name: "apiKey",   label: "API Key",      type: "password" }],
     bearer_token: [{ name: "apiKey",   label: "Bearer Token", type: "password" }],
-    custom:       [{ name: "apiKey",   label: "Token / Key", type: "password" }],
+    custom:       [{ name: "apiKey",   label: "Token / Key",  type: "password" }],
   };
 
   if (isLoading) return (
@@ -84,7 +100,7 @@ export default function IntegrationDetail() {
 
   if (!integ) return <div style={{ padding: 32, color: "#E8EEFF" }}>Integration not found</div>;
 
-  const fields = AUTH_FIELDS[integ.authType] || [];
+  const fields = INTEGRATION_FIELDS[integ.id] || AUTH_FIELDS[integ.authType] || [];
   const isOAuth = integ.authType === "oauth2";
 
   return (
