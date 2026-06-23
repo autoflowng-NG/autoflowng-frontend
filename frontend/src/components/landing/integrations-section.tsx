@@ -61,7 +61,7 @@ export function IntegrationsSection() {
         <p className={`mt-8 text-xl text-muted-foreground leading-relaxed max-w-lg mx-auto transition-all duration-1000 delay-100 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
-          Automate posting, messaging, and data sync across social media, payments, and productivity tools — built for the platforms Nigerian businesses actually use.
+          Automate posting, messaging, and data sync across social media, payments, and productivity tools — built for the platforms global businesses actually use.
         </p>
       </div>
 
