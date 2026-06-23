@@ -146,7 +146,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function SuperAdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const role = user?.role as PlatformRole;
-  if (!hasRole(role, 'admin')) return <Navigate to="/dashboard" replace />;
+  if (role !== 'super_admin') return <Navigate to="/admin" replace />;
   return <>{children}</>;
 }
 
