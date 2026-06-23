@@ -26,7 +26,7 @@ import {
   BarChart3, FileText, Store, Layers, Webhook, Activity, Key,
   Wand2, Library, HelpCircle, Globe, Newspaper, Compass,
 } from "lucide-react";
-import { isPlatformAdmin, isSupport, getRoleBadge } from "../lib/rbac";
+import { isPlatformAdmin, isSuperAdmin, isSupport, getRoleBadge } from "../lib/rbac";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import ProductTour from "./ProductTour";
 import AnnouncementBanner from "./AnnouncementBanner";
@@ -96,7 +96,7 @@ function SidebarContent({
     // Support+ sees legacy Admin panel
     ...(isSupport(role) || (user as any)?.is_admin ? ADMIN_NAV : []),
     // Admin+ sees Super Admin dashboard
-    ...(isPlatformAdmin(role) ? SUPER_ADMIN_NAV : []),
+    ...(isSuperAdmin(role) ? SUPER_ADMIN_NAV : []),
   ];
 
   const statusLabel =
@@ -270,18 +270,6 @@ function SidebarContent({
         )}
       </div>
 
-      {/* Desktop notification bell — shown only in desktop sidebar; af-topbar hides on desktop */}
-      {!isMobile && (
-        <div style={{
-          padding: isCollapsed ? "10px 0" : "10px 14px",
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: isCollapsed ? "center" : "flex-start",
-        }}>
-          <NotificationCentre />
-        </div>
-      )}
 
       {/* User footer */}
       <div
@@ -437,6 +425,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         >
           <button
             onClick={() => setMobileOpen(true)}
+            className="af-topbar-mobile-only"
             style={{
               background: "transparent",
               border: "none",
@@ -448,7 +437,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           >
             <Menu size={20} />
           </button>
-          <Logo size="xs" />
+          <span className="af-topbar-mobile-only"><Logo size="xs" /></span>
           <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative", zIndex: 50 }}>
             <NotificationCentre />
             <span onClick={() => setRuntimeOpen(o => !o)} style={{ cursor: "pointer" }}><RuntimeHealthDot /></span>
@@ -510,7 +499,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {/* Desktop top-right controls */}
       <style>{`
         @media (min-width: 768px) {
-          .af-topbar { display: none !important; }
+          .af-topbar-mobile-only { display: none !important; }
+          .af-topbar { justify-content: flex-end !important; }
           .af-desktop-sidebar { display: block !important; }
         }
       `}</style>
