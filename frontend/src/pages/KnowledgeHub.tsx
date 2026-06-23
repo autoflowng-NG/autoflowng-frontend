@@ -35,13 +35,13 @@ const CATEGORIES = [
 ];
 
 const FEATURED = [
-  { label: "African Tech Startups", cat: "tech",      q: "African technology startups and innovation ecosystem 2024" },
+  { label: "Global Tech Startups",  cat: "tech",      q: "Global technology startups and innovation ecosystem 2024" },
   { label: "Artificial Intelligence", cat: "tech",    q: "Latest developments in artificial intelligence and machine learning" },
   { label: "Global Economy 2024",   cat: "business",  q: "Global economy outlook 2024 GDP growth inflation" },
   { label: "World Cuisine Culture", cat: "food",      q: "World cuisine culture and food traditions" },
   { label: "Space Exploration",     cat: "tech",      q: "Space exploration missions discoveries 2024" },
   { label: "Music Streaming Trends",cat: "music",     q: "Music streaming platforms trends and artists 2024" },
-  { label: "African Countries",     cat: "countries", q: "Africa countries economic development demographics" },
+  { label: "Countries & Cultures",  cat: "countries", q: "Countries cultures economic development demographics world" },
   { label: "Football World News",   cat: "sports",    q: "Football soccer world news latest results transfers" },
 ];
 
@@ -260,7 +260,7 @@ export default function KnowledgeHub() {
                   ref={inputRef}
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="Ask anything — 'Premier League 2024', 'Nigerian tech hubs', 'AI in Africa'…"
+                  placeholder="Ask anything — 'Premier League 2024', 'Global tech trends', 'AI transforming industries'…"
                   style={{ width: "100%", padding: "14px 14px 14px 44px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#E8EEFF", fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box", transition: "border-color 0.2s" }}
                   onFocus={e => (e.target.style.borderColor = "#00C896")}
                   onBlur={e  => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}

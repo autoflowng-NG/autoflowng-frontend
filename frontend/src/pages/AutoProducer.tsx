@@ -279,7 +279,7 @@ export default function AutoProducer() {
           {/* Prompt area */}
           <textarea
             style={{ ...styles.textarea, opacity: (isExpired || quotaFull) ? 0.5 : 1 }}
-            placeholder="What video do you want to create? e.g. 'Top 5 AI tools for Nigerian businesses explained in 3 minutes'"
+            placeholder="What video do you want to create? e.g. 'Top 5 AI tools transforming global businesses in 3 minutes'"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             disabled={isExpired || quotaFull}
