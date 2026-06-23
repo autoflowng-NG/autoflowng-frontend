@@ -300,11 +300,22 @@ export default function Admin() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.15)", borderRadius: 8, padding: "5px 10px" }}>
+            {/* Global clock — WAT · UTC · London · New York */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(251,113,133,0.06)", border: "1px solid rgba(251,113,133,0.15)", borderRadius: 8, padding: "5px 10px" }}>
               <Clock size={11} color="#FB7185" />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#FB7185", fontFamily: "'DM Mono',monospace", letterSpacing: "0.05em" }}>
-                {clockTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </span>
+              {([
+                { tz: "Africa/Lagos",     label: "WAT" },
+                { tz: "UTC",              label: "UTC" },
+                { tz: "Europe/London",    label: "LON" },
+                { tz: "America/New_York", label: "NY"  },
+              ] as const).map(({ tz, label }) => (
+                <span key={tz} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(251,113,133,0.55)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#FB7185", fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>
+                    {clockTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: tz, hour12: false })}
+                  </span>
+                </span>
+              ))}
             </div>
             <OperationalAlertsBadge onClick={() => window.location.href = '/financial-integrity'} />
           </div>
