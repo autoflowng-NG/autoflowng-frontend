@@ -15,18 +15,23 @@ function GoogleDriveCard() {
   const [loading, setLoading] = useState(false);
 
   const refresh = async () => {
-    try { setStatus(await googleDriveAPI.status()); } catch { setStatus({ connected: false }); }
+    try {
+      // BUGFIX (Bug 3): status endpoint returns { integration: { connected, ... } }
+      // not { connected } directly — read the nested field.
+      const result: any = await googleDriveAPI.status();
+      setStatus({ connected: result?.integration?.connected ?? false });
+    } catch { setStatus({ connected: false }); }
   };
   useEffect(() => { refresh(); }, []);
 
-  const connect = async () => {
-    setLoading(true);
-    try {
-      const r: any = await googleDriveAPI.connect();
-      if (r?.url) window.location.href = r.url;
-    } catch (e: any) {
-      toast({ title: "Google Drive", description: e?.message || "Connect failed", variant: "destructive" });
-    } finally { setLoading(false); }
+  const connect = () => {
+    // BUGFIX (Bug 3): GET /api/integrations/:id/oauth/start does a server-side redirect
+    // to Google's consent screen — it cannot be called via fetch/api.get (no JSON response).
+    // Must be opened as a top-level navigation or popup, with the user's JWT as ?token=.
+    const token = tokenStore.get();
+    if (!token) { toast({ title: "Google Drive", description: "Please log in first", variant: "destructive" }); return; }
+    const url = `${googleDriveAPI.connect()}?token=${encodeURIComponent(token)}`;
+    window.open(url, "_blank", "width=600,height=700");
   };
 
   const disconnect = async () => {
