@@ -105,7 +105,13 @@ interface UserProfileDrawerProps {
 function UserProfileDrawer({ userId, onClose }: UserProfileDrawerProps) {
   const { data, isLoading } = useQuery({
     queryKey: ["super-admin", "user-profile", userId],
-    queryFn:  () => fetch(`/api/profile/user/${userId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn:  () => {
+      const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
+      return fetch(`/api/profile/user/${userId}`, {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json());
+    },
     enabled:  !!userId,
   });
 
