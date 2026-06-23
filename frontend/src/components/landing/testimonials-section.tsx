@@ -42,7 +42,7 @@ export function TestimonialsSection() {
             Trusted by builders
           </h2>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-            Teams across Africa and beyond use AutoFlowNG to move faster.
+            Teams across the globe use AutoFlowNG to move faster.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
