@@ -7,7 +7,7 @@
  *   3. Video          — Task 5: generate video from text prompt (Phase 32)
  *   4. Style          — Task 5: Anime / Cartoon / Comics / Cinematic style conversion (Phase 31)
  *   5. Animation      — Task 5: Image-to-video animation (Phase 30)
- *   6. Image Edit     — Task 6: pixel-level image editing via fal.ai (image-editor.js)
+ *   6. Image Edit     — Task 6: pixel-level image editing via Pollinations.ai Kontext (image-editor.js)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -295,7 +295,7 @@ function ThumbnailTab({ headers, onComplete }: { headers: Record<string, string>
   const [error,   setError]   = useState<string | null>(null);
 
   const providerLabel = (p: string) =>
-    p === 'fal' ? 'via fal.ai' : p === 'dalle3' ? 'via DALL-E 3' : 'via Placeholder';
+    p === 'pollinations' ? 'via Pollinations.ai' : p === 'fal' ? 'via fal.ai' : p === 'dalle3' ? 'via DALL-E 3' : 'via Placeholder';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1185,7 +1185,7 @@ function ImageEditTab({ token }: { token: string }) {
     try {
       const data = await aiAPI.imageEdit({ imageUrl: imageUrl.trim(), prompt, negativePrompt, strength });
       if (data.outputUrl) {
-        setResult({ outputUrl: data.outputUrl, provider: data.provider || 'fal', model: data.model || 'fal-ai/flux' });
+        setResult({ outputUrl: data.outputUrl, provider: data.provider || 'pollinations', model: data.model || 'flux' });
       } else {
         throw new Error(data.error || 'No output returned');
       }
@@ -1195,7 +1195,7 @@ function ImageEditTab({ token }: { token: string }) {
   return (
     <form onSubmit={handleSubmit}>
       <div style={s.infoBox}>
-        🖼️ <strong>Image Edit</strong> uses fal.ai's Flux Kontext model to apply guided, instruction-following edits to any image. Paste a public image URL and describe what you want to change. Requires <code style={{ fontFamily: "'DM Mono',monospace" }}>FAL_KEY</code> to be configured.
+        🖼️ <strong>Image Edit</strong> uses Pollinations.ai's Kontext model (free, no signup) to apply guided, instruction-following edits to any image — including style/cartoon conversion. Paste a public image URL and describe what you want to change.
       </div>
 
       <div style={s.fieldGroup}>
@@ -1328,7 +1328,7 @@ function ImageGenerateTab({ token }: { token: string }) {
     try {
       const data = await aiAPI.imageGenerate({ prompt: prompt.trim(), negativePrompt, aspectRatio });
       if (data.outputUrl) {
-        setResult({ outputUrl: data.outputUrl, provider: data.provider || 'fal', model: data.model || 'fal-ai/flux' });
+        setResult({ outputUrl: data.outputUrl, provider: data.provider || 'pollinations', model: data.model || 'flux' });
       } else {
         throw new Error(data.error || 'No output returned');
       }
