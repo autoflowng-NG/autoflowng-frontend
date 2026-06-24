@@ -1,16 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { authAPI } from "../lib/api";
 import { NotificationPreferences } from "../components/NotificationPreferences";
 import { PageTransition } from "../components/PageTransition";
 import { useAuth } from "../contexts/AuthContext";
+import { useOrg, type OrgRole, type OrgMember, type PendingInvitation } from "../contexts/OrgContext";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
-import { User, Lock, Bell, Shield, Trash2, Check, Eye, EyeOff, AlertCircle, Camera, Phone, MapPin, FileText } from "lucide-react";
+import { User, Lock, Bell, Shield, Trash2, Check, Eye, EyeOff, AlertCircle, Camera, Phone, MapPin, FileText, Building2, UserPlus, X, Mail, Clock, RefreshCw } from "lucide-react";
 
 const TABS = [
   { id: "profile",   label: "Profile",   icon: User },
   { id: "security",  label: "Security",  icon: Lock },
+  { id: "workspace", label: "Workspace", icon: Building2 },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "account",   label: "Account",   icon: Shield },
 ];
@@ -302,7 +304,242 @@ function AccountTab() {
   );
 }
 
-const TAB_CONTENT: Record<string, React.FC> = { profile: ProfileTab, security: SecurityTab, notifications: NotificationsTab, account: AccountTab };
+function WorkspaceTab() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { activeOrg, myRole, canDo, getMembers, inviteMember, changeRole, removeMember, resendInvite, revokeInvite } = useOrg();
+
+  const [members,    setMembers]    = useState<OrgMember[]>([]);
+  const [pending,    setPending]    = useState<PendingInvitation[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [email,      setEmail]      = useState("");
+  const [role,       setRole]       = useState<OrgRole>("viewer");
+  const [inviting,   setInviting]   = useState(false);
+  const [pendingAction, setPendingAction] = useState<number | null>(null); // invite id currently resending/revoking
+
+  const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em", marginBottom: 6, display: "block" };
+  const inp: React.CSSProperties = { width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "11px 14px", color: "#E8EEFF", fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" };
+
+  const ROLE_BADGE: Record<OrgRole, string> = { owner: "#A78BFA", admin: "#38BDF8", operator: "#00C896", viewer: "#94A3B8" };
+
+  const load = async () => {
+    if (!activeOrg) return;
+    setLoading(true);
+    try {
+      const data = await getMembers(activeOrg.id);
+      setMembers(data.members || []);
+      setPending(data.pending_invitations || []);
+    } catch (e: any) {
+      toast({ title: "Couldn't load members", description: e?.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [activeOrg?.id]);
+
+  // BUGFIX: this whole tab is new — previously there was no way for a user
+  // to invite teammates into a workspace at all, even though the backend
+  // (routes/organizations.js) has fully working invite/member-management
+  // routes. See OrgContext.tsx for the API wiring this calls into.
+  if (!activeOrg) {
+    return (
+      <div style={{ textAlign: "center", padding: "40px 20px" }}>
+        <Building2 size={28} color="rgba(232,238,255,0.2)" style={{ marginBottom: 12 }} />
+        <div style={{ fontSize: 14, color: "rgba(232,238,255,0.5)", marginBottom: 4 }}>You're in your personal workspace</div>
+        <div style={{ fontSize: 12, color: "rgba(232,238,255,0.3)" }}>Create or switch to a team workspace from the sidebar to manage members.</div>
+      </div>
+    );
+  }
+
+  const canManage = canDo("manage_members");
+
+  const handleInvite = async () => {
+    if (!email.trim()) return;
+    setInviting(true);
+    try {
+      await inviteMember(activeOrg.id, email.trim(), role);
+      toast({ title: "Invitation sent", description: `${email} will receive an email to join ${activeOrg.name}.` });
+      setEmail(""); setRole("viewer"); setInviteOpen(false);
+      load();
+    } catch (e: any) {
+      toast({ title: "Couldn't send invitation", description: e?.message, variant: "destructive" });
+    } finally { setInviting(false); }
+  };
+
+  const handleRoleChange = async (userId: number, newRole: OrgRole) => {
+    try {
+      await changeRole(activeOrg.id, userId, newRole);
+      toast({ title: "Role updated" });
+      load();
+    } catch (e: any) {
+      toast({ title: "Couldn't update role", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  const handleRemove = async (userId: number, name: string) => {
+    if (!window.confirm(`Remove ${name} from ${activeOrg.name}?`)) return;
+    try {
+      await removeMember(activeOrg.id, userId);
+      toast({ title: "Member removed" });
+      load();
+    } catch (e: any) {
+      toast({ title: "Couldn't remove member", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  // BUGFIX: resend previously generated a new token but never actually
+  // sent an email (fixed in routes/organizations.js); revoke didn't exist
+  // as an endpoint at all. Both are now wired through here.
+  const handleResend = async (invId: number, inviteeEmail: string) => {
+    setPendingAction(invId);
+    try {
+      await resendInvite(activeOrg.id, invId);
+      toast({ title: "Invitation resent", description: `A new email was sent to ${inviteeEmail}.` });
+      load();
+    } catch (e: any) {
+      toast({ title: "Couldn't resend invitation", description: e?.message, variant: "destructive" });
+    } finally { setPendingAction(null); }
+  };
+
+  const handleRevoke = async (invId: number, inviteeEmail: string) => {
+    if (!window.confirm(`Cancel the pending invite for ${inviteeEmail}?`)) return;
+    setPendingAction(invId);
+    try {
+      await revokeInvite(activeOrg.id, invId);
+      toast({ title: "Invitation cancelled" });
+      load();
+    } catch (e: any) {
+      toast({ title: "Couldn't cancel invitation", description: e?.message, variant: "destructive" });
+    } finally { setPendingAction(null); }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>{activeOrg.name}</div>
+          <div style={{ fontSize: 12, color: "rgba(232,238,255,0.4)", marginTop: 2 }}>
+            {members.length} member{members.length !== 1 ? "s" : ""} · your role: <span style={{ color: ROLE_BADGE[myRole || "viewer"], fontWeight: 700 }}>{myRole}</span>
+          </div>
+        </div>
+        {canManage && (
+          <button data-testid="button-invite-member" onClick={() => setInviteOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 10, padding: "9px 16px", color: "#A78BFA", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+            <UserPlus size={13} /> Invite member
+          </button>
+        )}
+      </div>
+
+      {!canManage && (
+        <div style={{ display: "flex", gap: 8, background: "rgba(56,189,248,0.06)", border: "1px solid rgba(56,189,248,0.15)", borderRadius: 12, padding: "12px 14px", marginBottom: 20, fontSize: 12, color: "rgba(232,238,255,0.6)" }}>
+          <AlertCircle size={14} color="#38BDF8" style={{ flexShrink: 0, marginTop: 1 }} />
+          Only admins and owners can invite or manage members. You can view the team below.
+        </div>
+      )}
+
+      {inviteOpen && canManage && (
+        <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18, marginBottom: 20 }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+            <div style={{ flex: 2, minWidth: 180 }}>
+              <label style={lbl}>Email address</label>
+              <div style={{ position: "relative" }}>
+                <Mail size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(232,238,255,0.3)" }} />
+                <input style={{ ...inp, paddingLeft: 36 }} placeholder="teammate@email.com" value={email}
+                  onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleInvite()} />
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 130 }}>
+              <label style={lbl}>Role</label>
+              <select style={inp} value={role} onChange={e => setRole(e.target.value as OrgRole)}>
+                <option value="viewer">Viewer — view only</option>
+                <option value="operator">Operator — run workflows</option>
+                {myRole === "owner" && <option value="admin">Admin — manage team</option>}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button data-testid="button-send-invite" onClick={handleInvite} disabled={inviting || !email.trim()}
+              style={{ background: "#00C896", border: "none", borderRadius: 10, padding: "10px 20px", color: "#04060F", fontSize: 13, fontWeight: 700, cursor: inviting ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: inviting || !email.trim() ? 0.5 : 1 }}>
+              {inviting ? "Sending…" : "Send invite"}
+            </button>
+            <button onClick={() => setInviteOpen(false)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "10px 20px", color: "rgba(232,238,255,0.5)", fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Member list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: pending.length ? 24 : 0 }}>
+        {loading && <div style={{ fontSize: 12, color: "rgba(232,238,255,0.4)", padding: "12px 0" }}>Loading members…</div>}
+        {!loading && members.map(m => (
+          <div key={m.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#00C896,#38BDF8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#04060F", flexShrink: 0 }}>
+                {(m.user_name || m.email || "?")[0].toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#E8EEFF" }}>{m.user_name || m.email}{m.email === user?.email && <span style={{ color: "rgba(232,238,255,0.3)", fontWeight: 400 }}> (you)</span>}</div>
+                <div style={{ fontSize: 11, color: "rgba(232,238,255,0.4)" }}>{m.email}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {canManage && m.role !== "owner" ? (
+                <select value={m.role} onChange={e => handleRoleChange(m.user_id, e.target.value as OrgRole)}
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "5px 8px", color: ROLE_BADGE[m.role], fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", cursor: "pointer" }}>
+                  <option value="viewer">viewer</option>
+                  <option value="operator">operator</option>
+                  {myRole === "owner" && <option value="admin">admin</option>}
+                </select>
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 700, color: ROLE_BADGE[m.role], fontFamily: "'DM Mono',monospace", textTransform: "uppercase" as const }}>{m.role}</span>
+              )}
+              {canManage && m.role !== "owner" && (
+                <button onClick={() => handleRemove(m.user_id, m.user_name || m.email)} style={{ background: "transparent", border: "none", color: "rgba(251,113,133,0.6)", cursor: "pointer", padding: 4, display: "flex" }}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pending invitations */}
+      {pending.length > 0 && (
+        <div>
+          <div style={{ ...lbl, marginBottom: 10 }}>PENDING INVITATIONS</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pending.map(inv => (
+              <div key={inv.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "rgba(251,191,36,0.04)", border: "1px solid rgba(251,191,36,0.12)", borderRadius: 10, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Clock size={13} color="#FBBF24" />
+                  <span style={{ fontSize: 13, color: "#E8EEFF" }}>{inv.email}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: ROLE_BADGE[inv.role], fontFamily: "'DM Mono',monospace", textTransform: "uppercase" as const }}>{inv.role}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 11, color: "rgba(232,238,255,0.35)" }}>Expires {new Date(inv.expires_at).toLocaleDateString()}</span>
+                  {canManage && (
+                    <>
+                      <button data-testid={`button-resend-invite-${inv.id}`} onClick={() => handleResend(inv.id, inv.email)} disabled={pendingAction === inv.id}
+                        title="Resend invite email"
+                        style={{ background: "transparent", border: "none", color: "rgba(56,189,248,0.7)", cursor: pendingAction === inv.id ? "not-allowed" : "pointer", padding: 4, display: "flex", opacity: pendingAction === inv.id ? 0.4 : 1 }}>
+                        <RefreshCw size={13} style={pendingAction === inv.id ? { animation: "spin 1s linear infinite" } : undefined} />
+                      </button>
+                      <button data-testid={`button-revoke-invite-${inv.id}`} onClick={() => handleRevoke(inv.id, inv.email)} disabled={pendingAction === inv.id}
+                        title="Cancel invite"
+                        style={{ background: "transparent", border: "none", color: "rgba(251,113,133,0.6)", cursor: pendingAction === inv.id ? "not-allowed" : "pointer", padding: 4, display: "flex", opacity: pendingAction === inv.id ? 0.4 : 1 }}>
+                        <X size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TAB_CONTENT: Record<string, React.FC> = { profile: ProfileTab, security: SecurityTab, workspace: WorkspaceTab, notifications: NotificationsTab, account: AccountTab };
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("profile");
