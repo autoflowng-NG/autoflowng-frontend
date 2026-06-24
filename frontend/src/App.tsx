@@ -18,7 +18,7 @@ class LandingErrorBoundary extends Component<{children:ReactNode},{hasError:bool
  *   /integration-health — Integration Health Monitor
  *
  * Phase 13B additions:
- *   /marketplace             — Integration Marketplace (protected)
+ *   /marketplace             — redirects to /connections (Integration Hub)
  *   /integrations/:id        — Integration Detail page (protected)
  *   /credentials             — Credential Vault Manager (protected)
  *   /node-library            — Node Library Browser (protected)
@@ -47,7 +47,8 @@ const Dashboard    = lazy(() => import('./pages/Dashboard'));
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const Workflows    = lazy(() => import('./pages/Workflows'));
 const Automations  = lazy(() => import('./pages/Automations'));
-const Connections  = lazy(() => import('./pages/Connections'));
+// Integration Hub — replaces both /connections and /marketplace
+const IntegrationHub     = lazy(() => import('./pages/IntegrationHub'));
 const Intelligence = lazy(() => import('./pages/IntelligenceOpsCenter'));
 const Profile      = lazy(() => import('./pages/Profile'));
 const Referrals    = lazy(() => import('./pages/Referrals'));
@@ -66,8 +67,7 @@ const SharedExecutionPage = lazy(() => import('./pages/SharedExecutionPage'));
 const Landing             = lazy(() => import('./pages/Landing'));
 const WorkflowBuilder     = lazy(() => import('./pages/WorkflowBuilder'));
 
-// ── Phase 13B: Integration Ecosystem ──────────────────────────────────────────
-const Marketplace        = lazy(() => import('./pages/Marketplace'));
+// ── Phase 13B: Integration Ecosystem (remaining pages, unchanged) ────────────
 const IntegrationDetail  = lazy(() => import('./pages/IntegrationDetail'));
 const CredentialManager  = lazy(() => import('./pages/CredentialManager'));
 const NodeLibrary        = lazy(() => import('./pages/NodeLibrary'));
@@ -234,7 +234,7 @@ function AppProviders() {
           <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route path="/workflows/*"   element={<RequireAuth><Workflows /></RequireAuth>} />
           <Route path="/automations/*" element={<RequireAuth><Automations /></RequireAuth>} />
-          <Route path="/connections"   element={<RequireAuth><Connections /></RequireAuth>} />
+          <Route path="/connections"   element={<RequireAuth><IntegrationHub /></RequireAuth>} />
           <Route path="/intelligence"  element={<RequireAuth><Intelligence /></RequireAuth>} />
           <Route path="/profile"       element={<RequireAuth><Profile /></RequireAuth>} />
 
@@ -282,9 +282,11 @@ function AppProviders() {
           <Route path="/ai-chat"           element={<RequireAuth><AIChat /></RequireAuth>} />
 
           {/* ─────────────────────────────────────────────────────────────── */}
-          {/* Phase 13B: Integration Ecosystem & Automation Marketplace      */}
+          {/* Integration Hub — unified destination for all integration work  */}
+          {/* /connections is the canonical route (sidebar entry).            */}
+          {/* /marketplace permanently redirects here — no duplicate systems. */}
           {/* ─────────────────────────────────────────────────────────────── */}
-          <Route path="/marketplace"          element={<RequireAuth><Marketplace /></RequireAuth>} />
+          <Route path="/marketplace"          element={<Navigate to="/connections" replace />} />
           <Route path="/integrations/:id"     element={<RequireAuth><IntegrationDetail /></RequireAuth>} />
           <Route path="/credentials"          element={<RequireAuth><CredentialManager /></RequireAuth>} />
           <Route path="/node-library"         element={<RequireAuth><NodeLibrary /></RequireAuth>} />
