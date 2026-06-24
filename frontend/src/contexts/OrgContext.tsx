@@ -74,6 +74,16 @@ export interface OrgContextValue {
   createOrg:     (name: string) => Promise<Org>;
   refreshOrgs:   () => Promise<void>;
   canDo:         (action: OrgAction) => boolean;
+  // BUGFIX: the backend (routes/organizations.js) already has a complete,
+  // working member-management API — list/invite/change-role/remove — but
+  // nothing in the frontend ever called it. There was no Invite UI at all.
+  getMembers:    (orgId: number) => Promise<{ members: OrgMember[]; pending_invitations: PendingInvitation[] }>;
+  inviteMember:  (orgId: number, email: string, role: OrgRole) => Promise<{ token: string; invite_url: string; expires_at: string }>;
+  changeRole:    (orgId: number, userId: number, role: OrgRole) => Promise<void>;
+  removeMember:  (orgId: number, userId: number) => Promise<void>;
+  acceptInvite:  (token: string) => Promise<{ org_id: number; role: OrgRole }>;
+  resendInvite:  (orgId: number, invId: number) => Promise<{ token: string; invite_url: string; expires_at: string }>;
+  revokeInvite:  (orgId: number, invId: number) => Promise<void>;
 }
 
 type OrgAction = "manage_members" | "invite" | "view_audit" | "delete_org" | "create_workflow" | "trigger_workflow" | "view_executions";
@@ -146,6 +156,61 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     return data.org;
   }, [token, fetchOrgs]);
 
+  // BUGFIX: these five didn't exist anywhere on the frontend. The backend
+  // routes (GET/:orgId/members, POST /:orgId/invite, PATCH /:orgId/members/
+  // :memberId, DELETE /:orgId/members/:memberId, POST /invitations/:token/
+  // accept) were fully built and working, but unreachable — there was no
+  // Invite Member button, no member list, and no /accept-invite page.
+  const getMembers = useCallback(async (orgId: number) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    return apiFetch(`/orgs/${orgId}/members`, tok);
+  }, [token]);
+
+  const inviteMember = useCallback(async (orgId: number, email: string, role: OrgRole) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    return apiFetch(`/orgs/${orgId}/invite`, tok, {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    });
+  }, [token]);
+
+  const changeRole = useCallback(async (orgId: number, userId: number, role: OrgRole) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    await apiFetch(`/orgs/${orgId}/members/${userId}`, tok, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+  }, [token]);
+
+  const removeMember = useCallback(async (orgId: number, userId: number) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    await apiFetch(`/orgs/${orgId}/members/${userId}`, tok, { method: "DELETE" });
+  }, [token]);
+
+  const acceptInvite = useCallback(async (inviteToken: string) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    const data = await apiFetch(`/orgs/invitations/${inviteToken}/accept`, tok, { method: "POST" });
+    await fetchOrgs();
+    return data;
+  }, [token, fetchOrgs]);
+
+  const resendInvite = useCallback(async (orgId: number, invId: number) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    return apiFetch(`/orgs/${orgId}/invite/resend/${invId}`, tok, { method: "POST" });
+  }, [token]);
+
+  const revokeInvite = useCallback(async (orgId: number, invId: number) => {
+    const tok = token();
+    if (!tok) throw new Error("Not authenticated");
+    await apiFetch(`/orgs/${orgId}/invite/${invId}`, tok, { method: "DELETE" });
+  }, [token]);
+
   const myRole: OrgRole | null = activeOrg?.role ?? null;
 
   const canDo = useCallback((action: OrgAction): boolean => {
@@ -159,7 +224,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     setActiveOrg, createOrg,
     refreshOrgs: fetchOrgs,
     canDo,
-  }), [orgs, activeOrg, myRole, isLoading, setActiveOrg, createOrg, fetchOrgs, canDo]);
+    getMembers, inviteMember, changeRole, removeMember, acceptInvite,
+    resendInvite, revokeInvite,
+  }), [orgs, activeOrg, myRole, isLoading, setActiveOrg, createOrg, fetchOrgs, canDo, getMembers, inviteMember, changeRole, removeMember, acceptInvite, resendInvite, revokeInvite]);
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
 }
