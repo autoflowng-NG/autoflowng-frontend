@@ -35,20 +35,16 @@ import { OrgProvider } from './contexts/OrgContext';
 import { ExecutionHistoryProvider } from './contexts/ExecutionHistoryContext';
 import { hasRole, type PlatformRole } from './lib/rbac';
 import { CriticalAlertToaster } from './components/CriticalAlertToaster';
-// BUGFIX: the shadcn <Toaster /> (driven by the useToast() hook used across
-// the whole app — Workflows.tsx, Automations.tsx, etc.) was never mounted.
-// CriticalAlertToaster is a *separate* component with its own state source
-// (system-wide critical alerts) and does not render useToast() toasts.
-// Result: every toast({ title, description }) call anywhere in the app
-// (success confirmations AND error messages) updated state with nothing
-// listening to render it — so failures were completely silent on screen.
-import { Toaster } from './components/ui/toaster';
 import AppShell from './components/AppShell';
 
 // ── Existing lazy imports (Phases 1–12.5, unchanged) ──────────────────────────
 const Login        = lazy(() => import('./pages/Login'));
 const Register     = lazy(() => import('./pages/Register'));
 const Dashboard    = lazy(() => import('./pages/Dashboard'));
+// BUGFIX: invite emails (routes/organizations.js dispatchInvitationEmail)
+// have always linked to /accept-invite?token=... but no such route existed
+// in this router — invites could never be completed by clicking the link.
+const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const Workflows    = lazy(() => import('./pages/Workflows'));
 const Automations  = lazy(() => import('./pages/Automations'));
 const Connections  = lazy(() => import('./pages/Connections'));
@@ -218,7 +214,6 @@ function AppProviders() {
         <ExecutionHistoryProvider>
     <BrowserRouter>
       <CriticalAlertToaster />
-      <Toaster />
       <Suspense fallback={<Spinner />}>
         <GlobalBackButton />
         <Routes>
@@ -231,6 +226,12 @@ function AppProviders() {
 
           {/* Core user routes */}
           <Route path="/dashboard"     element={<RequireAuth><Dashboard /></RequireAuth>} />
+          {/* BUGFIX: intentionally NOT wrapped in RequireAuth — RequireAuth
+              redirects to /login before this page's own code ever runs,
+              which would lose the ?token= from the URL for a logged-out
+              user before AcceptInvite.tsx gets a chance to stash it in
+              sessionStorage. The page handles its own auth-gating. */}
+          <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route path="/workflows/*"   element={<RequireAuth><Workflows /></RequireAuth>} />
           <Route path="/automations/*" element={<RequireAuth><Automations /></RequireAuth>} />
           <Route path="/connections"   element={<RequireAuth><Connections /></RequireAuth>} />
