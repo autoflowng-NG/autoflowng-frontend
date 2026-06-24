@@ -10,8 +10,8 @@
  * Task 4: Knowledge Hub renamed to "Explore" in the sidebar.
  * Task 4: "News" added as a sidebar entry (path: /news, icon: Newspaper).
  */
-import { useState, type ReactNode } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useState, useEffect, type ReactNode } from "react";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Logo } from "./Logo";
 import { useServerStatus } from "../hooks/useServerStatus";
@@ -357,6 +357,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [runtimeOpen,  setRuntimeOpen]  = useState(false);
   const { user } = useAuth();
+  const location = useLocation();
+  const nav       = useNavigate();
+
+  // BUGFIX: invite emails link to /accept-invite?token=... but a user who
+  // wasn't logged in yet gets bounced to /login, which always nav()s to
+  // /dashboard on success (no `next` param support) — so they'd land in
+  // the app having never actually accepted the invite. AcceptInvite.tsx
+  // stashes the token in sessionStorage before that detour; this runs on
+  // every authenticated page (AppShell wraps all RequireAuth routes) and
+  // picks it back up the moment the user is logged in, routing them back
+  // to finish accepting instead of leaving the invite to silently expire.
+  useEffect(() => {
+    if (!user) return;
+    if (location.pathname === "/accept-invite") return;
+    const pendingToken = sessionStorage.getItem("af_pending_invite_token");
+    if (pendingToken) nav("/accept-invite");
+  }, [user, location.pathname]);
 
   // Bug 6: Only show trial-expired banner when trial is genuinely past
   const isTrialExpired = user?.plan === 'trial' &&
