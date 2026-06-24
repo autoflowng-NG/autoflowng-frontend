@@ -9,6 +9,12 @@
  *
  * Task 4: Knowledge Hub renamed to "Explore" in the sidebar.
  * Task 4: "News" added as a sidebar entry (path: /news, icon: Newspaper).
+ *
+ * Integration Hub consolidation:
+ *   - Removed /marketplace from NAV (replaced by Integration Hub)
+ *   - Renamed /connections label from "Connections" to "Integration Hub"
+ *   - Changed /connections icon from Link2 to Layers (represents unified hub)
+ *   - /integration-health removed from sidebar (health is now inline on the hub)
  */
 import { useState, useEffect, type ReactNode } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
@@ -20,10 +26,10 @@ import { WorkspaceSwitcher, OrgHealthSummary } from "./EnterpriseOpsCenter";
 import { NotificationCentre } from "./NotificationCentre";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  LayoutDashboard, GitBranch, Zap, Bot, Link2,
+  LayoutDashboard, GitBranch, Zap, Bot,
   CreditCard, Users, Settings, ShieldCheck, Crown,
   ChevronLeft, ChevronRight, LogOut, Menu, X, Cpu,
-  BarChart3, FileText, Store, Layers, Webhook, Activity, Key,
+  BarChart3, FileText, Layers, Webhook, Key,
   Wand2, Library, HelpCircle, Globe, Newspaper, Compass,
 } from "lucide-react";
 import { isPlatformAdmin, isSuperAdmin, isSupport, getRoleBadge } from "../lib/rbac";
@@ -43,16 +49,15 @@ const NAV = [
   // Task 4: News added as sidebar entry
   { path: "/news",         label: "News",         icon: Newspaper },
   { path: "/dashboard/creative-agents", label: "Creative Agents", icon: Wand2 },
-  { path: "/connections",  label: "Connections",  icon: Link2 },
+  // Integration Hub — consolidates /marketplace + /connections + health
+  { path: "/connections",  label: "Integration Hub", icon: Layers },
   { path: "/intelligence", label: "Intelligence", icon: Cpu },
   { path: "/plans",        label: "Plans",        icon: CreditCard },
   { path: "/referrals",    label: "Referrals",    icon: Users },
   { path: "/settings",     label: "Settings",     icon: Settings },
-  { path: "/marketplace",  label: "Marketplace",  icon: Store },
   { path: "/node-library", label: "Node Library", icon: Layers },
   { path: "/credentials",  label: "Credentials",  icon: Key },
   { path: "/webhooks",     label: "Webhooks",     icon: Webhook },
-  { path: "/integration-health", label: "Int. Health", icon: Activity },
   { path: "/analytics",    label: "Analytics",    icon: BarChart3 },
   { path: "/media-cloud",  label: "Media Cloud",  icon: Library  },
   { path: "/reports",      label: "Reports",      icon: FileText },
