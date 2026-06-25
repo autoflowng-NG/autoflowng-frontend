@@ -218,7 +218,7 @@ export const referralsAPI = {
   stats:    ()             => api.get("/referrals/stats"),
   list:     ()             => api.get("/referrals"),
   balance:  ()             => api.get("/referrals/balance"),
-  withdraw: (data: any)    => api.post("/referrals/withdraw", data),
+  withdraw: (data: any)    => api.post("/wallet/withdraw", data),
 };
 
 // ── Legacy Admin API (preserved for backward compat — uses x-admin-secret) ────
