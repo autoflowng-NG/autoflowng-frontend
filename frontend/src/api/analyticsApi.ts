@@ -146,6 +146,18 @@ export const analyticsApi = {
   getExecutionSummary:   (days = 30) =>
     apiFetch<ExecutionSummary>(`/analytics/executions/summary?days=${days}`),
 
+  getDashboardSummary: (range: string = '7d') =>
+    apiFetch<{
+      range: string;
+      total_events: number;
+      success_rate: number | null;
+      avg_duration_ms: number | null;
+      active_workflows: number;
+      ai_requests: number;
+      recent_runs: unknown[];
+      volume: unknown;
+    }>(`/analytics?range=${range}`),
+
   getExecutionVolume:    (period = 'daily', workflowId?: string) =>
     apiFetch<VolumeDataPoint[]>(
       `/analytics/executions/volume?period=${period}${workflowId ? `&workflowId=${workflowId}` : ''}`
