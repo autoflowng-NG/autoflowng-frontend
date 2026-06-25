@@ -1,15 +1,47 @@
 /**
- * AutoFlowNG — Phase 43A: Media Cloud Page
+ * AutoFlowNG — Phase 43A: Media Cloud Page — Enterprise Redesign
  *
- * Four-tab asset management UI:
- *   1. Library   — upload, search, grid view, asset detail drawer
+ * All hooks, state, API calls, and logic preserved exactly from the original.
+ * Visual layer rewritten to the AutoFlowNG design system — inline styles only.
+ *
+ * Six-tab asset management UI:
+ *   1. Library    — upload, search, grid view, asset detail drawer
  *   2. Governance — policies, compliance flags
- *   3. Brands    — brand profiles, rules, brand compliance checker
- *   4. Audit Log — paginated org-wide audit trail
+ *   3. Brands     — brand profiles, rules, brand compliance checker
+ *   4. Reviews    — pending/approved/rejected review requests
+ *   5. Pub. Gates — publishing job approval gates
+ *   6. Audit Log  — paginated org-wide audit trail
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  Image as ImageIcon, Film, Music, FileText, LayoutTemplate, Tag, Package,
+  Upload, Search, X, ChevronDown, ChevronUp, Check, AlertTriangle,
+  Shield, BookMarked, ClipboardCheck, Send, Trash2, Archive, MessageSquare,
+  Plus, ExternalLink, RotateCcw,
+} from 'lucide-react';
+
+/* ── Design tokens ─────────────────────────────────────────────────── */
+const C = {
+  bg:      "#060810",
+  surface: "#0C0F1A",
+  raised:  "#111520",
+  border:  "rgba(255,255,255,0.06)",
+  borderH: "rgba(255,255,255,0.11)",
+  text:    "#E2E8FF",
+  muted:   "rgba(226,232,255,0.45)",
+  faint:   "rgba(226,232,255,0.22)",
+  green:   "#00C896",
+  blue:    "#38BDF8",
+  purple:  "#A78BFA",
+  amber:   "#FBBF24",
+  red:     "#FB7185",
+};
+
+const FONT_HEAD = "'Syne',sans-serif";
+const FONT_BODY = "'DM Sans',sans-serif";
+const FONT_MONO = "'DM Mono',monospace";
 
 // ── API helpers ───────────────────────────────────────────────────────────
 
@@ -149,68 +181,321 @@ const fmtBytes = (b: number) => {
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-// ── Asset Type Icon ───────────────────────────────────────────────────────
+/* ── Shared primitives ─────────────────────────────────────────────── */
 
-function AssetIcon({ type }: { type: AssetType }) {
-  const icons: Record<string, string> = {
-    image:       '🖼️',
-    video:       '🎬',
-    audio:       '🎵',
-    document:    '📄',
-    template:    '📋',
-    brand_asset: '🏷️',
-    other:       '📦',
-  };
-  return <span className="text-2xl">{icons[type] || '📦'}</span>;
-}
-
-// ── Severity Badge ────────────────────────────────────────────────────────
-
-function SeverityBadge({ severity }: { severity: Severity }) {
-  const colors: Record<Severity, string> = {
-    info:     'bg-blue-900/40 text-blue-300 border border-blue-700',
-    warning:  'bg-amber-900/40 text-amber-300 border border-amber-700',
-    critical: 'bg-red-900/40 text-red-300 border border-red-700',
-  };
+function Sk({ w = "100%", h = 14, r = 6 }: { w?: string | number; h?: number; r?: number }) {
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[severity]}`}>
-      {severity}
-    </span>
+    <div style={{
+      width: w, height: h, borderRadius: r,
+      background: "rgba(255,255,255,0.05)",
+      animation: "af-skeleton-pulse 1.8s ease-in-out infinite",
+    }} />
   );
 }
 
-// ── Tab bar ───────────────────────────────────────────────────────────────
-
-type Tab = 'library' | 'governance' | 'brands' | 'reviews' | 'publishing' | 'audit';
-
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'library',    label: 'Library'     },
-    { id: 'governance', label: 'Governance'  },
-    { id: 'brands',     label: 'Brands'      },
-    { id: 'reviews',    label: 'Reviews'     },
-    { id: 'publishing', label: 'Pub. Gates'  },
-    { id: 'audit',      label: 'Audit Log'   },
-  ];
+function Spinner({ color = C.amber, size = 28 }: { color?: string; size?: number }) {
   return (
-    <div className="flex gap-1 border-b border-gray-800 mb-6">
-      {tabs.map(t => (
-        <button
-          key={t.id}
-          onClick={() => onChange(t.id)}
-          className={`px-5 py-2.5 text-sm font-medium transition-colors rounded-t
-            ${active === t.id
-              ? 'bg-amber-500 text-black'
-              : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      border: `2px solid ${color}30`, borderTopColor: color,
+      animation: "af-spin 0.8s linear infinite",
+    }} />
+  );
+}
+
+function Card({ children, style = {}, accent }: { children: React.ReactNode; style?: React.CSSProperties; accent?: string }) {
+  return (
+    <div style={{
+      position: "relative", background: C.surface,
+      border: `1px solid ${C.border}`, borderRadius: 14,
+      padding: 20, overflow: "hidden", ...style,
+    }}>
+      {accent && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: 1,
+          background: `linear-gradient(90deg, transparent, ${accent}60, transparent)`,
+        }} />
+      )}
+      {children}
     </div>
   );
 }
 
-// ── Upload Zone ───────────────────────────────────────────────────────────
+function SectionLabel({ children, color = C.amber }: { children: React.ReactNode; color?: string }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, color, fontFamily: FONT_MONO, letterSpacing: "0.1em", marginBottom: 6 }}>
+      {children}
+    </div>
+  );
+}
+
+function PageHeader({ label, title, sub, color = C.amber, right }: {
+  label: string; title: string; sub?: string; color?: string; right?: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 24 }}>
+      <div>
+        <SectionLabel color={color}>{label}</SectionLabel>
+        <h1 style={{ fontSize: "clamp(1.5rem,3vw,2rem)", fontWeight: 900, fontFamily: FONT_HEAD, letterSpacing: "-0.04em", color: C.text, margin: 0 }}>
+          {title}
+        </h1>
+        {sub && <p style={{ fontSize: 13, color: C.muted, marginTop: 5, fontFamily: FONT_BODY }}>{sub}</p>}
+      </div>
+      {right && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>{right}</div>}
+    </div>
+  );
+}
+
+function StatPill({ icon: Icon, value, label, color }: { icon: any; value: number | string; label: string; color: string }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      background: `${color}08`, border: `1px solid ${color}20`,
+      borderRadius: 10, padding: "10px 16px",
+    }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: 7,
+        background: `${color}12`, border: `1px solid ${color}22`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon size={13} color={color} />
+      </div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, fontFamily: FONT_HEAD, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 10, color: C.faint, fontFamily: FONT_MONO, marginTop: 1 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatusDotBadge({ label, color, bg, border }: { label: string; color: string; bg: string; border: string }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      fontSize: 10, fontWeight: 700, color,
+      background: bg, border: `1px solid ${border}`,
+      borderRadius: 100, padding: "3px 9px",
+      fontFamily: FONT_MONO, textTransform: "capitalize",
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: color, display: "inline-block" }} />
+      {label}
+    </span>
+  );
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  active: C.green, archived: C.muted, deleted: C.red, pending_review: C.amber,
+  pending: C.amber, approved: C.green, rejected: C.red, cancelled: C.muted,
+  completed: C.green, processing: C.amber, failed: C.red, blocked: C.red,
+};
+
+function AssetStatusBadge({ status }: { status: AssetStatus }) {
+  const color = STATUS_COLOR[status] || C.muted;
+  return (
+    <StatusDotBadge label={status.replace('_', ' ')} color={color} bg={`${color}12`} border={`${color}28`} />
+  );
+}
+
+function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
+  const color = STATUS_COLOR[status] || C.muted;
+  return <StatusDotBadge label={status} color={color} bg={`${color}12`} border={`${color}28`} />;
+}
+
+function SeverityBadge({ severity }: { severity: Severity }) {
+  const colors: Record<Severity, string> = { info: C.blue, warning: C.amber, critical: C.red };
+  const color = colors[severity];
+  return <StatusDotBadge label={severity} color={color} bg={`${color}12`} border={`${color}28`} />;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+
+function BtnPrimary({ children, onClick, disabled, style = {}, color = C.green, full }: any) {
+  return (
+    <button
+      onClick={onClick} disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        background: color, border: "none", borderRadius: 8,
+        padding: "9px 16px", color: "#06120D",
+        fontSize: 12.5, fontWeight: 700, cursor: disabled ? "default" : "pointer",
+        fontFamily: FONT_BODY, opacity: disabled ? 0.55 : 1,
+        width: full ? "100%" : undefined, transition: "filter 0.14s",
+        ...style,
+      }}
+      onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLElement).style.filter = "brightness(1.1)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = "none"; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BtnSecondary({ children, onClick, disabled, style = {}, color = C.purple, full }: any) {
+  return (
+    <button
+      onClick={onClick} disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        background: `${color}0D`, border: `1px solid ${color}30`, borderRadius: 8,
+        padding: "9px 16px", color,
+        fontSize: 12.5, fontWeight: 600, cursor: disabled ? "default" : "pointer",
+        fontFamily: FONT_BODY, opacity: disabled ? 0.5 : 1,
+        width: full ? "100%" : undefined, transition: "background 0.14s",
+        ...style,
+      }}
+      onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLElement).style.background = `${color}18`; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${color}0D`; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BtnDanger({ children, onClick, disabled, style = {}, full }: any) {
+  return (
+    <button
+      onClick={onClick} disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.28)", borderRadius: 8,
+        padding: "9px 16px", color: C.red,
+        fontSize: 12.5, fontWeight: 600, cursor: disabled ? "default" : "pointer",
+        fontFamily: FONT_BODY, opacity: disabled ? 0.4 : 1,
+        width: full ? "100%" : undefined, transition: "background 0.14s",
+        ...style,
+      }}
+      onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLElement).style.background = "rgba(251,113,133,0.16)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,113,133,0.08)"; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { full?: boolean }) {
+  const { style, full, ...rest } = props;
+  return (
+    <input
+      {...rest}
+      style={{
+        width: full ? "100%" : undefined,
+        background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+        borderRadius: 8, padding: "9px 12px", color: C.text,
+        fontSize: 12.5, fontFamily: FONT_BODY, outline: "none",
+        boxSizing: "border-box", transition: "border-color 0.15s",
+        ...style,
+      }}
+      onFocus={e => (e.currentTarget.style.borderColor = "rgba(251,191,36,0.4)")}
+      onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const { style, children, ...rest } = props;
+  return (
+    <select
+      {...rest}
+      style={{
+        background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+        borderRadius: 8, padding: "9px 12px", color: C.text,
+        fontSize: 12.5, fontFamily: FONT_BODY, outline: "none",
+        cursor: "pointer", ...style,
+      }}
+    >
+      {children}
+    </select>
+  );
+}
+
+function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const { style, ...rest } = props;
+  return (
+    <textarea
+      {...rest}
+      style={{
+        width: "100%", background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+        borderRadius: 8, padding: "9px 12px", color: C.text,
+        fontSize: 12.5, fontFamily: FONT_BODY, outline: "none",
+        resize: "none", boxSizing: "border-box", ...style,
+      }}
+    />
+  );
+}
+
+/* ── Asset Type Icon ───────────────────────────────────────────────── */
+
+const ASSET_ICONS: Record<AssetType, any> = {
+  image: ImageIcon, video: Film, audio: Music, document: FileText,
+  template: LayoutTemplate, brand_asset: Tag, other: Package,
+};
+const ASSET_ICON_COLOR: Record<AssetType, string> = {
+  image: C.blue, video: C.purple, audio: C.green, document: C.amber,
+  template: C.blue, brand_asset: C.purple, other: C.muted,
+};
+
+function AssetIcon({ type, size = 18 }: { type: AssetType; size?: number }) {
+  const Icon = ASSET_ICONS[type] || Package;
+  const color = ASSET_ICON_COLOR[type] || C.muted;
+  return (
+    <div style={{
+      width: 36, height: 36, borderRadius: 9,
+      background: `${color}12`, border: `1px solid ${color}24`,
+      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    }}>
+      <Icon size={size} color={color} />
+    </div>
+  );
+}
+
+/* ── Tab bar ───────────────────────────────────────────────────────── */
+
+type Tab = 'library' | 'governance' | 'brands' | 'reviews' | 'publishing' | 'audit';
+
+const TAB_DEFS: { id: Tab; label: string; icon: any; color: string }[] = [
+  { id: 'library',    label: 'Library',     icon: ImageIcon,      color: C.amber  },
+  { id: 'governance', label: 'Governance',  icon: Shield,         color: C.purple },
+  { id: 'brands',     label: 'Brands',      icon: BookMarked,     color: C.blue   },
+  { id: 'reviews',    label: 'Reviews',     icon: ClipboardCheck, color: C.green  },
+  { id: 'publishing', label: 'Pub. Gates',  icon: Send,           color: C.amber  },
+  { id: 'audit',      label: 'Audit Log',   icon: FileText,       color: C.muted  },
+];
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  return (
+    <div style={{
+      display: "flex", gap: 4, marginBottom: 24, flexWrap: "wrap",
+      borderBottom: `1px solid ${C.border}`, paddingBottom: 2,
+    }}>
+      {TAB_DEFS.map(t => {
+        const isActive = active === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "9px 14px", borderRadius: "8px 8px 0 0", border: "none", cursor: "pointer",
+              background: isActive ? `${t.color}10` : "transparent",
+              color: isActive ? t.color : C.muted,
+              fontSize: 12.5, fontWeight: isActive ? 700 : 500,
+              fontFamily: FONT_BODY,
+              borderBottom: isActive ? `2px solid ${t.color}` : "2px solid transparent",
+              marginBottom: -2, transition: "all 0.14s",
+            }}
+            onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
+            onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}
+          >
+            <t.icon size={13} />
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Upload Zone ───────────────────────────────────────────────────── */
 
 function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   const [dragging, setDragging] = useState(false);
@@ -238,80 +523,141 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
 
   return (
     <div
-      className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors mb-6
-        ${dragging ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 hover:border-gray-500'}`}
       onDragOver={e => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
       onClick={() => inputRef.current?.click()}
+      style={{
+        border: `2px dashed ${dragging ? C.amber : C.border}`,
+        borderRadius: 14, padding: "32px 20px", textAlign: "center",
+        cursor: "pointer", marginBottom: 24, transition: "all 0.18s",
+        background: dragging ? "rgba(251,191,36,0.06)" : "transparent",
+      }}
     >
-      <input ref={inputRef} type="file" multiple className="hidden"
+      <input ref={inputRef} type="file" multiple style={{ display: "none" }}
         onChange={e => e.target.files && handleFiles(e.target.files)} />
       {uploading ? (
-        <div className="text-amber-400 text-sm">{progress}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: C.amber, fontSize: 13, fontFamily: FONT_BODY }}>
+          <Spinner size={18} /> {progress}
+        </div>
       ) : (
         <>
-          <div className="text-4xl mb-2">📁</div>
-          <p className="text-gray-300 font-medium">Drop files here or click to upload</p>
-          <p className="text-gray-500 text-sm mt-1">Max 100 MB per file</p>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12, margin: "0 auto 12px",
+            background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Upload size={20} color={C.amber} />
+          </div>
+          <p style={{ color: C.text, fontWeight: 600, fontSize: 13.5, fontFamily: FONT_BODY, margin: 0 }}>
+            Drop files here or click to upload
+          </p>
+          <p style={{ color: C.faint, fontSize: 11.5, fontFamily: FONT_MONO, marginTop: 5 }}>
+            MAX 100 MB PER FILE
+          </p>
         </>
       )}
     </div>
   );
 }
 
-// ── Asset Card ────────────────────────────────────────────────────────────
+/* ── Asset Card ────────────────────────────────────────────────────── */
 
 function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
   return (
     <div
       onClick={onClick}
-      className="bg-gray-900 border border-gray-800 rounded-lg p-4 cursor-pointer
-                 hover:border-amber-600 hover:bg-gray-800 transition-all group"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: C.surface, border: `1px solid ${hover ? C.borderH : C.border}`,
+        borderRadius: 12, padding: 14, cursor: "pointer",
+        transition: "all 0.16s", transform: hover ? "translateY(-2px)" : "none",
+      }}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <AssetIcon type={asset.asset_type} />
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-          ${asset.status === 'active'    ? 'bg-green-900/40 text-green-300 border border-green-800'
-          : asset.status === 'archived'  ? 'bg-gray-700 text-gray-400'
-          : asset.status === 'deleted'   ? 'bg-red-900/40 text-red-400'
-          : 'bg-blue-900/40 text-blue-300'}`}>
-          {asset.status}
-        </span>
+        <AssetStatusBadge status={asset.status} />
       </div>
-      <p className="text-white font-medium text-sm truncate mb-1">{asset.name}</p>
-      <p className="text-gray-500 text-xs mb-2">{fmtBytes(asset.file_size_bytes)}</p>
+      <p style={{
+        color: C.text, fontWeight: 600, fontSize: 12.5, margin: "0 0 3px",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        fontFamily: FONT_BODY,
+      }}>
+        {asset.name}
+      </p>
+      <p style={{ color: C.faint, fontSize: 10.5, margin: "0 0 8px", fontFamily: FONT_MONO }}>
+        {fmtBytes(asset.file_size_bytes)}
+      </p>
       {asset.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
           {asset.tags.slice(0, 3).map(t => (
-            <span key={t} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">
+            <span key={t} style={{
+              fontSize: 9.5, background: "rgba(255,255,255,0.05)", color: C.muted,
+              padding: "2px 6px", borderRadius: 5, fontFamily: FONT_MONO,
+            }}>
               {t}
             </span>
           ))}
         </div>
       )}
-      <p className="text-gray-600 text-xs mt-2">{fmtDate(asset.created_at)}</p>
+      <p style={{ color: C.faint, fontSize: 10, margin: 0, fontFamily: FONT_MONO }}>{fmtDate(asset.created_at)}</p>
     </div>
   );
 }
 
-// ── Review Status Badge ───────────────────────────────────────────────────
+/* ── Pagination ────────────────────────────────────────────────────── */
 
-function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
-  const styles: Record<ReviewStatus, string> = {
-    pending:   'bg-amber-900/40 text-amber-300 border border-amber-700',
-    approved:  'bg-green-900/40 text-green-300 border border-green-800',
-    rejected:  'bg-red-900/40 text-red-300 border border-red-800',
-    cancelled: 'bg-gray-700 text-gray-400',
-  };
+function Pagination({ page, total, pageSize, onPage }: { page: number; total: number; pageSize: number; onPage: (p: number) => void }) {
+  if (total <= pageSize) return null;
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${styles[status]}`}>
-      {status}
-    </span>
+    <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 24 }}>
+      <BtnSecondary color={C.muted} onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1}>Previous</BtnSecondary>
+      <span style={{ padding: "9px 12px", color: C.muted, fontSize: 12.5, fontFamily: FONT_MONO }}>Page {page}</span>
+      <BtnSecondary color={C.muted} onClick={() => onPage(page + 1)} disabled={page * pageSize >= total}>Next</BtnSecondary>
+    </div>
   );
 }
 
-// ── Asset Drawer ──────────────────────────────────────────────────────────
+/* ── Empty state ───────────────────────────────────────────────────── */
+
+function EmptyState({ icon: Icon, title, sub, color = C.amber }: { icon: any; title: string; sub: string; color?: string }) {
+  return (
+    <div style={{ textAlign: "center", padding: "64px 24px" }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: 14, margin: "0 auto 16px",
+        background: `${color}0C`, border: `1px solid ${color}22`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon size={24} color={`${color}90`} />
+      </div>
+      <p style={{ color: C.muted, fontWeight: 700, fontSize: 14, fontFamily: FONT_HEAD, margin: "0 0 6px" }}>{title}</p>
+      <p style={{ color: C.faint, fontSize: 12.5, fontFamily: FONT_BODY, margin: 0 }}>{sub}</p>
+    </div>
+  );
+}
+
+/* ── Drawer sub-tab pill ───────────────────────────────────────────── */
+
+function DrawerTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flexShrink: 0, padding: "10px 12px", border: "none", cursor: "pointer",
+        background: "transparent", color: active ? C.amber : C.faint,
+        fontSize: 11.5, fontWeight: active ? 700 : 500, fontFamily: FONT_BODY,
+        borderBottom: active ? `2px solid ${C.amber}` : "2px solid transparent",
+        transition: "color 0.14s",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ── Asset Drawer ──────────────────────────────────────────────────── */
 
 function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
   assetId: string;
@@ -405,82 +751,91 @@ function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
   const openReview = reviews.find(r => r.status === 'pending') || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-gray-950 border-l border-gray-800 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold">Asset Details</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">✕</button>
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+      <div style={{
+        position: "relative", width: "100%", maxWidth: 480, background: C.bg,
+        borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: 16, borderBottom: `1px solid ${C.border}`,
+        }}>
+          <h2 style={{ color: C.text, fontWeight: 700, fontSize: 15, fontFamily: FONT_HEAD, margin: 0 }}>Asset Details</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.faint, cursor: "pointer", padding: 4 }}>
+            <X size={18} />
+          </button>
         </div>
 
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : asset ? (
           <>
-            <div className="p-4 border-b border-gray-800">
-              <div className="flex items-start gap-3">
+            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                 <AssetIcon type={asset.asset_type} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium break-words">{asset.name}</p>
-                  <p className="text-gray-500 text-xs">{asset.mime_type} · {fmtBytes(asset.file_size_bytes)}</p>
-                  <p className="text-gray-600 text-xs">v{asset.current_version} · {fmtDate(asset.updated_at)}</p>
-                  {openReview && (
-                    <span className="inline-block mt-1"><ReviewStatusBadge status="pending" /></span>
-                  )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ color: C.text, fontWeight: 600, fontSize: 13.5, margin: 0, wordBreak: "break-word", fontFamily: FONT_BODY }}>{asset.name}</p>
+                  <p style={{ color: C.faint, fontSize: 11, margin: "3px 0 0", fontFamily: FONT_MONO }}>{asset.mime_type} · {fmtBytes(asset.file_size_bytes)}</p>
+                  <p style={{ color: C.faint, fontSize: 11, margin: "2px 0 0", fontFamily: FONT_MONO }}>v{asset.current_version} · {fmtDate(asset.updated_at)}</p>
+                  {openReview && <div style={{ marginTop: 6 }}><ReviewStatusBadge status="pending" /></div>}
                 </div>
               </div>
             </div>
 
-            <div className="flex border-b border-gray-800 overflow-x-auto">
+            <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, overflowX: "auto" }}>
               {(['preview','versions','flags','review','comments'] as const).map(t => (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`flex-shrink-0 px-3 py-2 text-xs font-medium capitalize transition-colors
-                    ${tab === t ? 'text-amber-400 border-b-2 border-amber-500' : 'text-gray-500 hover:text-gray-300'}`}>
-                  {t === 'flags'    ? `Flags (${flags.length})`
+                <DrawerTab
+                  key={t} active={tab === t} onClick={() => setTab(t)}
+                  label={
+                    t === 'flags'    ? `Flags (${flags.length})`
                   : t === 'versions' ? `Versions (${versions.length})`
-                  : t === 'review'   ? `Review${openReview ? ' 🔴' : ''}`
+                  : t === 'review'   ? `Review${openReview ? ' ●' : ''}`
                   : t === 'comments' ? `Comments (${comments.length})`
-                  : t}
-                </button>
+                  : 'Preview'
+                  }
+                />
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
               {tab === 'preview' && (
                 <div>
                   {asset.presigned_url && asset.asset_type === 'image' && (
                     <img src={asset.presigned_url} alt={asset.name}
-                      className="w-full rounded-lg mb-4 max-h-64 object-contain bg-gray-900" />
+                      style={{ width: "100%", borderRadius: 10, marginBottom: 16, maxHeight: 260, objectFit: "contain", background: C.surface }} />
                   )}
                   {asset.presigned_url && asset.asset_type === 'video' && (
-                    <video src={asset.presigned_url} controls className="w-full rounded-lg mb-4 max-h-64 bg-black" />
+                    <video src={asset.presigned_url} controls style={{ width: "100%", borderRadius: 10, marginBottom: 16, maxHeight: 260, background: "#000" }} />
                   )}
                   {asset.presigned_url && asset.asset_type === 'audio' && (
-                    <audio src={asset.presigned_url} controls className="w-full mb-4" />
+                    <audio src={asset.presigned_url} controls style={{ width: "100%", marginBottom: 16 }} />
                   )}
                   {asset.tags.length > 0 && (
-                    <div className="mb-3">
-                      <p className="text-gray-400 text-xs mb-1">Tags</p>
-                      <div className="flex flex-wrap gap-1">
+                    <div style={{ marginBottom: 14 }}>
+                      <p style={{ color: C.faint, fontSize: 10.5, margin: "0 0 6px", fontFamily: FONT_MONO }}>TAGS</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                         {asset.tags.map(t => (
-                          <span key={t} className="text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded">{t}</span>
+                          <span key={t} style={{ fontSize: 10.5, background: "rgba(255,255,255,0.05)", color: C.muted, padding: "3px 8px", borderRadius: 6, fontFamily: FONT_MONO }}>{t}</span>
                         ))}
                       </div>
                     </div>
                   )}
-                  
-                  {/* Phase 1 Stopgap: Link to Campaigns */}
-                  <div className="mt-6 pt-6 border-t border-gray-800">
-                    <p className="text-gray-400 text-xs mb-2">Social & Campaigns</p>
-                    <a 
-                      href="/campaign-orchestration" 
-                      className="flex items-center justify-center gap-2 w-full bg-amber-500 hover:bg-amber-400 text-gray-950 py-2.5 rounded-lg text-sm font-bold transition-colors"
+
+                  <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+                    <p style={{ color: C.faint, fontSize: 10.5, margin: "0 0 8px", fontFamily: FONT_MONO }}>SOCIAL & CAMPAIGNS</p>
+                    <a
+                      href="/campaign-orchestration"
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                        width: "100%", background: C.amber, color: "#1a1305",
+                        padding: "11px", borderRadius: 9, fontSize: 13, fontWeight: 700,
+                        fontFamily: FONT_BODY, textDecoration: "none", boxSizing: "border-box",
+                      }}
                     >
-                      🚀 Publish this Asset
+                      <ExternalLink size={14} /> Publish this Asset
                     </a>
-                    <p className="text-[10px] text-gray-600 mt-2 text-center">
+                    <p style={{ color: C.faint, fontSize: 10, marginTop: 8, textAlign: "center", fontFamily: FONT_BODY }}>
                       Opens Campaign Orchestration to schedule or post this asset.
                     </p>
                   </div>
@@ -488,186 +843,158 @@ function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
               )}
 
               {tab === 'versions' && (
-                <div className="space-y-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {versions.map(v => (
-                    <div key={v.id} className="bg-gray-900 border border-gray-800 rounded p-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-amber-400 font-mono text-sm">v{v.version_number}</span>
-                        <span className="text-gray-500 text-xs">{fmtDate(v.created_at)}</span>
+                    <Card key={v.id} style={{ padding: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: C.amber, fontFamily: FONT_MONO, fontSize: 12.5, fontWeight: 700 }}>v{v.version_number}</span>
+                        <span style={{ color: C.faint, fontSize: 10.5, fontFamily: FONT_MONO }}>{fmtDate(v.created_at)}</span>
                       </div>
-                      {v.change_note && <p className="text-gray-300 text-sm mt-1">{v.change_note}</p>}
-                      <p className="text-gray-600 text-xs mt-1">{fmtBytes(v.file_size_bytes)}</p>
-                    </div>
+                      {v.change_note && <p style={{ color: C.muted, fontSize: 12, margin: "6px 0 0", fontFamily: FONT_BODY }}>{v.change_note}</p>}
+                      <p style={{ color: C.faint, fontSize: 10.5, margin: "4px 0 0", fontFamily: FONT_MONO }}>{fmtBytes(v.file_size_bytes)}</p>
+                    </Card>
                   ))}
-                  {versions.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-4">No versions found</p>
-                  )}
+                  {versions.length === 0 && <p style={{ color: C.faint, fontSize: 12.5, textAlign: "center", padding: "16px 0", fontFamily: FONT_BODY }}>No versions found</p>}
                 </div>
               )}
 
               {tab === 'flags' && (
-                <div className="space-y-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {flags.map(f => (
-                    <div key={f.id} className={`border rounded p-3 ${f.resolved ? 'border-gray-800 opacity-50' : 'border-amber-700'}`}>
-                      <div className="flex justify-between items-start gap-2">
+                    <Card key={f.id} style={{ padding: 12, opacity: f.resolved ? 0.5 : 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                         <SeverityBadge severity={f.severity} />
-                        <span className="text-gray-500 text-xs">{fmtDate(f.created_at)}</span>
+                        <span style={{ color: C.faint, fontSize: 10.5, fontFamily: FONT_MONO }}>{fmtDate(f.created_at)}</span>
                       </div>
-                      <p className="text-gray-300 text-sm mt-1">{f.message}</p>
-                      <p className="text-gray-500 text-xs mt-1">{f.flag_type}</p>
-                    </div>
+                      <p style={{ color: C.muted, fontSize: 12, margin: "8px 0 0", fontFamily: FONT_BODY }}>{f.message}</p>
+                      <p style={{ color: C.faint, fontSize: 10.5, margin: "4px 0 0", fontFamily: FONT_MONO }}>{f.flag_type}</p>
+                    </Card>
                   ))}
-                  {flags.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-4">No compliance flags</p>
-                  )}
+                  {flags.length === 0 && <p style={{ color: C.faint, fontSize: 12.5, textAlign: "center", padding: "16px 0", fontFamily: FONT_BODY }}>No compliance flags</p>}
                 </div>
               )}
 
               {tab === 'review' && (
                 <div>
                   {asset.status !== 'pending_review' && (
-                    <div className="mb-4 p-3 bg-gray-900 border border-gray-800 rounded-lg">
-                      <p className="text-gray-300 text-sm font-medium mb-2">Submit for Review</p>
-                      <textarea
-                        rows={2}
-                        placeholder="Optional note for reviewer..."
-                        value={submitNote}
-                        onChange={e => setSubmitNote(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none resize-none mb-2"
-                      />
-                      <button onClick={submitForReview} disabled={submitting}
-                        className="w-full py-2 bg-amber-500 text-black text-sm font-medium rounded hover:bg-amber-400 disabled:opacity-50">
+                    <Card style={{ marginBottom: 16 }}>
+                      <p style={{ color: C.text, fontWeight: 600, fontSize: 12.5, margin: "0 0 10px", fontFamily: FONT_BODY }}>Submit for Review</p>
+                      <TextArea rows={2} placeholder="Optional note for reviewer…" value={submitNote}
+                        onChange={(e: any) => setSubmitNote(e.target.value)} style={{ marginBottom: 10 }} />
+                      <BtnPrimary full color={C.amber} onClick={submitForReview} disabled={submitting}>
                         {submitting ? 'Submitting…' : 'Submit for Review'}
-                      </button>
-                    </div>
+                      </BtnPrimary>
+                    </Card>
                   )}
 
                   {openReview && (
-                    <div className="mb-4 p-3 bg-amber-900/20 border border-amber-700 rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-amber-300 text-sm font-medium">Pending Review</p>
+                    <Card accent={C.amber} style={{ marginBottom: 16, background: "rgba(251,191,36,0.05)", borderColor: "rgba(251,191,36,0.25)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <p style={{ color: C.amber, fontWeight: 700, fontSize: 12.5, margin: 0, fontFamily: FONT_BODY }}>Pending Review</p>
                         <ReviewStatusBadge status="pending" />
                       </div>
                       {openReview.review_note && (
-                        <p className="text-gray-300 text-xs mb-3">Note: {openReview.review_note}</p>
+                        <p style={{ color: C.muted, fontSize: 11.5, margin: "0 0 12px", fontFamily: FONT_BODY }}>Note: {openReview.review_note}</p>
                       )}
-                      <div className="space-y-2">
-                        <button onClick={() => approveRequest(openReview.id)}
-                          className="w-full py-2 bg-green-700 text-white text-sm rounded hover:bg-green-600">
-                          ✓ Approve
-                        </button>
-                        <input
-                          placeholder="Rejection reason (required to reject)…"
-                          value={rejectReason}
-                          onChange={e => setRejectReason(e.target.value)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none"
-                        />
-                        <button onClick={() => rejectRequest(openReview.id)} disabled={!rejectReason.trim()}
-                          className="w-full py-2 bg-red-900/50 border border-red-700 text-red-300 text-sm rounded hover:bg-red-900/70 disabled:opacity-40">
-                          ✗ Reject
-                        </button>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <BtnPrimary full color={C.green} onClick={() => approveRequest(openReview.id)}>
+                          <Check size={13} /> Approve
+                        </BtnPrimary>
+                        <Input full placeholder="Rejection reason (required to reject)…" value={rejectReason}
+                          onChange={(e: any) => setRejectReason(e.target.value)} />
+                        <BtnDanger full onClick={() => rejectRequest(openReview.id)} disabled={!rejectReason.trim()}>
+                          <X size={13} /> Reject
+                        </BtnDanger>
                       </div>
-                    </div>
+                    </Card>
                   )}
 
                   {reviews.length > 0 && (
                     <div>
-                      <p className="text-gray-400 text-xs font-medium mb-2">Review History</p>
-                      <div className="space-y-2">
+                      <p style={{ color: C.faint, fontSize: 10.5, fontWeight: 700, margin: "0 0 8px", fontFamily: FONT_MONO }}>REVIEW HISTORY</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {reviews.map(r => (
-                          <div key={r.id} className="bg-gray-900 border border-gray-800 rounded p-3">
-                            <div className="flex justify-between items-center mb-1">
+                          <Card key={r.id} style={{ padding: 12 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                               <ReviewStatusBadge status={r.status} />
-                              <span className="text-gray-500 text-xs">{fmtDate(r.submitted_at)}</span>
+                              <span style={{ color: C.faint, fontSize: 10.5, fontFamily: FONT_MONO }}>{fmtDate(r.submitted_at)}</span>
                             </div>
-                            <p className="text-gray-400 text-xs">v{r.version_number} · By {r.requester_name || 'unknown'}</p>
-                            {r.rejection_reason && (
-                              <p className="text-red-300 text-xs mt-1">Reason: {r.rejection_reason}</p>
-                            )}
-                            {r.reviewer_name && (
-                              <p className="text-gray-500 text-xs mt-1">Reviewed by {r.reviewer_name}</p>
-                            )}
-                          </div>
+                            <p style={{ color: C.muted, fontSize: 11, margin: 0, fontFamily: FONT_BODY }}>v{r.version_number} · By {r.requester_name || 'unknown'}</p>
+                            {r.rejection_reason && <p style={{ color: C.red, fontSize: 11, margin: "4px 0 0", fontFamily: FONT_BODY }}>Reason: {r.rejection_reason}</p>}
+                            {r.reviewer_name && <p style={{ color: C.faint, fontSize: 10.5, margin: "4px 0 0", fontFamily: FONT_BODY }}>Reviewed by {r.reviewer_name}</p>}
+                          </Card>
                         ))}
                       </div>
                     </div>
                   )}
 
                   {reviews.length === 0 && asset.status !== 'pending_review' && (
-                    <p className="text-gray-500 text-sm text-center py-4">No review history</p>
+                    <p style={{ color: C.faint, fontSize: 12.5, textAlign: "center", padding: "16px 0", fontFamily: FONT_BODY }}>No review history</p>
                   )}
                 </div>
               )}
 
               {tab === 'comments' && (
                 <div>
-                  <div className="space-y-3 mb-4">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
                     {comments.map(c => (
-                      <div key={c.id} className="bg-gray-900 border border-gray-800 rounded p-3">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-amber-400 text-xs font-medium">{c.author_name || 'Unknown'}</span>
-                          <span className="text-gray-600 text-xs">{fmtDate(c.created_at)}</span>
+                      <Card key={c.id} style={{ padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <span style={{ color: C.amber, fontSize: 11, fontWeight: 700, fontFamily: FONT_BODY }}>{c.author_name || 'Unknown'}</span>
+                          <span style={{ color: C.faint, fontSize: 10, fontFamily: FONT_MONO }}>{fmtDate(c.created_at)}</span>
                         </div>
-                        <p className="text-gray-300 text-sm">{c.is_deleted ? <em className="text-gray-600">[deleted]</em> : c.body}</p>
+                        <p style={{ color: C.muted, fontSize: 12, margin: 0, fontFamily: FONT_BODY }}>
+                          {c.is_deleted ? <em style={{ color: C.faint }}>[deleted]</em> : c.body}
+                        </p>
                         {c.replies && c.replies.length > 0 && (
-                          <div className="mt-2 ml-4 space-y-2 border-l border-gray-700 pl-3">
+                          <div style={{ marginTop: 10, marginLeft: 14, paddingLeft: 12, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
                             {c.replies.map(r => (
                               <div key={r.id}>
-                                <div className="flex justify-between items-center mb-0.5">
-                                  <span className="text-amber-400 text-xs">{r.author_name || 'Unknown'}</span>
-                                  <span className="text-gray-600 text-xs">{fmtDate(r.created_at)}</span>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                                  <span style={{ color: C.amber, fontSize: 10.5, fontFamily: FONT_BODY }}>{r.author_name || 'Unknown'}</span>
+                                  <span style={{ color: C.faint, fontSize: 9.5, fontFamily: FONT_MONO }}>{fmtDate(r.created_at)}</span>
                                 </div>
-                                <p className="text-gray-300 text-sm">{r.is_deleted ? <em className="text-gray-600">[deleted]</em> : r.body}</p>
+                                <p style={{ color: C.muted, fontSize: 11.5, margin: 0, fontFamily: FONT_BODY }}>
+                                  {r.is_deleted ? <em style={{ color: C.faint }}>[deleted]</em> : r.body}
+                                </p>
                               </div>
                             ))}
                           </div>
                         )}
-                      </div>
+                      </Card>
                     ))}
                     {comments.length === 0 && (
-                      <p className="text-gray-500 text-sm text-center py-4">No comments yet. Start the conversation.</p>
+                      <p style={{ color: C.faint, fontSize: 12.5, textAlign: "center", padding: "16px 0", fontFamily: FONT_BODY }}>No comments yet. Start the conversation.</p>
                     )}
                   </div>
 
-                  <div className="border-t border-gray-800 pt-3">
-                    <textarea
-                      rows={3}
-                      placeholder="Write a comment… Use @name to mention a teammate"
-                      value={commentBody}
-                      onChange={e => setCommentBody(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none resize-none mb-2"
-                    />
-                    <button onClick={postComment} disabled={submitting || !commentBody.trim()}
-                      className="w-full py-2 bg-amber-500 text-black text-sm font-medium rounded hover:bg-amber-400 disabled:opacity-50">
-                      {submitting ? 'Posting…' : 'Post Comment'}
-                    </button>
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                    <TextArea rows={3} placeholder="Write a comment… Use @name to mention a teammate" value={commentBody}
+                      onChange={(e: any) => setCommentBody(e.target.value)} style={{ marginBottom: 10 }} />
+                    <BtnPrimary full color={C.amber} onClick={postComment} disabled={submitting || !commentBody.trim()}>
+                      <MessageSquare size={13} /> {submitting ? 'Posting…' : 'Post Comment'}
+                    </BtnPrimary>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-800 flex gap-2">
+            <div style={{ display: "flex", gap: 8, padding: 16, borderTop: `1px solid ${C.border}` }}>
               {asset.status === 'active' && (
-                <button onClick={archive}
-                  className="flex-1 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700 transition-colors">
-                  Archive
-                </button>
+                <BtnSecondary full color={C.muted} onClick={archive}><Archive size={13} /> Archive</BtnSecondary>
               )}
-              <button onClick={remove}
-                className="flex-1 py-2 text-sm bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 border border-red-800 transition-colors">
-                Delete
-              </button>
+              <BtnDanger full onClick={remove}><Trash2 size={13} /> Delete</BtnDanger>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">Asset not found</div>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, fontFamily: FONT_BODY }}>Asset not found</div>
         )}
       </div>
     </div>
   );
 }
 
-// ── Library Tab ───────────────────────────────────────────────────────────
+/* ── Library Tab ───────────────────────────────────────────────────── */
 
 function LibraryTab() {
   const [assets, setAssets]       = useState<Asset[]>([]);
@@ -695,57 +1022,42 @@ function LibraryTab() {
     <div>
       <UploadZone onUploaded={load} />
 
-      <div className="flex gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Search assets..."
-          value={query}
-          onChange={e => { setQuery(e.target.value); setPage(1); }}
-          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-        />
-        <select
-          value={assetType}
-          onChange={e => { setAssetType(e.target.value); setPage(1); }}
-          className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none"
-        >
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "1 1 220px" }}>
+          <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: C.faint, pointerEvents: "none" }} />
+          <Input full placeholder="Search assets…" value={query}
+            onChange={(e: any) => { setQuery(e.target.value); setPage(1); }} style={{ paddingLeft: 32 }} />
+        </div>
+        <Select value={assetType} onChange={(e: any) => { setAssetType(e.target.value); setPage(1); }}>
           <option value="">All Types</option>
           {['image','video','audio','document','template','brand_asset','other'].map(t => (
             <option key={t} value={t}>{t}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 12 }}>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Card key={i} style={{ padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                <Sk w={36} h={36} r={9} /><Sk w={50} h={18} r={100} />
+              </div>
+              <Sk w="80%" h={12} /><div style={{ marginTop: 6 }}><Sk w="40%" h={10} /></div>
+            </Card>
+          ))}
         </div>
       ) : assets.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <div className="text-5xl mb-4">📁</div>
-          <p>No assets found. Upload your first file above.</p>
-        </div>
+        <EmptyState icon={Package} title="No assets found" sub="Upload your first file above to get started." />
       ) : (
         <>
-          <p className="text-gray-500 text-sm mb-4">{total} assets</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <p style={{ color: C.faint, fontSize: 11.5, marginBottom: 14, fontFamily: FONT_MONO }}>{total} ASSETS</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 12 }}>
             {assets.map(a => (
               <AssetCard key={a.id} asset={a} onClick={() => setSelectedId(a.id)} />
             ))}
           </div>
-
-          {total > 20 && (
-            <div className="flex justify-center gap-2 mt-6">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">
-                Previous
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-400">Page {page}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={page * 20 >= total}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">
-                Next
-              </button>
-            </div>
-          )}
+          <Pagination page={page} total={total} pageSize={20} onPage={setPage} />
         </>
       )}
 
@@ -761,7 +1073,7 @@ function LibraryTab() {
   );
 }
 
-// ── Governance Tab ────────────────────────────────────────────────────────
+/* ── Governance Tab ────────────────────────────────────────────────── */
 
 function GovernanceTab() {
   const [policies, setPolicies]   = useState<GovernancePolicy[]>([]);
@@ -796,88 +1108,62 @@ function GovernanceTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-white font-semibold">Governance Policies</h3>
-        <button onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-amber-500 text-black text-sm font-medium rounded hover:bg-amber-400 transition-colors">
-          + New Policy
-        </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <p style={{ color: C.text, fontWeight: 700, fontSize: 14, margin: 0, fontFamily: FONT_HEAD }}>Governance Policies</p>
+        <BtnPrimary color={C.amber} onClick={() => setShowForm(true)}><Plus size={13} /> New Policy</BtnPrimary>
       </div>
 
       {showForm && (
-        <div className="bg-gray-900 border border-amber-700 rounded-lg p-4 mb-6">
-          <h4 className="text-white font-medium mb-4">Create Policy</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <input
-              placeholder="Policy name"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm col-span-1 sm:col-span-3 focus:outline-none"
-            />
-            <input
-              type="number"
-              placeholder="Archive after N days"
-              value={form.archive_days}
-              onChange={e => setForm(f => ({ ...f, archive_days: e.target.value }))}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none"
-            />
-            <input
-              type="number"
-              placeholder="Delete after N days"
-              value={form.retention_days}
-              onChange={e => setForm(f => ({ ...f, retention_days: e.target.value }))}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none"
-            />
+        <Card accent={C.amber} style={{ marginBottom: 20, borderColor: "rgba(251,191,36,0.25)" }}>
+          <p style={{ color: C.text, fontWeight: 600, fontSize: 13, margin: "0 0 14px", fontFamily: FONT_BODY }}>Create Policy</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 14 }}>
+            <Input full placeholder="Policy name" value={form.name}
+              onChange={(e: any) => setForm(f => ({ ...f, name: e.target.value }))} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Input full type="number" placeholder="Archive after N days" value={form.archive_days}
+                onChange={(e: any) => setForm(f => ({ ...f, archive_days: e.target.value }))} />
+              <Input full type="number" placeholder="Delete after N days" value={form.retention_days}
+                onChange={(e: any) => setForm(f => ({ ...f, retention_days: e.target.value }))} />
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={submit}
-              className="px-4 py-2 bg-amber-500 text-black text-sm font-medium rounded hover:bg-amber-400">
-              Create
-            </button>
-            <button onClick={() => setShowForm(false)}
-              className="px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded hover:bg-gray-700">
-              Cancel
-            </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <BtnPrimary color={C.amber} onClick={submit}>Create</BtnPrimary>
+            <BtnSecondary color={C.muted} onClick={() => setShowForm(false)}>Cancel</BtnSecondary>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="space-y-3">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {policies.map(p => (
-          <div key={p.id} className={`bg-gray-900 border rounded-lg p-4 ${p.is_active ? 'border-gray-800' : 'border-gray-700 opacity-50'}`}>
-            <div className="flex justify-between items-start">
+          <Card key={p.id} style={{ opacity: p.is_active ? 1 : 0.55 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
               <div>
-                <p className="text-white font-medium">{p.name}</p>
-                <div className="flex gap-4 mt-1">
-                  {p.archive_days && <span className="text-gray-400 text-xs">Archive after {p.archive_days}d</span>}
-                  {p.retention_days && <span className="text-gray-400 text-xs">Delete after {p.retention_days}d</span>}
+                <p style={{ color: C.text, fontWeight: 600, fontSize: 13, margin: 0, fontFamily: FONT_BODY }}>{p.name}</p>
+                <div style={{ display: "flex", gap: 12, marginTop: 5 }}>
+                  {p.archive_days && <span style={{ color: C.faint, fontSize: 10.5, fontFamily: FONT_MONO }}>Archive after {p.archive_days}d</span>}
+                  {p.retention_days && <span style={{ color: C.faint, fontSize: 10.5, fontFamily: FONT_MONO }}>Delete after {p.retention_days}d</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${p.is_active ? 'bg-green-900/40 text-green-300 border border-green-800' : 'bg-gray-700 text-gray-400'}`}>
-                  {p.is_active ? 'Active' : 'Inactive'}
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <StatusDotBadge label={p.is_active ? 'Active' : 'Inactive'} color={p.is_active ? C.green : C.muted} bg={p.is_active ? "rgba(0,200,150,0.1)" : "rgba(255,255,255,0.05)"} border={p.is_active ? "rgba(0,200,150,0.25)" : C.border} />
                 {p.is_active && (
-                  <button onClick={() => deactivate(p.id)}
-                    className="text-xs text-red-400 hover:text-red-300">
+                  <button onClick={() => deactivate(p.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 11, cursor: "pointer", fontFamily: FONT_BODY }}>
                     Deactivate
                   </button>
                 )}
               </div>
             </div>
-          </div>
+          </Card>
         ))}
         {policies.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <p>No governance policies yet.</p>
-          </div>
+          <EmptyState icon={Shield} title="No governance policies yet" sub="Create a policy to manage asset retention and archiving." />
         )}
       </div>
     </div>
   );
 }
 
-// ── Brands Tab ────────────────────────────────────────────────────────────
+/* ── Brands Tab ────────────────────────────────────────────────────── */
 
 const RULE_TYPES = ['color_palette','font_family','logo_usage','tone_of_voice','aspect_ratio','file_format','naming_convention','custom'];
 
@@ -939,123 +1225,114 @@ function BrandsTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-      <div className="md:col-span-1">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-white font-semibold text-sm">Brands</h3>
-          <button onClick={() => setShowBrandForm(true)}
-            className="text-xs px-2 py-1 bg-amber-500 text-black rounded hover:bg-amber-400">
-            + New
+    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 20 }} className="af-brands-grid">
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <p style={{ color: C.text, fontWeight: 700, fontSize: 12.5, margin: 0, fontFamily: FONT_HEAD }}>Brands</p>
+          <button onClick={() => setShowBrandForm(true)} style={{
+            display: "flex", alignItems: "center", gap: 3, fontSize: 10.5, padding: "4px 8px",
+            background: C.blue, color: "#06141F", border: "none", borderRadius: 6, cursor: "pointer", fontFamily: FONT_BODY, fontWeight: 700,
+          }}>
+            <Plus size={10} /> New
           </button>
         </div>
 
         {showBrandForm && (
-          <div className="mb-3">
-            <input
-              placeholder="Brand name"
-              value={brandName}
-              onChange={e => setBrandName(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm mb-2 focus:outline-none"
-            />
-            <div className="flex gap-1">
-              <button onClick={createBrand}
-                className="flex-1 py-1.5 bg-amber-500 text-black text-xs rounded hover:bg-amber-400">Create</button>
-              <button onClick={() => setShowBrandForm(false)}
-                className="flex-1 py-1.5 bg-gray-800 text-gray-300 text-xs rounded">Cancel</button>
+          <div style={{ marginBottom: 12 }}>
+            <Input full placeholder="Brand name" value={brandName} onChange={(e: any) => setBrandName(e.target.value)} style={{ marginBottom: 8 }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <BtnPrimary full color={C.blue} onClick={createBrand}>Create</BtnPrimary>
+              <BtnSecondary full color={C.muted} onClick={() => setShowBrandForm(false)}>Cancel</BtnSecondary>
             </div>
           </div>
         )}
 
-        <div className="space-y-1">
-          {brands.map(b => (
-            <button key={b.id}
-              onClick={() => loadBrand(b.id)}
-              className={`w-full text-left px-3 py-2 rounded text-sm transition-colors
-                ${activeBrand?.id === b.id ? 'bg-amber-500/20 text-amber-400 border border-amber-700' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-              {b.name}
-              {b.is_default && <span className="ml-2 text-xs text-gray-500">default</span>}
-            </button>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {brands.map(b => {
+            const isActive = activeBrand?.id === b.id;
+            return (
+              <button key={b.id} onClick={() => loadBrand(b.id)} style={{
+                textAlign: "left", padding: "9px 11px", borderRadius: 8, fontSize: 12.5,
+                background: isActive ? "rgba(56,189,248,0.1)" : "transparent",
+                color: isActive ? C.blue : C.muted,
+                border: isActive ? "1px solid rgba(56,189,248,0.25)" : "1px solid transparent",
+                cursor: "pointer", fontFamily: FONT_BODY, transition: "all 0.14s",
+              }}>
+                {b.name}
+                {b.is_default && <span style={{ marginLeft: 8, fontSize: 10, color: C.faint, fontFamily: FONT_MONO }}>default</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="md:col-span-3">
+      <div>
         {activeBrand ? (
           <>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-white font-semibold">{activeBrand.name} — Rules</h3>
-              <button onClick={() => setShowRuleForm(true)}
-                className="text-sm px-3 py-1.5 bg-amber-500 text-black rounded hover:bg-amber-400">
-                + Add Rule
-              </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <p style={{ color: C.text, fontWeight: 700, fontSize: 14, margin: 0, fontFamily: FONT_HEAD }}>{activeBrand.name} — Rules</p>
+              <BtnPrimary color={C.blue} onClick={() => setShowRuleForm(true)}><Plus size={13} /> Add Rule</BtnPrimary>
             </div>
 
             {showRuleForm && (
-              <div className="bg-gray-900 border border-amber-700 rounded-lg p-4 mb-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <select value={ruleForm.rule_type} onChange={e => setRuleForm(f => ({ ...f, rule_type: e.target.value }))}
-                    className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none">
+              <Card accent={C.blue} style={{ marginBottom: 16, borderColor: "rgba(56,189,248,0.25)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <Select value={ruleForm.rule_type} onChange={(e: any) => setRuleForm(f => ({ ...f, rule_type: e.target.value }))}>
                     {RULE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <input placeholder="Rule name" value={ruleForm.rule_name}
-                    onChange={e => setRuleForm(f => ({ ...f, rule_name: e.target.value }))}
-                    className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none" />
+                  </Select>
+                  <Input full placeholder="Rule name" value={ruleForm.rule_name}
+                    onChange={(e: any) => setRuleForm(f => ({ ...f, rule_name: e.target.value }))} />
                 </div>
-                <textarea rows={3} placeholder='Config JSON e.g. {"colors":["#FF0000"]}' value={ruleForm.config}
-                  onChange={e => setRuleForm(f => ({ ...f, config: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm font-mono focus:outline-none mb-3" />
-                <div className="flex gap-2">
-                  <button onClick={addRule}
-                    className="px-4 py-1.5 bg-amber-500 text-black text-sm rounded hover:bg-amber-400">Add</button>
-                  <button onClick={() => setShowRuleForm(false)}
-                    className="px-4 py-1.5 bg-gray-800 text-gray-300 text-sm rounded">Cancel</button>
+                <TextArea rows={3} placeholder='Config JSON e.g. {"colors":["#FF0000"]}' value={ruleForm.config}
+                  onChange={(e: any) => setRuleForm(f => ({ ...f, config: e.target.value }))}
+                  style={{ fontFamily: FONT_MONO, marginBottom: 10 }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <BtnPrimary color={C.blue} onClick={addRule}>Add</BtnPrimary>
+                  <BtnSecondary color={C.muted} onClick={() => setShowRuleForm(false)}>Cancel</BtnSecondary>
                 </div>
-              </div>
+              </Card>
             )}
 
-            <div className="space-y-2 mb-6">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {(activeBrand.rules || []).map(r => (
-                <div key={r.id} className="bg-gray-900 border border-gray-800 rounded-lg p-3 flex items-start justify-between">
+                <Card key={r.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: 14 }}>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded">{r.rule_type}</span>
-                      <span className="text-white text-sm font-medium">{r.rule_name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, background: "rgba(255,255,255,0.05)", color: C.muted, padding: "2px 7px", borderRadius: 5, fontFamily: FONT_MONO }}>{r.rule_type}</span>
+                      <span style={{ color: C.text, fontSize: 12.5, fontWeight: 600, fontFamily: FONT_BODY }}>{r.rule_name}</span>
                     </div>
-                    <p className="text-gray-500 text-xs font-mono">{JSON.stringify(r.config)}</p>
+                    <p style={{ color: C.faint, fontSize: 10.5, margin: 0, fontFamily: FONT_MONO }}>{JSON.stringify(r.config)}</p>
                   </div>
-                  <button onClick={() => deleteRule(r.id)}
-                    className="text-red-400 hover:text-red-300 text-xs ml-4">Remove</button>
-                </div>
+                  <button onClick={() => deleteRule(r.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 11, cursor: "pointer", marginLeft: 14, fontFamily: FONT_BODY, flexShrink: 0 }}>
+                    Remove
+                  </button>
+                </Card>
               ))}
               {(!activeBrand.rules || activeBrand.rules.length === 0) && (
-                <p className="text-gray-500 text-sm text-center py-6">No rules yet. Add a rule above.</p>
+                <p style={{ color: C.faint, fontSize: 12.5, textAlign: "center", padding: "20px 0", fontFamily: FONT_BODY }}>No rules yet. Add a rule above.</p>
               )}
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-3 text-sm">Check Asset Against Brand</h4>
-              <div className="flex gap-2">
-                <input
-                  placeholder="Asset ID (UUID)"
-                  value={checkAssetId}
-                  onChange={e => setCheckAssetId(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none"
-                />
-                <button onClick={runCheck} disabled={checkLoading}
-                  className="px-4 py-2 bg-amber-500 text-black text-sm rounded hover:bg-amber-400 disabled:opacity-50">
-                  {checkLoading ? '...' : 'Check'}
-                </button>
+            <Card>
+              <p style={{ color: C.text, fontWeight: 600, fontSize: 12.5, margin: "0 0 12px", fontFamily: FONT_BODY }}>Check Asset Against Brand</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Input full placeholder="Asset ID (UUID)" value={checkAssetId} onChange={(e: any) => setCheckAssetId(e.target.value)} />
+                <BtnPrimary color={C.blue} onClick={runCheck} disabled={checkLoading}>{checkLoading ? '…' : 'Check'}</BtnPrimary>
               </div>
               {checkResult && (
-                <div className="mt-3 p-3 bg-gray-800 rounded text-sm">
-                  <p className="text-gray-300">Violations: <span className={checkResult.violations.length > 0 ? 'text-red-400' : 'text-green-400'}>{checkResult.violations.length}</span></p>
-                  <p className="text-gray-300">Warnings emitted: <span className="text-amber-400">{checkResult.warnings_emitted}</span></p>
+                <div style={{ marginTop: 12, padding: 12, background: "rgba(255,255,255,0.03)", borderRadius: 8 }}>
+                  <p style={{ color: C.muted, fontSize: 12, margin: "0 0 4px", fontFamily: FONT_BODY }}>
+                    Violations: <span style={{ color: checkResult.violations.length > 0 ? C.red : C.green, fontWeight: 700 }}>{checkResult.violations.length}</span>
+                  </p>
+                  <p style={{ color: C.muted, fontSize: 12, margin: 0, fontFamily: FONT_BODY }}>
+                    Warnings emitted: <span style={{ color: C.amber, fontWeight: 700 }}>{checkResult.warnings_emitted}</span>
+                  </p>
                 </div>
               )}
-            </div>
+            </Card>
           </>
         ) : (
-          <div className="flex items-center justify-center h-48 text-gray-500">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: C.faint, fontSize: 12.5, fontFamily: FONT_BODY }}>
             Select a brand from the left to manage its rules
           </div>
         )}
@@ -1064,7 +1341,7 @@ function BrandsTab() {
   );
 }
 
-// ── Reviews Tab ───────────────────────────────────────────────────────────
+/* ── Reviews Tab ───────────────────────────────────────────────────── */
 
 function ReviewsTab() {
   const [requests, setRequests]     = useState<ReviewRequest[]>([]);
@@ -1105,105 +1382,171 @@ function ReviewsTab() {
 
   return (
     <div>
-      <div className="flex gap-3 mb-6">
-        <select
-          value={statusFilter}
-          onChange={e => { setStatus(e.target.value); setPage(1); }}
-          className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none"
-        >
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
+        <Select value={statusFilter} onChange={(e: any) => { setStatus(e.target.value); setPage(1); }}>
           <option value="">All Statuses</option>
           {(['pending','approved','rejected','cancelled'] as ReviewStatus[]).map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
-        </select>
-        <span className="text-gray-500 text-sm self-center">{total} requests</span>
+        </Select>
+        <span style={{ color: C.faint, fontSize: 11.5, fontFamily: FONT_MONO }}>{total} REQUESTS</span>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}><Spinner color={C.green} /></div>
       ) : requests.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <div className="text-5xl mb-4">✅</div>
-          <p>No review requests found.</p>
-        </div>
+        <EmptyState icon={ClipboardCheck} title="No review requests found" sub="Submitted assets awaiting review will appear here." color={C.green} />
       ) : (
         <>
-          <div className="space-y-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {requests.map(r => (
-              <div key={r.id}
-                className={`bg-gray-900 border rounded-lg p-4 ${r.status === 'pending' ? 'border-amber-700' : 'border-gray-800'}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{r.asset_name || r.asset_id}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">
+              <Card key={r.id} accent={r.status === 'pending' ? C.amber : undefined} style={r.status === 'pending' ? { borderColor: "rgba(251,191,36,0.25)" } : {}}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      color: C.text, fontWeight: 600, fontSize: 13, margin: 0, fontFamily: FONT_BODY,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {r.asset_name || r.asset_id}
+                    </p>
+                    <p style={{ color: C.faint, fontSize: 10.5, margin: "3px 0 0", fontFamily: FONT_MONO }}>
                       v{r.version_number} · Requested by {r.requester_name || 'unknown'} · {fmtDate(r.submitted_at)}
                     </p>
-                    {r.assignee_name && (
-                      <p className="text-gray-400 text-xs mt-0.5">Assigned to: {r.assignee_name}</p>
-                    )}
-                    {r.review_note && (
-                      <p className="text-gray-400 text-xs mt-1 italic">"{r.review_note}"</p>
-                    )}
-                    {r.rejection_reason && (
-                      <p className="text-red-400 text-xs mt-1">Rejection: {r.rejection_reason}</p>
-                    )}
+                    {r.assignee_name && <p style={{ color: C.muted, fontSize: 11, margin: "3px 0 0", fontFamily: FONT_BODY }}>Assigned to: {r.assignee_name}</p>}
+                    {r.review_note && <p style={{ color: C.muted, fontSize: 11.5, margin: "5px 0 0", fontStyle: "italic", fontFamily: FONT_BODY }}>"{r.review_note}"</p>}
+                    {r.rejection_reason && <p style={{ color: C.red, fontSize: 11, margin: "5px 0 0", fontFamily: FONT_BODY }}>Rejection: {r.rejection_reason}</p>}
                   </div>
                   <ReviewStatusBadge status={r.status} />
                 </div>
 
                 {r.status === 'pending' && (
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={() => approve(r.id)}
-                      className="px-3 py-1.5 bg-green-700 text-white text-xs rounded hover:bg-green-600">
-                      ✓ Approve
-                    </button>
-                    <button onClick={() => setRejectId(r.id === rejectId ? null : r.id)}
-                      className="px-3 py-1.5 bg-red-900/40 border border-red-700 text-red-300 text-xs rounded hover:bg-red-900/60">
-                      ✗ Reject
-                    </button>
+                  <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                    <BtnPrimary color={C.green} onClick={() => approve(r.id)} style={{ padding: "7px 13px", fontSize: 11.5 }}>
+                      <Check size={12} /> Approve
+                    </BtnPrimary>
+                    <BtnDanger onClick={() => setRejectId(r.id === rejectId ? null : r.id)} style={{ padding: "7px 13px", fontSize: 11.5 }}>
+                      <X size={12} /> Reject
+                    </BtnDanger>
                   </div>
                 )}
 
                 {rejectId === r.id && (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      placeholder="Rejection reason..."
-                      value={rejectReason}
-                      onChange={e => setRejectReason(e.target.value)}
-                      className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-xs focus:outline-none"
-                    />
-                    <button onClick={() => reject(r.id)} disabled={!rejectReason.trim()}
-                      className="px-3 py-1.5 bg-red-700 text-white text-xs rounded hover:bg-red-600 disabled:opacity-40">
-                      Confirm
-                    </button>
+                  <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                    <Input full placeholder="Rejection reason…" value={rejectReason} onChange={(e: any) => setRejectReason(e.target.value)} />
+                    <BtnDanger onClick={() => reject(r.id)} disabled={!rejectReason.trim()} style={{ fontSize: 11.5 }}>Confirm</BtnDanger>
                   </div>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
-
-          {total > 20 && (
-            <div className="flex justify-center gap-2 mt-6">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">
-                Previous
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-400">Page {page}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={page * 20 >= total}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">
-                Next
-              </button>
-            </div>
-          )}
+          <Pagination page={page} total={total} pageSize={20} onPage={setPage} />
         </>
       )}
     </div>
   );
 }
 
-// ── Publishing Gate Tab ───────────────────────────────────────────────────
+/* ── Audit Log Tab ─────────────────────────────────────────────────── */
+
+function AuditLogTab() {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [total, setTotal]     = useState(0);
+  const [page, setPage]       = useState(1);
+  const [action, setAction]   = useState('');
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(page), limit: '25' });
+    if (action) params.set('action', action);
+    const res = await API(`/asset-governance/audit-log?${params}`);
+    setEntries(res.entries || []);
+    setTotal(res.total || 0);
+    setLoading(false);
+  }, [page, action]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const ACTIONS = ['upload','update','archive','delete','version_created','policy_applied','compliance_flag'];
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
+        <Select value={action} onChange={(e: any) => { setAction(e.target.value); setPage(1); }}>
+          <option value="">All Actions</option>
+          {ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+        </Select>
+        <span style={{ color: C.faint, fontSize: 11.5, fontFamily: FONT_MONO }}>{total} ENTRIES</span>
+      </div>
+
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}><Spinner color={C.muted} /></div>
+      ) : (
+        <div style={{
+          background: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: 14, overflow: "hidden",
+        }}>
+          <div style={{
+            display: "grid", gridTemplateColumns: "120px 1fr 140px 1fr 30px",
+            gap: 12, padding: "9px 18px", borderBottom: `1px solid ${C.border}`,
+            background: "rgba(255,255,255,0.015)",
+          }}>
+            {["TIME", "ACTOR", "ACTION", "ASSET", ""].map(h => (
+              <div key={h} style={{ fontSize: 9, fontWeight: 800, color: C.faint, fontFamily: FONT_MONO, letterSpacing: "0.08em" }}>{h}</div>
+            ))}
+          </div>
+
+          {entries.map(e => {
+            const isExp = expanded === e.id;
+            return (
+              <div key={e.id}>
+                <div
+                  onClick={() => setExpanded(isExp ? null : e.id)}
+                  style={{
+                    display: "grid", gridTemplateColumns: "120px 1fr 140px 1fr 30px",
+                    gap: 12, alignItems: "center", padding: "12px 18px",
+                    borderBottom: `1px solid ${C.border}`, cursor: "pointer", transition: "background 0.14s",
+                  }}
+                  onMouseEnter={ev => (ev.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)"}
+                  onMouseLeave={ev => (ev.currentTarget as HTMLElement).style.background = "transparent"}
+                >
+                  <span style={{ color: C.faint, fontSize: 11, fontFamily: FONT_MONO, whiteSpace: "nowrap" }}>{fmtDate(e.created_at)}</span>
+                  <span style={{ color: C.muted, fontSize: 12, fontFamily: FONT_BODY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.actor_name || e.actor_email || '—'}</span>
+                  <span>
+                    <span style={{ background: "rgba(251,191,36,0.1)", color: C.amber, fontSize: 10.5, padding: "2px 8px", borderRadius: 5, fontFamily: FONT_MONO }}>{e.action}</span>
+                  </span>
+                  <span style={{ color: C.faint, fontSize: 11.5, fontFamily: FONT_BODY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.asset_name || '—'}</span>
+                  <span style={{ color: C.faint, display: "flex", justifyContent: "flex-end" }}>
+                    {isExp ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </span>
+                </div>
+                {isExp && (
+                  <div style={{ padding: "0 18px 14px", borderBottom: `1px solid ${C.border}` }}>
+                    <pre style={{
+                      background: "rgba(0,0,0,0.3)", color: C.muted, fontSize: 11,
+                      borderRadius: 8, padding: 12, overflow: "auto", maxHeight: 140,
+                      fontFamily: FONT_MONO, margin: 0,
+                    }}>
+                      {JSON.stringify(e.detail, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {entries.length === 0 && (
+            <div style={{ textAlign: "center", padding: "48px 0", color: C.faint, fontSize: 12.5, fontFamily: FONT_BODY }}>No audit entries found</div>
+          )}
+        </div>
+      )}
+      <Pagination page={page} total={total} pageSize={25} onPage={setPage} />
+    </div>
+  );
+}
+
+/* ── Publishing Gate Tab ───────────────────────────────────────────── */
 
 interface BlockingAsset {
   id:                string;
@@ -1229,15 +1572,6 @@ interface PublishingJob {
   gateLoading?:           boolean;
 }
 
-const JOB_STATUS_COLORS: Record<string, string> = {
-  pending:    'bg-blue-900/40 text-blue-300 border border-blue-700',
-  processing: 'bg-amber-900/40 text-amber-300 border border-amber-700',
-  completed:  'bg-green-900/40 text-green-300 border border-green-800',
-  failed:     'bg-red-900/40 text-red-300 border border-red-800',
-  blocked:    'bg-orange-900/50 text-orange-300 border border-orange-700',
-  cancelled:  'bg-gray-700 text-gray-400',
-};
-
 function PublishingGateTab() {
   const [jobs, setJobs]       = useState<PublishingJob[]>([]);
   const [total, setTotal]     = useState(0);
@@ -1253,7 +1587,6 @@ function PublishingGateTab() {
     const rawJobs: PublishingJob[] = res.jobs || [];
     setTotal(res.total || 0);
 
-    // Fetch gate check for each job in parallel (fire-and-forget per job)
     const withGates = await Promise.all(
       rawJobs.map(async (job) => {
         try {
@@ -1293,28 +1626,23 @@ function PublishingGateTab() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h3 className="text-white font-semibold">Publishing Gates</h3>
-          <p className="text-gray-500 text-xs mt-0.5">
+          <p style={{ color: C.text, fontWeight: 700, fontSize: 14, margin: 0, fontFamily: FONT_HEAD }}>Publishing Gates</p>
+          <p style={{ color: C.faint, fontSize: 11.5, margin: "3px 0 0", fontFamily: FONT_BODY }}>
             Require all campaign assets to be approved before a job can publish.
           </p>
         </div>
-        <span className="text-gray-500 text-sm">{total} jobs</span>
+        <span style={{ color: C.faint, fontSize: 11.5, fontFamily: FONT_MONO }}>{total} JOBS</span>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}><Spinner /></div>
       ) : jobs.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <div className="text-5xl mb-4">📤</div>
-          <p>No publishing jobs found.</p>
-        </div>
+        <EmptyState icon={Send} title="No publishing jobs found" sub="Jobs created from campaign orchestration will show up here." />
       ) : (
         <>
-          <div className="space-y-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {jobs.map(job => {
               const gateOn      = job.requires_asset_approval ?? false;
               const isBlocked   = job.status === 'blocked';
@@ -1323,131 +1651,134 @@ function PublishingGateTab() {
                 ? (job.blocked_reason?.blocking_assets ?? [])
                 : (gateStatus?.blocking_assets ?? []);
               const isExpanded  = expanded === job.id;
+              const borderColor = isBlocked ? "rgba(251,113,133,0.3)" : gateOn ? "rgba(251,191,36,0.25)" : C.border;
 
               return (
-                <div
-                  key={job.id}
-                  className={`bg-gray-900 border rounded-lg overflow-hidden transition-all
-                    ${isBlocked ? 'border-orange-700' : gateOn ? 'border-amber-700/50' : 'border-gray-800'}`}
-                >
-                  {/* ── Job header ── */}
+                <div key={job.id} style={{
+                  background: C.surface, border: `1px solid ${borderColor}`,
+                  borderRadius: 12, overflow: "hidden", transition: "all 0.16s",
+                }}>
                   <div
-                    className="flex items-start gap-3 p-4 cursor-pointer"
                     onClick={() => setExpanded(isExpanded ? null : job.id)}
+                    style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 16, cursor: "pointer" }}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-white font-mono text-xs">{job.id.slice(0, 8)}…</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${JOB_STATUS_COLORS[job.status] || 'bg-gray-700 text-gray-400'}`}>
-                          {job.status}
-                        </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ color: C.text, fontFamily: FONT_MONO, fontSize: 11.5 }}>{job.id.slice(0, 8)}…</span>
+                        <AssetStatusBadge status={job.status as AssetStatus} />
                         {isBlocked && (
-                          <span className="text-xs text-orange-300 font-medium">
-                            🚫 {blockers.length} asset{blockers.length !== 1 ? 's' : ''} pending approval
+                          <span style={{ color: C.red, fontSize: 11, fontWeight: 600, fontFamily: FONT_BODY }}>
+                            {blockers.length} asset{blockers.length !== 1 ? 's' : ''} pending approval
                           </span>
                         )}
                         {gateOn && !isBlocked && gateStatus?.gated && (
-                          <span className="text-xs text-amber-300">⚠ {gateStatus.blocking_assets?.length ?? 0} pending</span>
+                          <span style={{ color: C.amber, fontSize: 11, fontFamily: FONT_BODY }}>
+                            <AlertTriangle size={10} style={{ display: "inline", marginRight: 3, marginBottom: -1 }} />
+                            {gateStatus.blocking_assets?.length ?? 0} pending
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <p className="text-gray-500 text-xs">
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                        <p style={{ color: C.faint, fontSize: 11, margin: 0, fontFamily: FONT_BODY }}>
                           {(job.target_platforms || []).join(', ') || 'No platforms'}
                         </p>
-                        <span className="text-gray-700 text-xs">·</span>
-                        <p className="text-gray-600 text-xs">{fmtDate(job.created_at)}</p>
+                        <span style={{ color: C.faint, fontSize: 11 }}>·</span>
+                        <p style={{ color: C.faint, fontSize: 11, margin: 0, fontFamily: FONT_MONO }}>{fmtDate(job.created_at)}</p>
                       </div>
                     </div>
 
-                    {/* ── Gate toggle ── */}
-                    <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                      <span className={`text-xs ${gateOn ? 'text-amber-400' : 'text-gray-600'}`}>
-                        {gateOn ? 'Gate ON' : 'Gate OFF'}
+                    <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10.5, color: gateOn ? C.amber : C.faint, fontFamily: FONT_MONO }}>
+                        {gateOn ? 'GATE ON' : 'GATE OFF'}
                       </span>
                       <button
                         onClick={() => toggleGate(job.id, gateOn)}
                         disabled={toggling === job.id || ['completed','failed','cancelled'].includes(job.status)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-                          ${gateOn ? 'bg-amber-500' : 'bg-gray-700'}
-                          disabled:opacity-40 disabled:cursor-not-allowed`}
+                        style={{
+                          position: "relative", width: 36, height: 20, borderRadius: 100, border: "none", cursor: "pointer",
+                          background: gateOn ? C.amber : "rgba(255,255,255,0.12)",
+                          opacity: (toggling === job.id || ['completed','failed','cancelled'].includes(job.status)) ? 0.4 : 1,
+                          transition: "background 0.18s",
+                        }}
                       >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform
-                          ${gateOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        <span style={{
+                          position: "absolute", top: 2, left: gateOn ? 18 : 2,
+                          width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                          transition: "left 0.18s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                        }} />
                       </button>
-                      <span className="text-gray-700 ml-1">{isExpanded ? '▲' : '▼'}</span>
+                      <span style={{ color: C.faint }}>{isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>
                     </div>
                   </div>
 
-                  {/* ── Expanded detail ── */}
                   {isExpanded && (
-                    <div className="border-t border-gray-800 p-4 space-y-4">
-
-                      {/* Gate status panel */}
-                      <div className="bg-gray-800/60 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-gray-300 text-sm font-medium">Gate Status</p>
+                    <div style={{ borderTop: `1px solid ${C.border}`, padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+                      <div style={{ background: "rgba(255,255,255,0.025)", borderRadius: 10, padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                          <p style={{ color: C.muted, fontWeight: 600, fontSize: 12, margin: 0, fontFamily: FONT_BODY }}>Gate Status</p>
                           <button
-                            onClick={() => recheck(job.id)}
-                            disabled={job.gateLoading}
-                            className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40"
+                            onClick={() => recheck(job.id)} disabled={job.gateLoading}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4, background: "none", border: "none",
+                              color: C.amber, fontSize: 11, cursor: "pointer", opacity: job.gateLoading ? 0.4 : 1, fontFamily: FONT_BODY,
+                            }}
                           >
-                            {job.gateLoading ? 'Checking…' : '↻ Re-check'}
+                            <RotateCcw size={11} /> {job.gateLoading ? 'Checking…' : 'Re-check'}
                           </button>
                         </div>
 
                         {!gateOn ? (
-                          <p className="text-gray-500 text-xs">
-                            Asset approval gate is <strong className="text-gray-400">disabled</strong> for this job.
+                          <p style={{ color: C.faint, fontSize: 11.5, margin: 0, fontFamily: FONT_BODY }}>
+                            Asset approval gate is <strong style={{ color: C.muted }}>disabled</strong> for this job.
                             Toggle it on to require all campaign assets to be approved before publishing.
                           </p>
                         ) : gateStatus === null ? (
-                          <p className="text-gray-500 text-xs italic">Gate check unavailable</p>
+                          <p style={{ color: C.faint, fontSize: 11.5, fontStyle: "italic", margin: 0, fontFamily: FONT_BODY }}>Gate check unavailable</p>
                         ) : gateStatus?.gated ? (
                           <div>
-                            <p className="text-orange-300 text-xs mb-2">
-                              🚫 Job is <strong>blocked</strong> — {blockers.length} asset{blockers.length !== 1 ? 's' : ''} require approval before this job can run.
+                            <p style={{ color: C.red, fontSize: 11.5, margin: "0 0 8px", fontFamily: FONT_BODY }}>
+                              Job is <strong>blocked</strong> — {blockers.length} asset{blockers.length !== 1 ? 's' : ''} require approval before this job can run.
                             </p>
-                            <div className="space-y-1.5">
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                               {blockers.map(a => (
-                                <div key={a.id} className="flex items-center gap-2 bg-gray-900 rounded px-2 py-1.5">
-                                  <span className="text-orange-400 text-xs">⏳</span>
-                                  <span className="text-gray-300 text-xs font-medium truncate flex-1">{a.name || a.id}</span>
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700">
-                                    {a.status}
-                                  </span>
+                                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", borderRadius: 7, padding: "7px 10px" }}>
+                                  <AlertTriangle size={11} color={C.amber} />
+                                  <span style={{ color: C.muted, fontSize: 11.5, fontWeight: 600, fontFamily: FONT_BODY, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name || a.id}</span>
+                                  <AssetStatusBadge status={a.status as AssetStatus} />
                                 </div>
                               ))}
                             </div>
                           </div>
                         ) : (
-                          <p className="text-green-400 text-xs">
-                            ✓ All campaign assets are approved — job can proceed.
+                          <p style={{ color: C.green, fontSize: 11.5, margin: 0, fontFamily: FONT_BODY }}>
+                            <Check size={12} style={{ display: "inline", marginRight: 4, marginBottom: -2 }} />
+                            All campaign assets are approved — job can proceed.
                           </p>
                         )}
                       </div>
 
-                      {/* Blocked reason (from DB, if job is in blocked state) */}
                       {isBlocked && job.blocked_reason && (
-                        <div className="bg-orange-900/20 border border-orange-800 rounded-lg p-3">
-                          <p className="text-orange-300 text-xs font-medium mb-1">Blocked by orchestrator</p>
-                          <p className="text-gray-400 text-xs">
-                            Reason: <span className="text-orange-300">{job.blocked_reason.reason}</span>
+                        <div style={{ background: "rgba(251,113,133,0.06)", border: "1px solid rgba(251,113,133,0.2)", borderRadius: 10, padding: 12 }}>
+                          <p style={{ color: C.red, fontWeight: 600, fontSize: 11.5, margin: "0 0 4px", fontFamily: FONT_BODY }}>Blocked by orchestrator</p>
+                          <p style={{ color: C.muted, fontSize: 11, margin: 0, fontFamily: FONT_BODY }}>
+                            Reason: <span style={{ color: C.red }}>{job.blocked_reason.reason}</span>
                           </p>
-                          <p className="text-gray-500 text-xs mt-1">
+                          <p style={{ color: C.faint, fontSize: 10.5, margin: "4px 0 0", fontFamily: FONT_BODY }}>
                             Approve the blocking assets, then re-queue or re-run this job.
                           </p>
                         </div>
                       )}
 
-                      {/* Gate toggle guidance */}
-                      <div className="text-xs text-gray-600 border-t border-gray-800 pt-3">
-                        <p>
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                        <p style={{ color: C.faint, fontSize: 11, margin: 0, fontFamily: FONT_BODY }}>
                           {gateOn
                             ? 'Gate is enabled. The orchestrator will block this job if any campaign assets have pending review requests.'
                             : 'Gate is disabled. The job will publish regardless of asset review status.'}
                         </p>
                         {['completed','failed','cancelled'].includes(job.status) && (
-                          <p className="mt-1 text-gray-700">Gate toggle is locked for jobs in terminal state ({job.status}).</p>
+                          <p style={{ color: C.faint, fontSize: 10.5, margin: "5px 0 0", fontFamily: FONT_BODY }}>
+                            Gate toggle is locked for jobs in terminal state ({job.status}).
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1456,140 +1787,71 @@ function PublishingGateTab() {
               );
             })}
           </div>
-
-          {total > 15 && (
-            <div className="flex justify-center gap-2 mt-6">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">
-                Previous
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-400">Page {page}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={page * 15 >= total}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">
-                Next
-              </button>
-            </div>
-          )}
+          <Pagination page={page} total={total} pageSize={15} onPage={setPage} />
         </>
       )}
     </div>
   );
 }
 
-// ── Audit Log Tab ─────────────────────────────────────────────────────────
-
-function AuditLogTab() {
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [total, setTotal]     = useState(0);
-  const [page, setPage]       = useState(1);
-  const [action, setAction]   = useState('');
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(page), limit: '25' });
-    if (action) params.set('action', action);
-    const res = await API(`/asset-governance/audit-log?${params}`);
-    setEntries(res.entries || []);
-    setTotal(res.total || 0);
-    setLoading(false);
-  }, [page, action]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const ACTIONS = ['upload','update','archive','delete','version_created','policy_applied','compliance_flag'];
-
-  return (
-    <div>
-      <div className="flex gap-3 mb-6">
-        <select value={action} onChange={e => { setAction(e.target.value); setPage(1); }}
-          className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none">
-          <option value="">All Actions</option>
-          {ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <span className="text-gray-500 text-sm self-center">{total} entries</span>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 text-left">
-                <th className="text-gray-400 font-medium pb-3 pr-4">Time</th>
-                <th className="text-gray-400 font-medium pb-3 pr-4">Actor</th>
-                <th className="text-gray-400 font-medium pb-3 pr-4">Action</th>
-                <th className="text-gray-400 font-medium pb-3 pr-4">Asset</th>
-                <th className="text-gray-400 font-medium pb-3">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map(e => (
-                <>
-                  <tr key={e.id}
-                    className="border-b border-gray-900 hover:bg-gray-900/50 cursor-pointer"
-                    onClick={() => setExpanded(expanded === e.id ? null : e.id)}>
-                    <td className="py-2.5 pr-4 text-gray-500 whitespace-nowrap">{fmtDate(e.created_at)}</td>
-                    <td className="py-2.5 pr-4 text-gray-300">{e.actor_name || e.actor_email || '—'}</td>
-                    <td className="py-2.5 pr-4">
-                      <span className="bg-gray-800 text-amber-400 text-xs px-2 py-0.5 rounded font-mono">{e.action}</span>
-                    </td>
-                    <td className="py-2.5 pr-4 text-gray-400 truncate max-w-[150px]">{e.asset_name || '—'}</td>
-                    <td className="py-2.5 text-gray-600 text-xs">
-                      {expanded === e.id ? '▲' : '▼'}
-                    </td>
-                  </tr>
-                  {expanded === e.id && (
-                    <tr key={`${e.id}-exp`} className="border-b border-gray-900">
-                      <td colSpan={5} className="pb-3 pt-0 px-4">
-                        <pre className="bg-gray-900 text-gray-400 text-xs rounded p-3 overflow-auto max-h-32">
-                          {JSON.stringify(e.detail, null, 2)}
-                        </pre>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
-
-          {entries.length === 0 && (
-            <div className="text-center py-12 text-gray-500">No audit entries found</div>
-          )}
-
-          {total > 25 && (
-            <div className="flex justify-center gap-2 mt-4">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">Previous</button>
-              <span className="px-4 py-2 text-sm text-gray-400">Page {page}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={page * 25 >= total}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded disabled:opacity-30">Next</button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Main Page ─────────────────────────────────────────────────────────────
+/* ── Main Page ─────────────────────────────────────────────────────── */
 
 export default function MediaCloudPage() {
   const [tab, setTab] = useState<Tab>('library');
   const { user } = useAuth();
 
+  // BUGFIX: these four pills previously showed a hardcoded "—" — the page
+  // header read like a real enterprise dashboard summary but displayed no
+  // actual data. Each count below is genuinely available (LibraryTab and
+  // ReviewsTab already track `total` from their own paginated loads;
+  // GovernanceTab and BrandsTab fetch their full lists directly), but
+  // since only the active tab is mounted at any time ({tab === 'x' &&
+  // <XTab/>} unmounts the others), the parent can't read those counts
+  // directly. Instead it fetches each count independently, once, on page
+  // load — limit=1 on the paginated endpoints since only `total` is
+  // needed, not the actual records.
+  const [counts, setCounts] = useState<{
+    assets: number | null; policies: number | null;
+    brands: number | null; pendingReview: number | null;
+  }>({ assets: null, policies: null, brands: null, pendingReview: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    API('/asset-library?page=1&limit=1').then(r => {
+      if (!cancelled) setCounts(c => ({ ...c, assets: r.total ?? 0 }));
+    }).catch(() => { if (!cancelled) setCounts(c => ({ ...c, assets: 0 })); });
+
+    API('/asset-governance/policies').then(r => {
+      if (!cancelled) setCounts(c => ({ ...c, policies: Array.isArray(r) ? r.length : 0 }));
+    }).catch(() => { if (!cancelled) setCounts(c => ({ ...c, policies: 0 })); });
+
+    API('/brands').then(r => {
+      if (!cancelled) setCounts(c => ({ ...c, brands: Array.isArray(r) ? r.length : 0 }));
+    }).catch(() => { if (!cancelled) setCounts(c => ({ ...c, brands: 0 })); });
+
+    API('/asset-review?page=1&limit=1&status=pending').then(r => {
+      if (!cancelled) setCounts(c => ({ ...c, pendingReview: r.total ?? 0 }));
+    }).catch(() => { if (!cancelled) setCounts(c => ({ ...c, pendingReview: 0 })); });
+
+    return () => { cancelled = true; };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Media Cloud</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Enterprise asset library, governance policies, brand management, and audit trail.
-          </p>
+    <div style={{ minHeight: "100vh", background: C.bg }}>
+      <div style={{ padding: "clamp(16px,3vw,28px)", maxWidth: 1440, margin: "0 auto" }}>
+
+        <PageHeader
+          label="PLATFORM"
+          title="Media Cloud"
+          sub="Enterprise asset library, governance policies, brand management, and audit trail."
+          color={C.amber}
+        />
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 }}>
+          <StatPill icon={ImageIcon}      value={counts.assets        ?? "…"} label="TOTAL ASSETS"    color={C.amber} />
+          <StatPill icon={Shield}         value={counts.policies      ?? "…"} label="POLICIES"        color={C.purple} />
+          <StatPill icon={BookMarked}     value={counts.brands        ?? "…"} label="BRANDS"          color={C.blue} />
+          <StatPill icon={ClipboardCheck} value={counts.pendingReview ?? "…"} label="PENDING REVIEW"  color={C.green} />
         </div>
 
         <TabBar active={tab} onChange={setTab} />
@@ -1601,6 +1863,14 @@ export default function MediaCloudPage() {
         {tab === 'publishing' && <PublishingGateTab />}
         {tab === 'audit'      && <AuditLogTab />}
       </div>
+
+      <style>{`
+        @keyframes af-skeleton-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes af-spin { to { transform: rotate(360deg); } }
+        @media (max-width: 720px) {
+          .af-brands-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

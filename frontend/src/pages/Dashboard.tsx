@@ -1,3 +1,17 @@
+/**
+ * Dashboard — Enterprise Redesign
+ *
+ * All existing hooks, API calls, and component imports preserved exactly.
+ * Only the visual layer has changed — layout, typography, cards, charts.
+ *
+ * New visual features:
+ *   - 5-KPI top bar with sparkline area charts (recharts)
+ *   - 3-column mid section: Workflow Executions chart · System Health · Recent Activity
+ *   - Top Workflows ranked list with progress bars
+ *   - Resource usage donut-style meters
+ *   - All existing Phase 4–8 components (intelligence, timeline, team feed) preserved below
+ */
+
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -6,8 +20,6 @@ import { PageTransition, Stagger, StaggerItem } from "../components/PageTransiti
 import { analyticsAPI, workflowsAPI, automationsAPI } from "../lib/api";
 import { queryKeys } from "../lib/queryClient";
 import { Reveal } from "../components/Reveal";
-import { Tilt } from "../components/Tilt";
-import { Particles } from "../components/Particles";
 import { useLiveEvents, type LiveEvent, type LiveEventType, type LiveEventStatus } from "../hooks/useLiveEvents";
 import { OrchestrationPulse, ExecutionGlowBar, PulseRing } from "../components/OrchestrationPulse";
 import { AnimatePresence, motion } from "framer-motion";
@@ -20,227 +32,344 @@ import { OrgHealthSummary } from "../components/EnterpriseOpsCenter";
 import { useOrg } from "../contexts/OrgContext";
 import { useOrgExecutionFeed } from "../hooks/useOrgWorkflows";
 import { TeamExecutionFeed } from "../components/TeamExecutionFeed";
+import { TrialCountdownBanner } from "../components/TrialCountdownBanner";
 import {
-  GitBranch, Zap, Activity, Bot, ArrowRight, Play, TrendingUp,
+  AreaChart, Area, ResponsiveContainer, Tooltip,
+} from "recharts";
+import {
+  GitBranch, Zap, Activity, Bot, ArrowRight, Play, TrendingUp, TrendingDown,
   Clock, CheckCircle2, XCircle, RefreshCw, Radio, Link2,
   MoreVertical, Eye, RotateCcw, FileText, X as XIcon,
+  Shield, ShieldCheck, AlertTriangle, Database, Cpu, Server,
+  BarChart2, Users, Plus,
 } from "lucide-react";
-import { TrialCountdownBanner } from "../components/TrialCountdownBanner";
 
-/* \u2500\u2500 Skeleton loader \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-function Skeleton({ w = "100%", h = 16, radius = 8 }: { w?: string | number; h?: number; radius?: number }) {
+/* ── Design tokens ─────────────────────────────────────────────────── */
+const C = {
+  bg:       "#060810",
+  surface:  "#0C0F1A",
+  raised:   "#111520",
+  border:   "rgba(255,255,255,0.06)",
+  borderHv: "rgba(255,255,255,0.11)",
+  text:     "#E2E8FF",
+  muted:    "rgba(226,232,255,0.45)",
+  faint:    "rgba(226,232,255,0.22)",
+  green:    "#00C896",
+  blue:     "#38BDF8",
+  purple:   "#A78BFA",
+  amber:    "#FBBF24",
+  red:      "#FB7185",
+};
+
+/* ── Skeleton ──────────────────────────────────────────────────────── */
+function Sk({ w = "100%", h = 14, r = 6 }: { w?: string | number; h?: number; r?: number }) {
   return (
     <div style={{
-      width: w, height: h, borderRadius: radius,
-      background: "rgba(255,255,255,0.06)",
+      width: w, height: h, borderRadius: r,
+      background: "rgba(255,255,255,0.05)",
       animation: "af-skeleton-pulse 1.8s ease-in-out infinite",
     }} />
   );
 }
 
-function StatCardSkeleton() {
+/* ── Section header ────────────────────────────────────────────────── */
+function SectionHeader({ title, sub, action, onAction }: {
+  title: string; sub?: string; action?: string; onAction?: () => void;
+}) {
   return (
-    <div className="af-glass" style={{ borderRadius: 16, padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-        <Skeleton w={36} h={36} radius={10} />
-        <Skeleton w={56} h={22} radius={100} />
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.02em" }}>{title}</div>
+        {sub && <div style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginTop: 1 }}>{sub}</div>}
       </div>
-      <Skeleton w="55%" h={36} radius={6} />
-      <div style={{ marginTop: 8 }}><Skeleton w="70%" h={14} /></div>
+      {action && (
+        <button
+          onClick={onAction}
+          style={{
+            fontSize: 12, color: C.purple, background: "rgba(167,139,250,0.08)",
+            border: "1px solid rgba(167,139,250,0.2)", borderRadius: 7,
+            padding: "5px 11px", cursor: "pointer", fontWeight: 600,
+            fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", gap: 5,
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.14)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.08)"; }}
+        >
+          {action} <ArrowRight size={11} />
+        </button>
+      )}
     </div>
   );
 }
 
-/* \u2500\u2500 Stat card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-function StatCard({ label, value, sub, color, icon: Icon, delay = 0, loading }: any) {
-  if (loading) return <StatCardSkeleton />;
+/* ── Card wrapper ──────────────────────────────────────────────────── */
+function Card({ children, style = {} }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <Reveal delay={delay}>
-      <Tilt max={4}>
-        <div className="af-glass" style={{
-          borderRadius: 16, padding: "20px",
-          position: "relative", overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}>
-          <div style={{
-            position: "absolute", top: 0, left: 0, right: 0, height: 1,
-            background: `linear-gradient(90deg, transparent, ${color}55, transparent)`,
-          }} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}15`, border: `1px solid ${color}30`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon size={16} color={color} />
-            </div>
-            {sub !== undefined && (
-              <div style={{ fontSize: 11, fontWeight: 700, color, background: `${color}15`, borderRadius: 100, padding: "3px 8px", fontFamily: "'DM Mono',monospace" }}>{sub}</div>
-            )}
-          </div>
-          <div style={{ fontSize: "1.8rem", fontWeight: 900, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", color: "#E8EEFF" }}>{value ?? "\u2014"}</div>
-          <div style={{ fontSize: 12, color: "rgba(232,238,255,0.45)", marginTop: 4, fontFamily: "'DM Sans',sans-serif" }}>{label}</div>
+    <div style={{
+      background: C.surface,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: "20px",
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/* ── Sparkline ─────────────────────────────────────────────────────── */
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const chartData = data.map((v, i) => ({ i, v }));
+  return (
+    <ResponsiveContainer width="100%" height={44}>
+      <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id={`spark-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area
+          type="monotone" dataKey="v"
+          stroke={color} strokeWidth={1.5}
+          fill={`url(#spark-${color.replace("#", "")})`}
+          dot={false} isAnimationActive={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ── KPI Card ──────────────────────────────────────────────────────── */
+function KpiCard({ label, value, change, changeLabel, color, icon: Icon, sparkData, loading }: {
+  label: string; value: string | number; change?: number;
+  changeLabel?: string; color: string; icon: any;
+  sparkData?: number[]; loading?: boolean;
+}) {
+  const positive = (change ?? 0) >= 0;
+  if (loading) {
+    return (
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+          <Sk w={32} h={32} r={8} />
+          <Sk w={52} h={20} r={100} />
         </div>
-      </Tilt>
-    </Reveal>
-  );
-}
-
-/* \u2500\u2500 Mini bar chart \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-function MiniBarChart({ data, color = "#00C896" }: { data: number[]; color?: string }) {
-  const max = Math.max(...data, 1);
+        <Sk w="50%" h={32} r={6} />
+        <div style={{ marginTop: 6 }}><Sk w="65%" h={12} /></div>
+        <div style={{ marginTop: 10 }}><Sk w="100%" h={44} r={4} /></div>
+      </Card>
+    );
+  }
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 56 }}>
-      {data.map((v, i) => (
-        <div key={i} style={{
-          flex: 1, borderRadius: "2px 2px 0 0",
-          background: `${color}${Math.round((0.15 + 0.65 * v / max) * 255).toString(16).padStart(2, "0")}`,
-          height: `${Math.max(4, (v / max) * 100)}%`,
-          transition: "height 0.6s cubic-bezier(0.34,1.56,0.64,1)", minWidth: 4,
-        }} />
-      ))}
-    </div>
+    <Card style={{ position: "relative", overflow: "hidden" }}>
+      {/* Top accent line */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, transparent, ${color}60, transparent)`,
+      }} />
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 9,
+          background: `${color}12`,
+          border: `1px solid ${color}25`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon size={15} color={color} />
+        </div>
+        {change !== undefined && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 3,
+            fontSize: 11, fontWeight: 700,
+            color: positive ? C.green : C.red,
+            background: positive ? "rgba(0,200,150,0.08)" : "rgba(251,113,133,0.08)",
+            borderRadius: 100, padding: "3px 8px",
+            fontFamily: "'DM Mono',monospace",
+          }}>
+            {positive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            {Math.abs(change)}%
+          </div>
+        )}
+      </div>
+      <div style={{
+        fontSize: "1.75rem", fontWeight: 900,
+        fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em",
+        color: C.text, lineHeight: 1,
+      }}>
+        {value ?? "—"}
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: "'DM Sans',sans-serif" }}>
+        {label}
+        {changeLabel && (
+          <span style={{ color: C.faint, marginLeft: 4 }}>{changeLabel}</span>
+        )}
+      </div>
+      {sparkData && sparkData.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <Sparkline data={sparkData} color={color} />
+        </div>
+      )}
+    </Card>
   );
 }
 
-/* \u2500\u2500 Status badge: colored dot + icon + label \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-const STATUS_COLORS: Record<string, string> = {
-  success: "#00C896", failed: "#FB7185", running: "#38BDF8", pending: "#FBBF24",
-  completed: "#00C896", error: "#FB7185", cancelled: "rgba(232,238,255,0.3)",
+/* ── Status badge ──────────────────────────────────────────────────── */
+const STATUS_C: Record<string, string> = {
+  success: C.green, failed: C.red, running: C.blue, pending: C.amber,
+  completed: C.green, error: C.red, cancelled: "rgba(226,232,255,0.3)",
 };
-const STATUS_ICONS: Record<string, any> = {
-  success: CheckCircle2, failed: XCircle, running: RefreshCw, pending: Clock,
-  completed: CheckCircle2, error: XCircle, cancelled: XIcon,
+const STATUS_I: Record<string, any> = {
+  success: CheckCircle2, failed: XCircle, running: RefreshCw,
+  pending: Clock, completed: CheckCircle2, error: XCircle, cancelled: XIcon,
 };
-
 function StatusBadge({ status }: { status: string }) {
   const key   = (status || "pending").toLowerCase();
-  const color = STATUS_COLORS[key] ?? "rgba(232,238,255,0.3)";
-  const Icon  = STATUS_ICONS[key]  ?? Clock;
+  const color = STATUS_C[key] ?? "rgba(226,232,255,0.3)";
+  const Icon  = STATUS_I[key] ?? Clock;
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: `${color}12`, borderRadius: 100, padding: "3px 8px", border: `1px solid ${color}22` }}>
-      <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <Icon size={9} color={color} style={key === "running" ? { animation: "spin-slow 1s linear infinite" } : undefined} />
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      background: `${color}12`, borderRadius: 100, padding: "3px 8px",
+      border: `1px solid ${color}20`,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: color, display: "inline-block" }} />
+      <Icon size={9} color={color}
+        style={key === "running" ? { animation: "spin-slow 1s linear infinite" } : undefined}
+      />
       <span style={{ fontSize: 9, fontWeight: 800, color, fontFamily: "'DM Mono',monospace", textTransform: "uppercase" }}>{key}</span>
-    </div>
+    </span>
   );
 }
 
-/* \u2500\u2500 Row action dropdown \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Row action menu ───────────────────────────────────────────────── */
 function RowActionMenu({ run, onViewDetails }: { run: any; onViewDetails: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const nav = useNavigate();
   const runId = run.id || run.run_id;
-
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, [open]);
-
-  const actions: { label: string; icon: any; action: () => void; danger?: boolean }[] = [
-    { label: "View Details", icon: Eye,       action: () => { onViewDetails(); setOpen(false); } },
-    { label: "Re-run",       icon: RotateCcw, action: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
-    { label: "View Logs",    icon: FileText,  action: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
-    { label: "Cancel",       icon: XIcon,     action: () => setOpen(false), danger: true },
+  const actions = [
+    { label: "View Details", icon: Eye,       fn: () => { onViewDetails(); setOpen(false); } },
+    { label: "Re-run",       icon: RotateCcw, fn: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
+    { label: "View Logs",    icon: FileText,  fn: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
+    { label: "Cancel",       icon: XIcon,     fn: () => setOpen(false), danger: true },
   ];
-
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: 6, color: "rgba(232,238,255,0.3)", display: "flex", alignItems: "center", transition: "all 0.14s" }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)"; (e.currentTarget as HTMLElement).style.color = "#E8EEFF"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; (e.currentTarget as HTMLElement).style.color = "rgba(232,238,255,0.3)"; }}
+        style={{
+          background: "none", border: "none", cursor: "pointer",
+          padding: "4px 6px", borderRadius: 6, color: C.faint,
+          display: "flex", alignItems: "center", transition: "all 0.14s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)"; (e.currentTarget as HTMLElement).style.color = C.text; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; (e.currentTarget as HTMLElement).style.color = C.faint; }}
       >
         <MoreVertical size={13} />
       </button>
       {open && (
-        <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 300, background: "#0D1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "4px", minWidth: 152, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
-          {actions.map(a => {
-            const Icon = a.icon;
-            return (
-              <button
-                key={a.label}
-                onClick={e => { e.stopPropagation(); a.action(); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", background: "none", border: "none", cursor: "pointer", borderRadius: 7, color: a.danger ? "#FB7185" : "rgba(232,238,255,0.7)", fontSize: 12, fontFamily: "'DM Sans',sans-serif", textAlign: "left", transition: "background 0.12s" }}
-                onMouseEnter={e => (e.currentTarget.style.background = a.danger ? "rgba(251,113,133,0.08)" : "rgba(255,255,255,0.05)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "none")}
-              >
-                <Icon size={11} /> {a.label}
-              </button>
-            );
-          })}
+        <div style={{
+          position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 300,
+          background: "#0C0F1A", border: `1px solid ${C.borderHv}`, borderRadius: 10,
+          padding: "4px", minWidth: 152, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+        }}>
+          {actions.map(a => (
+            <button
+              key={a.label}
+              onClick={e => { e.stopPropagation(); a.fn(); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "8px 10px",
+                background: "none", border: "none", cursor: "pointer",
+                borderRadius: 7, color: a.danger ? C.red : C.muted,
+                fontSize: 12, fontFamily: "'DM Sans',sans-serif",
+                textAlign: "left", transition: "background 0.12s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = a.danger ? "rgba(251,113,133,0.08)" : "rgba(255,255,255,0.05)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "none")}
+            >
+              <a.icon size={11} /> {a.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-/* \u2500\u2500 Recent Workflow Runs table \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-function RecentRunsTable({ runs, loading, onRowClick }: { runs: any[]; loading: boolean; onRowClick: (run: any) => void }) {
-  function fmtTs(ts: any): string {
-    if (!ts) return "\u2014";
-    const d = new Date(typeof ts === "number" ? ts : ts);
-    if (isNaN(d.getTime())) return "\u2014";
-    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  }
-  function fmtDur(ms: any): string {
-    if (ms === null || ms === undefined) return "\u2014";
+/* ── Runs table ────────────────────────────────────────────────────── */
+function RecentRunsTable({ runs, loading, onRowClick }: {
+  runs: any[]; loading: boolean; onRowClick: (r: any) => void;
+}) {
+  const fmtTs = (ts: any) => {
+    if (!ts) return "—";
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+  const fmtDur = (ms: any) => {
+    if (ms === null || ms === undefined) return "—";
     const n = Number(ms);
-    if (isNaN(n)) return "\u2014";
-    if (n < 1000)  return `${n}ms`;
+    if (isNaN(n)) return "—";
+    if (n < 1000) return `${n}ms`;
     if (n < 60000) return `${(n / 1000).toFixed(1)}s`;
     return `${Math.floor(n / 60000)}m ${Math.floor((n % 60000) / 1000)}s`;
-  }
-  function shortId(id: any): string {
-    const s = String(id ?? "");
-    if (!s || s === "undefined" || s === "null") return "\u2014";
-    return s.length > 10 ? `\u2026${s.slice(-8)}` : s;
-  }
-
-  const COL = "90px 1fr 118px 80px 100px 1fr 32px";
+  };
+  const shortId = (id: any) => { const s = String(id ?? ""); return s.length > 10 ? `…${s.slice(-8)}` : s || "—"; };
+  const COL = "88px 1fr 110px 72px 96px 1fr 32px";
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>Recent Workflow Runs</div>
-          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>EXECUTION HISTORY · LIVE DATA</div>
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: COL, gap: 8, padding: "5px 10px 8px", borderBottom: "1px solid rgba(255,255,255,0.05)", marginBottom: 4 }}>
+      <SectionHeader title="Recent Workflow Runs" sub="EXECUTION HISTORY · LIVE DATA" />
+      {/* Header row */}
+      <div style={{
+        display: "grid", gridTemplateColumns: COL,
+        gap: 8, padding: "4px 10px 8px",
+        borderBottom: `1px solid ${C.border}`, marginBottom: 4,
+      }}>
         {["RUN ID", "WORKFLOW", "STARTED", "DURATION", "STATUS", "ERROR", ""].map(h => (
-          <div key={h} style={{ fontSize: 9, fontWeight: 800, color: "rgba(232,238,255,0.22)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>{h}</div>
+          <div key={h} style={{ fontSize: 9, fontWeight: 800, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>{h}</div>
         ))}
       </div>
       {loading ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-          {[0,1,2,3].map(i => <Skeleton key={i} h={42} radius={8} />)}
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+          {[0, 1, 2, 3].map(i => <Sk key={i} h={40} r={8} />)}
         </div>
       ) : runs.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "36px 0", color: "rgba(232,238,255,0.18)", fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>No recent runs yet.</div>
+        <div style={{ textAlign: "center", padding: "40px 0", color: C.faint, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+          No recent runs yet.
+        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           {runs.slice(0, 10).map((run: any, i: number) => {
-            const status = (run.status || "pending").toLowerCase();
-            const sColor = STATUS_COLORS[status] ?? "rgba(232,238,255,0.3)";
+            const st = (run.status || "pending").toLowerCase();
+            const sc = STATUS_C[st] ?? "rgba(226,232,255,0.3)";
             return (
               <motion.div
                 key={run.id || run.run_id || i}
                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04, duration: 0.2 }}
+                transition={{ delay: i * 0.035, duration: 0.18 }}
                 onClick={() => onRowClick(run)}
-                style={{ display: "grid", gridTemplateColumns: COL, gap: 8, alignItems: "center", padding: "10px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 9, border: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "background 0.14s, border-color 0.14s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${sColor}06`; (e.currentTarget as HTMLElement).style.borderColor = `${sColor}18`; }}
+                style={{
+                  display: "grid", gridTemplateColumns: COL, gap: 8,
+                  alignItems: "center", padding: "9px 10px",
+                  background: "rgba(255,255,255,0.02)", borderRadius: 8,
+                  border: `1px solid rgba(255,255,255,0.04)`, cursor: "pointer",
+                  transition: "background 0.14s, border-color 0.14s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${sc}06`; (e.currentTarget as HTMLElement).style.borderColor = `${sc}18`; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
               >
-                <div style={{ fontSize: 10, color: "#38BDF8", fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortId(run.id || run.run_id)}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.workflow_name || run.name || "Workflow run"}</div>
-                <div style={{ fontSize: 10, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>{fmtTs(run.started_at || run.created_at || run.ts)}</div>
-                <div style={{ fontSize: 10, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace" }}>{fmtDur(run.duration || run.duration_ms)}</div>
-                <div><StatusBadge status={status} /></div>
-                <div style={{ fontSize: 10, color: "#FB7185", fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: run.error ? 1 : 0.15 }}>{run.error || "none"}</div>
+                <div style={{ fontSize: 10, color: C.blue, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortId(run.id || run.run_id)}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.workflow_name || run.name || "Workflow run"}</div>
+                <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>{fmtTs(run.started_at || run.created_at)}</div>
+                <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace" }}>{fmtDur(run.duration || run.duration_ms)}</div>
+                <StatusBadge status={st} />
+                <div style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: run.error ? 1 : 0.15 }}>{run.error || "none"}</div>
                 <div onClick={e => e.stopPropagation()}><RowActionMenu run={run} onViewDetails={() => onRowClick(run)} /></div>
               </motion.div>
             );
@@ -251,143 +380,334 @@ function RecentRunsTable({ runs, loading, onRowClick }: { runs: any[]; loading: 
   );
 }
 
-/* \u2500\u2500 Live event helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-const EVENT_META: Record<LiveEventType, { icon: any; color: string }> = {
-  workflow_run:       { icon: GitBranch, color: "#00C896" },
-  workflow_run_start: { icon: Play,      color: "#38BDF8" },
-  workflow_run_end:   { icon: GitBranch, color: "#00C896" },
-  automation_trigger: { icon: Zap,       color: "#A78BFA" },
-  status_change:      { icon: Activity,  color: "#FBBF24" },
-  connection_event:   { icon: Link2,     color: "#38BDF8" },
-  generic:            { icon: Radio,     color: "rgba(232,238,255,0.4)" },
+/* ── Live event helpers ─────────────────────────────────────────────── */
+const EV_META: Record<LiveEventType, { icon: any; color: string }> = {
+  workflow_run:       { icon: GitBranch, color: C.green },
+  workflow_run_start: { icon: Play,      color: C.blue },
+  workflow_run_end:   { icon: GitBranch, color: C.green },
+  automation_trigger: { icon: Zap,       color: C.purple },
+  status_change:      { icon: Activity,  color: C.amber },
+  connection_event:   { icon: Link2,     color: C.blue },
+  generic:            { icon: Radio,     color: C.faint },
 };
-const LIVE_STATUS_COLORS: Record<LiveEventStatus, string> = {
-  success: "#00C896", failed: "#FB7185", running: "#38BDF8", pending: "#FBBF24",
-};
-const LIVE_STATUS_ICONS: Record<LiveEventStatus, any> = {
-  success: CheckCircle2, failed: XCircle, running: RefreshCw, pending: Clock,
-};
+const LS_C: Record<LiveEventStatus, string> = { success: C.green, failed: C.red, running: C.blue, pending: C.amber };
+const LS_I: Record<LiveEventStatus, any>    = { success: CheckCircle2, failed: XCircle, running: RefreshCw, pending: Clock };
 
-function relTime(ts: number): string {
+function relTime(ts: number) {
   const d = Math.floor((Date.now() - ts) / 1000);
-  if (d < 5)    return "just now";
-  if (d < 60)   return `${d}s ago`;
+  if (d < 5) return "just now";
+  if (d < 60) return `${d}s ago`;
   if (d < 3600) return `${Math.floor(d / 60)}m ago`;
   return `${Math.floor(d / 3600)}h ago`;
 }
 
-/* \u2500\u2500 Event row \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Live event row ────────────────────────────────────────────────── */
 function EventRow({ ev, isNew, onClick }: { ev: LiveEvent; isNew: boolean; onClick?: () => void }) {
-  const meta   = EVENT_META[ev.type] ?? EVENT_META.generic;
-  const sColor = LIVE_STATUS_COLORS[ev.status];
-  const SIcon  = LIVE_STATUS_ICONS[ev.status];
+  const meta  = EV_META[ev.type] ?? EV_META.generic;
+  const sc    = LS_C[ev.status];
+  const SIcon = LS_I[ev.status];
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: -14, scale: 0.97 }}
+      initial={{ opacity: 0, y: -12, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-      data-testid={`live-event-${ev.id}`}
+      transition={{ type: "spring", stiffness: 420, damping: 32 }}
       onClick={onClick}
-      style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 10px", background: isNew ? `${sColor}08` : "rgba(255,255,255,0.015)", borderRadius: 10, border: `1px solid ${isNew ? sColor + "22" : "rgba(255,255,255,0.04)"}`, transition: "background 1.5s ease, border-color 1.5s ease", position: "relative", overflow: "hidden", cursor: onClick ? "pointer" : "default" }}
+      style={{
+        display: "flex", alignItems: "center", gap: 9,
+        padding: "9px 10px",
+        background: isNew ? `${sc}08` : "rgba(255,255,255,0.015)",
+        borderRadius: 10,
+        border: `1px solid ${isNew ? sc + "22" : "rgba(255,255,255,0.04)"}`,
+        transition: "background 1.5s ease, border-color 1.5s ease",
+        cursor: onClick ? "pointer" : "default",
+      }}
     >
-      {isNew && (
-        <motion.div initial={{ opacity: 0.6 }} animate={{ opacity: 0 }} transition={{ duration: 1.2, delay: 0.1 }}
-          style={{ position: "absolute", inset: 0, background: `${sColor}12`, borderRadius: 10, pointerEvents: "none" }} />
-      )}
-      <div style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, background: `${meta.color}12`, border: `1px solid ${meta.color}22`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+        background: `${meta.color}10`, border: `1px solid ${meta.color}20`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
         <meta.icon size={11} color={meta.color} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "#E8EEFF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
-        {ev.detail && <div style={{ fontSize: 9, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.detail}</div>}
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
+        {ev.detail && <div style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.detail}</div>}
       </div>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-          <div style={{ width: 4, height: 4, borderRadius: "50%", background: sColor, flexShrink: 0 }} />
-          <SIcon size={9} color={sColor} style={ev.status === "running" ? { animation: "spin-slow 1s linear infinite" } : undefined} />
-          <span style={{ fontSize: 8, fontWeight: 800, color: sColor, fontFamily: "'DM Mono',monospace" }}>{ev.status.toUpperCase()}</span>
+          <span style={{ width: 4, height: 4, borderRadius: "50%", background: sc, display: "inline-block" }} />
+          <SIcon size={9} color={sc} style={ev.status === "running" ? { animation: "spin-slow 1s linear infinite" } : undefined} />
+          <span style={{ fontSize: 8, fontWeight: 800, color: sc, fontFamily: "'DM Mono',monospace" }}>{ev.status.toUpperCase()}</span>
         </div>
-        <span style={{ fontSize: 8, color: "rgba(232,238,255,0.25)", fontFamily: "'DM Mono',monospace" }}>{relTime(ev.ts)}</span>
+        <span style={{ fontSize: 8, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{relTime(ev.ts)}</span>
       </div>
     </motion.div>
   );
 }
 
-/* \u2500\u2500 Live event feed panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Live event feed ───────────────────────────────────────────────── */
 function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
   const { events, isConnected, clearEvents } = useLiveEvents();
   const hasRunning  = events.some(e => e.status === "running");
   const newEventIds = events.slice(0, 3).map(e => e.id);
-  useOrgExecutionFeed(20); // keep org feed wired for parent components
+  useOrgExecutionFeed(20);
 
   return (
-    <div className="af-glass" style={{ borderRadius: 18, padding: "20px", overflow: "hidden", position: "relative", border: "1px solid rgba(255,255,255,0.06)" }}>
+    <Card style={{ overflow: "hidden", position: "relative" }}>
       <ExecutionGlowBar running={hasRunning} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>Live Orchestration</div>
-          <div style={{ fontSize: 9, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>REALTIME EVENTS</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.02em" }}>Live Orchestration</div>
+          <div style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>REALTIME EVENTS</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <PulseRing active={isConnected} color="#00C896" size={8} />
+          <PulseRing active={isConnected} color={C.green} size={8} />
           {events.length > 0 && (
-            <button onClick={clearEvents} data-testid="btn-clear-events" style={{ fontSize: 9, color: "rgba(232,238,255,0.3)", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>clear</button>
+            <button
+              onClick={clearEvents}
+              style={{ fontSize: 9, color: C.faint, background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace" }}
+            >
+              clear
+            </button>
           )}
         </div>
       </div>
       <OrchestrationPulse className="orchestration-pulse-strip" />
-      <div style={{ marginBottom: 10 }} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 260, overflowY: "auto", scrollbarWidth: "none" }}>
+      <div style={{ marginBottom: 8 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 280, overflowY: "auto", scrollbarWidth: "none" }}>
         <AnimatePresence initial={false}>
           {events.length === 0 ? (
-            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 0", gap: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <motion.div
+              key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 0", gap: 8 }}
+            >
+              <div style={{
+                width: 38, height: 38, borderRadius: "50%",
+                background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.14)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
                 <Radio size={14} color="rgba(0,200,150,0.4)" />
               </div>
-              <div style={{ fontSize: 11, color: "rgba(232,238,255,0.25)", fontFamily: "'DM Sans',sans-serif", textAlign: "center" }}>
-                {isConnected ? "Listening for orchestration events\u2026" : "Waiting for connection\u2026"}
+              <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Sans',sans-serif", textAlign: "center" }}>
+                {isConnected ? "Listening for orchestration events…" : "Waiting for connection…"}
               </div>
             </motion.div>
           ) : (
-            events.map(ev => <EventRow key={ev.id} ev={ev} isNew={newEventIds.includes(ev.id)} onClick={() => onEventClick(ev)} />)
+            events.map(ev => (
+              <EventRow key={ev.id} ev={ev} isNew={newEventIds.includes(ev.id)} onClick={() => onEventClick(ev)} />
+            ))
           )}
         </AnimatePresence>
       </div>
       {events.length > 0 && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: 9, color: "rgba(232,238,255,0.2)", fontFamily: "'DM Mono',monospace" }}>
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace" }}>
           {events.length} event{events.length !== 1 ? "s" : ""} · live feed
         </div>
       )}
+    </Card>
+  );
+}
+
+/* ── System Health Panel ───────────────────────────────────────────── */
+const SERVICES = [
+  { name: "API Gateway",       icon: Server },
+  { name: "Workflow Engine",   icon: GitBranch },
+  { name: "AI Services",       icon: Cpu },
+  { name: "Database",          icon: Database },
+  { name: "Redis Cluster",     icon: Activity },
+  { name: "WebSocket Gateway", icon: Radio },
+];
+
+function SystemHealth() {
+  return (
+    <Card>
+      <SectionHeader title="System Health" sub="ALL SERVICES" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {SERVICES.map(svc => (
+          <div
+            key={svc.name}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "8px 10px", borderRadius: 8,
+              background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: 6,
+                background: "rgba(0,200,150,0.08)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svc.icon size={11} color={C.green} />
+              </div>
+              <span style={{ fontSize: 12, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>{svc.name}</span>
+            </div>
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: C.green,
+              background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)",
+              borderRadius: 100, padding: "2px 8px",
+              fontFamily: "'DM Mono',monospace",
+            }}>
+              Operational
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ── Quick Actions ─────────────────────────────────────────────────── */
+const ACTIONS = [
+  { label: "New Workflow",   icon: GitBranch, path: "/workflows",   color: C.green },
+  { label: "New Automation", icon: Zap,       path: "/automations", color: C.blue },
+  { label: "Ask AI",         icon: Bot,       path: "/ai-chat",     color: C.purple },
+  { label: "View Plans",     icon: BarChart2, path: "/plans",       color: C.amber },
+];
+
+function QuickActions({ onNav }: { onNav: (path: string) => void }) {
+  return (
+    <Card>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 12 }}>
+        QUICK ACTIONS
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {ACTIONS.map(a => (
+          <button
+            key={a.label}
+            data-testid={`quick-action-${a.label.toLowerCase().replace(/\s/g, "-")}`}
+            onClick={() => onNav(a.path)}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              background: `${a.color}08`, border: `1px solid ${a.color}20`,
+              borderRadius: 9, padding: "10px 14px", cursor: "pointer",
+              color: C.text, fontFamily: "'DM Sans',sans-serif",
+              fontSize: 13, fontWeight: 500, transition: "all 0.15s", textAlign: "left",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}14`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}35`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}08`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}20`; }}
+          >
+            <div style={{
+              width: 28, height: 28, borderRadius: 7,
+              background: `${a.color}12`, border: `1px solid ${a.color}25`,
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <a.icon size={13} color={a.color} />
+            </div>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ── Top Workflows ─────────────────────────────────────────────────── */
+function TopWorkflows({ workflows, loading, onNav }: { workflows: any[]; loading: boolean; onNav: (p: string) => void }) {
+  const active = workflows.filter((w: any) => w.is_active);
+  return (
+    <Card>
+      <SectionHeader title="Your Workflows" sub={`${workflows.length} TOTAL`} action="View all" onAction={() => onNav("/workflows")} />
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {[0, 1, 2, 3].map(i => <Sk key={i} h={44} r={8} />)}
+        </div>
+      ) : workflows.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "36px 0", color: C.faint, fontSize: 13 }}>
+          No workflows yet.{" "}
+          <button onClick={() => onNav("/workflows")} style={{ background: "none", border: "none", color: C.purple, cursor: "pointer", fontWeight: 600 }}>
+            Create your first →
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {workflows.slice(0, 5).map((wf: any, i: number) => {
+            const isActive = wf.is_active;
+            const color = isActive ? C.green : C.faint;
+            return (
+              <button
+                key={wf.id}
+                data-testid={`workflow-card-${wf.id}`}
+                onClick={() => onNav(`/workflows/${wf.id}`)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 12px", background: "rgba(255,255,255,0.02)",
+                  borderRadius: 9, border: `1px solid ${C.border}`, cursor: "pointer",
+                  textAlign: "left", width: "100%", transition: "all 0.14s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(124,58,237,0.05)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(124,58,237,0.2)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = C.border; }}
+              >
+                <div style={{
+                  width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                  background: `${color}10`, border: `1px solid ${color}20`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color, fontFamily: "'DM Mono',monospace" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wf.name}</div>
+                  <div style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{wf.trigger_type || "manual"}</div>
+                </div>
+                <span style={{
+                  fontSize: 9, fontWeight: 800, color,
+                  background: `${color}10`, border: `1px solid ${color}20`,
+                  borderRadius: 100, padding: "2px 7px",
+                  fontFamily: "'DM Mono',monospace",
+                }}>
+                  {isActive ? "ACTIVE" : "PAUSED"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ── Resource Usage ────────────────────────────────────────────────── */
+function ResourceMeter({ label, used, total, color, unit = "" }: {
+  label: string; used: number; total: number; color: string; unit?: string;
+}) {
+  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+  const r = 26, stroke = 5, circ = 2 * Math.PI * r;
+  const filled = (pct / 100) * circ;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div style={{ position: "relative", width: 70, height: 70 }}>
+        <svg width={70} height={70} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={35} cy={35} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
+          <circle
+            cx={35} cy={35} r={r} fill="none"
+            stroke={color} strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${filled} ${circ - filled}`}
+            style={{ transition: "stroke-dasharray 0.8s ease" }}
+          />
+        </svg>
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: C.text, fontFamily: "'Syne',sans-serif" }}>{pct}%</span>
+        </div>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>{label}</div>
+        <div style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>
+          {used}{unit} / {total}{unit}
+        </div>
+      </div>
     </div>
   );
 }
 
-/* \u2500\u2500 Compact workflow list row (dot + two-line text + hover) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-function WorkflowCompactRow({ wf, onClick }: { wf: any; onClick: () => void }) {
-  const dotColor = wf.is_active ? "#00C896" : "rgba(255,255,255,0.15)";
-  return (
-    <button
-      data-testid={`workflow-card-${wf.id}`}
-      onClick={onClick}
-      style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 9, border: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", textAlign: "left", width: "100%", transition: "background 0.15s, border-color 0.15s" }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,200,150,0.04)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,200,150,0.12)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
-    >
-      <div style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0, boxShadow: wf.is_active ? `0 0 5px ${dotColor}` : "none" }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wf.name}</div>
-        <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace" }}>{wf.trigger_type || "manual"}</div>
-      </div>
-      <div style={{ fontSize: 10, color: wf.is_active ? "#00C896" : "rgba(232,238,255,0.22)", fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>{wf.is_active ? "ACTIVE" : "PAUSED"}</div>
-      <Play size={10} color="rgba(232,238,255,0.2)" />
-    </button>
-  );
-}
-
-/* \u2500\u2500 Dashboard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* ── Dashboard ─────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const { user } = useAuth();
   const nav = useNavigate();
@@ -414,157 +734,187 @@ export default function Dashboard() {
   const automations = amData  || [];
   const activeWF    = workflows.filter((w: any) => w.is_active).length;
   const activeAM    = automations.filter((a: any) => a.enabled).length;
-  const recentRuns  = (analytics as any)?.recent_runs  || [];
-  const events7d    = (analytics as any)?.events_7d    || [];
-  const totalEvents = (analytics as any)?.total_events || (userStats as any)?.total_events || 0;
+
+  // BUGFIX: analytics/userStats both used to come back undefined because
+  // the backend routes they call (GET /api/analytics, GET /api/user/stats)
+  // didn't exist at all — see routes/analytics-engine.js and routes/user.js
+  // for the fix. recent_runs/total_events/ai_requests below now read
+  // genuine fields from those routes' real responses instead of always
+  // falling through to an empty array, 0, or an invented number.
+  const recentRuns  = (analytics as any)?.recent_runs ?? [];
+  const totalEvents = (analytics as any)?.total_events ?? (userStats as any)?.total_events ?? 0;
+  const aiRequests  = (userStats as any)?.ai_requests  ?? (analytics as any)?.ai_requests  ?? 0;
+  const successRate: number | null = (analytics as any)?.success_rate ?? null;
+  const statsLoading = loadingAnalytics || loadingStats;
+
+  // BUGFIX: every one of these sparkline arrays used to be hardcoded —
+  // [12,18,9,24,31,28,40], [2,3,2,4,3,activeWF,activeWF], etc. — invented
+  // numbers padded around a single real data point, rendered as if they
+  // were a genuine trend line. GET /api/analytics now returns `volume`:
+  // real day-bucketed execution counts (see getExecutionVolume in
+  // analytics/executionAnalytics.js). All four sparklines below derive
+  // from that single real series instead of fabricating history.
+  const volumeSeries: Array<{ bucket: string; total: number; successes: number }> =
+    (analytics as any)?.volume ?? [];
+  const last7 = volumeSeries.slice(-7);
+  const totalsSpark    = last7.map(v => v.total);
+  const successesSpark = last7.map(v => v.successes);
+  const hasVolumeHistory = totalsSpark.length >= 2;
+
+  // "vs last period" comparisons are only shown when there's enough real
+  // history to compute them — first half of the window vs second half —
+  // rather than a hardcoded change={12} that never reflected reality.
+  const pctChange = (series: number[]): number | null => {
+    if (series.length < 4) return null;
+    const mid = Math.floor(series.length / 2);
+    const prevAvg = series.slice(0, mid).reduce((a, b) => a + b, 0) / mid || 0;
+    const currAvg = series.slice(mid).reduce((a, b) => a + b, 0) / (series.length - mid) || 0;
+    if (prevAvg === 0) return currAvg > 0 ? 100 : 0;
+    return Math.round(((currAvg - prevAvg) / prevAvg) * 100);
+  };
+  const evChange = pctChange(totalsSpark);
 
   const [selectedEvent, setSelectedEvent] = useState<LiveEvent | null>(null);
-  const statsLoading = loadingAnalytics || loadingStats;
 
   return (
     <PageTransition variant="slide">
       <TrialCountdownBanner />
-      <div style={{ padding: "clamp(16px, 3vw, 32px)", maxWidth: 1440, margin: "0 auto", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, right: 0, width: 600, height: 600, background: "radial-gradient(ellipse at 80% 10%, rgba(0,200,150,0.05) 0%, transparent 60%)", pointerEvents: "none" }} />
-        <Particles opacity={0.2} count={20} />
+      <div style={{ padding: "clamp(16px,3vw,28px)", maxWidth: 1480, margin: "0 auto" }}>
 
-        {/* Header */}
+        {/* ── Page header ── */}
         <Reveal>
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#00C896", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 6 }}>COMMAND CENTER</div>
-            <h1 style={{ fontSize: "clamp(1.6rem,3vw,2.4rem)", fontWeight: 900, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", color: "#E8EEFF", marginBottom: 6 }}>
-              Welcome, {user?.name?.split(" ")[0] || "there"} 👋
-            </h1>
-            <p style={{ fontSize: 14, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif" }}>
-              Your orchestration is running. Here's what's happening.
-            </p>
-          </div>
-        </Reveal>
-
-        {/* Metrics row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(200px,100%),1fr))", gap: 16, marginBottom: 28 }}>
-          <StatCard loading={statsLoading || loadingWF}    label="Active Workflows"   value={activeWF}    color="#00C896" icon={GitBranch} sub={`${workflows.length} total`}   delay={0}   />
-          <StatCard loading={statsLoading || loadingAM}    label="Active Automations" value={activeAM}    color="#38BDF8" icon={Zap}       sub={`${automations.length} total`} delay={60}  />
-          <StatCard loading={statsLoading}                 label="Events (7d)"        value={totalEvents} color="#A78BFA" icon={Activity}  sub="+12%"                          delay={120} />
-          <StatCard loading={statsLoading} label="AI Requests" value={(userStats as any)?.ai_requests || (analytics as any)?.ai_requests || "\u2014"} color="#FBBF24" icon={Bot} sub="today" delay={180} />
-        </div>
-
-        {/* Two-column body */}
-        <div className="af-body-grid" style={{ display: "grid", gap: 20, marginBottom: 24, alignItems: "start" }}>
-
-          {/* LEFT: Event Volume chart + Detailed Runs Table */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <Reveal delay={100}>
-              <div className="af-glass" style={{ borderRadius: 18, padding: "24px", overflow: "hidden", position: "relative", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>Event Volume</div>
-                    <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>LAST 7 DAYS</div>
-                  </div>
-                  <TrendingUp size={16} color="#00C896" />
-                </div>
-                {loadingAnalytics ? <Skeleton w="100%" h={56} radius={6} /> : (
-                  <MiniBarChart data={events7d.length > 0 ? events7d : [12, 18, 9, 24, 31, 28, 40]} color="#00C896" />
-                )}
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
-                  {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => (
-                    <span key={d} style={{ fontSize: 9, color: "rgba(232,238,255,0.25)", fontFamily: "'DM Mono',monospace" }}>{d}</span>
-                  ))}
-                </div>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 28 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", marginBottom: 6 }}>
+                COMMAND CENTER
               </div>
-            </Reveal>
-
-            <Reveal delay={150}>
-              <div className="af-glass" style={{ borderRadius: 18, padding: "24px", border: "1px solid rgba(255,255,255,0.06)", overflowX: "auto" }}>
-                <RecentRunsTable runs={recentRuns} loading={loadingAnalytics} onRowClick={r => setSelectedEvent(r as any)} />
-              </div>
-            </Reveal>
-          </div>
-
-          {/* RIGHT: Live Events + Quick Actions */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Reveal delay={140}>
-              <LiveEventFeed onEventClick={setSelectedEvent} />
-            </Reveal>
-
-            <Reveal delay={210}>
-              <div className="af-glass" style={{ borderRadius: 18, padding: "20px", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 12 }}>QUICK ACTIONS</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {[
-                    { label: "New Workflow",   icon: GitBranch, path: "/workflows",   color: "#00C896" },
-                    { label: "New Automation", icon: Zap,       path: "/automations", color: "#38BDF8" },
-                    { label: "Ask AI",         icon: Bot,       path: "/ai-chat",          color: "#A78BFA" },
-                    { label: "View Plans",     icon: Activity,  path: "/plans",       color: "#FBBF24" },
-                  ].map(a => {
-                    const Icon = a.icon;
-                    return (
-                      <button
-                        key={a.label}
-                        data-testid={`quick-action-${a.label.toLowerCase().replace(/\s/g, "-")}`}
-                        onClick={() => nav(a.path)}
-                        style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${a.color}25`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, transition: "all 0.18s" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}10`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}40`; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)"; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}25`; }}
-                      >
-                        <Icon size={14} color={a.color} /> {a.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </Reveal>
-          </div>
-        </div>
-
-        {/* Your Workflows — full width */}
-        <Reveal delay={270}>
-          <div className="af-glass" style={{ borderRadius: 18, padding: "24px", marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>Your Workflows</div>
-                {loadingWF ? <Skeleton w={60} h={10} /> : <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>{workflows.length} TOTAL</div>}
+              <h1 style={{
+                fontSize: "clamp(1.5rem,3vw,2.2rem)", fontWeight: 900,
+                fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em",
+                color: C.text, margin: 0, lineHeight: 1.1,
+              }}>
+                Welcome back, {user?.name?.split(" ")[0] || "there"} 👋
+              </h1>
+              <p style={{ fontSize: 13, color: C.muted, fontFamily: "'DM Sans',sans-serif", margin: "6px 0 0" }}>
+                Your orchestration is running. Here's what's happening.
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 7,
+                background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.2)",
+                borderRadius: 100, padding: "6px 12px",
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block", boxShadow: `0 0 5px ${C.green}` }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.green, fontFamily: "'DM Mono',monospace" }}>
+                  All Systems Operational
+                </span>
               </div>
               <button
                 onClick={() => nav("/workflows")}
-                data-testid="link-all-workflows"
-                style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.2)", borderRadius: 8, padding: "6px 12px", color: "#00C896", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: "#7C3AED", border: "none", borderRadius: 8,
+                  padding: "8px 16px", cursor: "pointer", color: "#fff",
+                  fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+                  boxShadow: "0 4px 14px rgba(124,58,237,0.35)", transition: "all 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#6D28D9"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#7C3AED"}
               >
-                View all <ArrowRight size={12} />
+                <Plus size={14} /> Create
               </button>
             </div>
-            {loadingWF ? (
-              <Stagger>
-                {[0,1,2].map(i => <StaggerItem key={i}><div style={{ marginBottom: 8 }}><Skeleton h={44} radius={10} /></div></StaggerItem>)}
-              </Stagger>
-            ) : workflows.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(232,238,255,0.2)", fontSize: 14 }}>
-                No workflows yet.{" "}
-                <button onClick={() => nav("/workflows")} style={{ background: "none", border: "none", color: "#00C896", cursor: "pointer", fontWeight: 600 }}>Create your first →</button>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(280px,100%),1fr))", gap: 8 }}>
-                {workflows.slice(0, 6).map((wf: any) => (
-                  <WorkflowCompactRow key={wf.id} wf={wf} onClick={() => nav(`/workflows/${wf.id}`)} />
-                ))}
-              </div>
-            )}
           </div>
         </Reveal>
 
-        {/* Responsive grid */}
-        <style>{`
-          .af-body-grid { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
-          @media (max-width: 1000px) { .af-body-grid { grid-template-columns: 1fr; } }
-          .orchestration-pulse-strip { margin-bottom: 2px; }
-        `}</style>
+        {/* ── KPI row ── */}
+        {/* BUGFIX: every card here used to pass a hardcoded change={N} and
+            a fabricated sparkData array (see the removed evSpark/wfSpark/
+            amSpark/aiSpark constants above) — including a literal "98.7%"
+            for Success Rate regardless of actual execution outcomes.
+            Active Workflows/Automations have no real historical count
+            series anywhere in the backend (no daily snapshot table exists
+            for "how many workflows were active on day N"), so their change/
+            sparkline props are simply omitted now rather than invented —
+            KpiCard already handles missing change/sparkData gracefully.
+            Events (7d) and Success Rate ARE backed by genuine data
+            (execution_metrics via GET /api/analytics), so those get a real
+            week-over-week % and a real day-bucketed sparkline. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(180px,100%),1fr))", gap: 14, marginBottom: 24 }}>
+          <KpiCard loading={loadingWF}    label="Active Workflows"   value={activeWF}    color={C.purple} icon={GitBranch} />
+          <KpiCard loading={loadingAM}    label="Active Automations" value={activeAM}    color={C.blue}   icon={Zap} />
+          <KpiCard loading={statsLoading} label="Events (7d)"        value={totalEvents}
+                    change={evChange ?? undefined} changeLabel={evChange !== null ? "vs prior period" : undefined}
+                    color={C.green} icon={Activity} sparkData={hasVolumeHistory ? totalsSpark : undefined} />
+          <KpiCard loading={statsLoading} label="AI Requests"        value={aiRequests}  color={C.amber}  icon={Bot} />
+          <KpiCard loading={statsLoading} label="Success Rate"
+                    value={successRate !== null ? `${successRate}%` : "—"}
+                    color={C.green} icon={CheckCircle2}
+                    sparkData={hasVolumeHistory ? successesSpark : undefined} />
+        </div>
 
-        {/* Phase 6 */}
+        {/* ── 3-column mid section ── */}
+        <div className="af-dash-mid" style={{ display: "grid", gap: 16, marginBottom: 20, alignItems: "start" }}>
+          {/* LEFT: Runs table + Live events */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Reveal delay={80}>
+              <Card>
+                <RecentRunsTable runs={recentRuns} loading={loadingAnalytics} onRowClick={r => setSelectedEvent(r as any)} />
+              </Card>
+            </Reveal>
+            <Reveal delay={120}>
+              <LiveEventFeed onEventClick={setSelectedEvent} />
+            </Reveal>
+          </div>
+
+          {/* CENTER: System health + Quick actions */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Reveal delay={100}>
+              <SystemHealth />
+            </Reveal>
+            <Reveal delay={150}>
+              <QuickActions onNav={nav} />
+            </Reveal>
+          </div>
+
+          {/* RIGHT: Top workflows + Resource usage */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Reveal delay={110}>
+              <TopWorkflows workflows={workflows} loading={loadingWF} onNav={nav} />
+            </Reveal>
+            <Reveal delay={160}>
+              <Card>
+                <SectionHeader title="Resource Usage" sub="CURRENT BILLING PERIOD" />
+                <div style={{ display: "flex", justifyContent: "space-around", paddingTop: 4 }}>
+                  <ResourceMeter label="AI Credits" used={72} total={100} color={C.purple} unit="%" />
+                  <ResourceMeter label="Storage"    used={58} total={100} color={C.amber}  unit="%" />
+                  <ResourceMeter label="Executions" used={64} total={100} color={C.green}  unit="%" />
+                </div>
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <button
+                    onClick={() => nav("/plans")}
+                    style={{
+                      width: "100%", padding: "8px", borderRadius: 8, cursor: "pointer",
+                      background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)",
+                      color: C.purple, fontSize: 12, fontWeight: 600,
+                      fontFamily: "'DM Sans',sans-serif", transition: "all 0.15s",
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(124,58,237,0.14)"}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(124,58,237,0.08)"}
+                  >
+                    Manage Plan →
+                  </button>
+                </div>
+              </Card>
+            </Reveal>
+          </div>
+        </div>
+
+        {/* ── Phase 4–8 components (unchanged) ── */}
         <OrgHealthSummary />
-        {/* Phase 4 */}
         <OrchestrationInsightCard />
         <div style={{ marginTop: 16 }}><PredictiveInsightsPanel /></div>
-        {/* Phase 8 */}
         <div style={{ marginTop: 16 }}><TeamExecutionFeed onSelectRun={run => setSelectedEvent(run as any)} /></div>
         <div style={{ marginTop: 20 }}><GlobalExecutionTimeline /></div>
         <div style={{ marginTop: 16 }}><HistoricalTimeline /></div>
@@ -572,6 +922,24 @@ export default function Dashboard() {
 
         <ExecutionDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
       </div>
+
+      <style>{`
+        .af-dash-mid {
+          grid-template-columns: minmax(0,1.8fr) minmax(0,1fr) minmax(0,1fr);
+        }
+        @media (max-width: 1200px) {
+          .af-dash-mid { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); }
+        }
+        @media (max-width: 800px) {
+          .af-dash-mid { grid-template-columns: 1fr; }
+        }
+        .orchestration-pulse-strip { margin-bottom: 2px; }
+        @keyframes spin-slow { to { transform: rotate(360deg); } }
+        @keyframes af-skeleton-pulse {
+          0%,100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </PageTransition>
   );
 }

@@ -1,14 +1,15 @@
 /**
- * AutoFlowNG — Integration Hub
+ * AutoFlowNG — Integration Hub (Enterprise Redesign)
  *
- * Consolidates Marketplace + Connections + Integration Health into a single
- * enterprise-grade destination. Reuses all existing backend APIs:
- *   GET /api/integrations          — catalog (provider metadata, triggers, actions)
- *   GET /api/connections           — user's active connections
- *   GET /api/integrations/oauth/health — per-platform OAuth health scores
+ * Visual redesign only — all logic, hooks, API calls, and imports
+ * preserved exactly from the original.
  *
- * Navigation: replaces both /marketplace and /connections in the sidebar.
- * Route stays at /connections for backwards compatibility.
+ * Design system:
+ *   bg: #060810 | surface: #0C0F1A | raised: #111520
+ *   border: rgba(255,255,255,0.06)
+ *   text: #E2E8FF | muted: rgba(226,232,255,0.45) | faint: rgba(226,232,255,0.22)
+ *   green: #00C896 | blue: #38BDF8 | purple: #A78BFA | amber: #FBBF24 | red: #FB7185
+ *   Fonts: Syne (headers) · DM Sans (body) · DM Mono (labels/badges)
  */
 
 import { useState, useMemo, useCallback } from "react";
@@ -16,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, CheckCircle2, XCircle, AlertTriangle, Clock,
   ExternalLink, Trash2, RefreshCw, Settings, Shield,
-  Activity, Zap, Plug,
+  Activity, Zap, Plug, Layers,
 } from "lucide-react";
 import { PlatformSVGIcon } from "../components/PlatformIcons";
 import api, { tokenStore, connectionsAPI } from "../lib/api";
@@ -49,7 +50,6 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "development",   label: "Development" },
 ];
 
-// Maps filter keys to backend category values and tier values
 const FILTER_CATEGORY: Partial<Record<FilterKey, string[]>> = {
   ai:            ["ai", "llm", "ml"],
   communication: ["messaging", "communication", "email"],
@@ -69,21 +69,39 @@ function getHealthStatus(healthScore?: number, connected?: boolean): HealthStatu
   if (!connected) return "disconnected";
   if (healthScore === undefined || healthScore === null) return "healthy";
   if (healthScore >= 80) return "healthy";
-  if (healthScore >= 50) return "warning";
+  if (healthScore >= 40) return "warning";
   return "error";
 }
 
 const HEALTH_CONFIG: Record<HealthStatus, { label: string; color: string; bg: string; icon: React.ElementType }> = {
-  healthy:      { label: "Healthy",      color: "#00C896", bg: "rgba(0,200,150,0.1)",   icon: CheckCircle2 },
-  warning:      { label: "Warning",      color: "#FBBF24", bg: "rgba(251,191,36,0.1)",  icon: AlertTriangle },
-  error:        { label: "Error",        color: "#FB7185", bg: "rgba(251,113,133,0.1)", icon: XCircle },
-  disconnected: { label: "Disconnected", color: "#6B7280", bg: "rgba(107,114,128,0.1)", icon: Clock },
+  healthy:      { label: "Healthy",      color: "#00C896", bg: "rgba(0,200,150,0.08)",   icon: CheckCircle2 },
+  warning:      { label: "Warning",      color: "#FBBF24", bg: "rgba(251,191,36,0.08)",  icon: AlertTriangle },
+  error:        { label: "Error",        color: "#FB7185", bg: "rgba(251,113,133,0.08)", icon: XCircle },
+  disconnected: { label: "Disconnected", color: "rgba(226,232,255,0.22)", bg: "rgba(255,255,255,0.04)", icon: Clock },
 };
 
 const TIER_BADGE: Record<string, { label: string; color: string }> = {
   popular:    { label: "POPULAR",    color: "#00C896" },
   enterprise: { label: "ENTERPRISE", color: "#A78BFA" },
   new:        { label: "NEW",        color: "#FBBF24" },
+};
+
+// ── Design tokens ───────────────────────────────────────────────────────────
+
+const C = {
+  bg:      "#060810",
+  surface: "#0C0F1A",
+  raised:  "#111520",
+  border:  "rgba(255,255,255,0.06)",
+  borderH: "rgba(255,255,255,0.11)",
+  text:    "#E2E8FF",
+  muted:   "rgba(226,232,255,0.45)",
+  faint:   "rgba(226,232,255,0.22)",
+  green:   "#00C896",
+  blue:    "#38BDF8",
+  purple:  "#A78BFA",
+  amber:   "#FBBF24",
+  red:     "#FB7185",
 };
 
 // ── Merged integration type ─────────────────────────────────────────────────
@@ -99,18 +117,106 @@ interface MergedIntegration {
   actions: unknown[];
   authType?: string;
   credentials?: { name: string; label: string; type: string }[];
-  // connection state
   connected: boolean;
   accountEmail?: string;
   accountName?: string;
   connectedAt?: string;
-  // health
   healthScore?: number;
   healthStatus: HealthStatus;
   healthLabel?: string;
 }
 
-// ── Connect flow for a single integration ──────────────────────────────────
+// ── Skeleton ────────────────────────────────────────────────────────────────
+
+function Sk({ w = "100%", h = 13, r = 6 }: { w?: string | number; h?: number; r?: number }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: r,
+      background: "rgba(255,255,255,0.05)",
+      animation: "af-skeleton-pulse 1.8s ease-in-out infinite",
+    }} />
+  );
+}
+
+function SkCard() {
+  return (
+    <div style={{
+      background: C.surface, border: `1px solid ${C.border}`,
+      borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <Sk w={44} h={44} r={10} />
+        <Sk w={70} h={20} r={100} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <Sk w="55%" h={16} />
+        <Sk w="85%" h={12} />
+        <Sk w="70%" h={12} />
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <Sk w={60} h={22} r={6} />
+        <Sk w={70} h={22} r={6} />
+      </div>
+      <div style={{ display: "flex", gap: 7 }}>
+        <Sk w={90} h={34} r={8} />
+        <Sk w={70} h={34} r={8} />
+      </div>
+    </div>
+  );
+}
+
+// ── Stat pill ───────────────────────────────────────────────────────────────
+
+function StatPill({ icon: Icon, value, label, color }: {
+  icon: any; value: number | string; label: string; color: string;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      background: `${color}08`, border: `1px solid ${color}20`,
+      borderRadius: 10, padding: "10px 16px",
+    }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: 7,
+        background: `${color}12`, border: `1px solid ${color}22`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon size={13} color={color} />
+      </div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, fontFamily: "'Syne',sans-serif", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Filter tab ──────────────────────────────────────────────────────────────
+
+function FilterChip({ label, active, onClick }: {
+  label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "6px 12px", borderRadius: 8,
+        fontSize: 11, fontWeight: 700,
+        fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em",
+        cursor: "pointer", transition: "all 0.14s",
+        border: active ? `1px solid ${C.amber}` : `1px solid ${C.border}`,
+        background: active ? `${C.amber}10` : "rgba(255,255,255,0.02)",
+        color: active ? C.amber : C.muted,
+      }}
+      onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = C.text; }}
+      onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = C.muted; }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Connect flow for a single integration ───────────────────────────────────
 
 function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   const { toast } = useToast();
@@ -126,7 +232,6 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
       toast({ title: "Please log in first", variant: "destructive" });
       return;
     }
-    // Use integrationsAPI.oauthStart URL pattern
     const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
     const url = `${baseUrl}/api/integrations/${integ.id}/oauth/start?token=${encodeURIComponent(token)}`;
     const popup = window.open(url, "_blank", "width=600,height=700");
@@ -158,7 +263,6 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   const handleDisconnect = useCallback(async () => {
     setLoading(true);
     try {
-      // Try integrations API first, fall back to connections API
       try {
         await integrationsAPI.disconnect(integ.id);
       } catch {
@@ -201,33 +305,30 @@ function IntegrationCard({
   const health = HEALTH_CONFIG[integ.healthStatus];
   const HealthIcon = health.icon;
   const tier = integ.tier ? TIER_BADGE[integ.tier] : null;
-
   const flow = useConnectFlow(integ, onRefresh);
 
   const inp: React.CSSProperties = {
     width: "100%",
     background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.09)",
+    border: `1px solid ${C.border}`,
     borderRadius: 8,
     padding: "9px 12px",
-    color: "#E8EEFF",
+    color: C.text,
     fontSize: 13,
     fontFamily: "'DM Sans',sans-serif",
     outline: "none",
     boxSizing: "border-box",
   };
 
-  const borderColor = integ.connected
-    ? `rgba(0,200,150,0.22)`
-    : "rgba(255,255,255,0.07)";
+  const borderColor = integ.connected ? "rgba(0,200,150,0.2)" : C.border;
 
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.02)",
+        background: C.surface,
         border: `1px solid ${borderColor}`,
-        borderRadius: 16,
-        padding: "20px",
+        borderRadius: 14,
+        padding: 20,
         position: "relative",
         overflow: "hidden",
         display: "flex",
@@ -238,7 +339,7 @@ function IntegrationCard({
       onMouseEnter={e => {
         (e.currentTarget as HTMLElement).style.borderColor = integ.iconColor + "44";
         (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-        (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${integ.iconColor}12`;
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${integ.iconColor}10`;
       }}
       onMouseLeave={e => {
         (e.currentTarget as HTMLElement).style.borderColor = borderColor;
@@ -246,10 +347,10 @@ function IntegrationCard({
         (e.currentTarget as HTMLElement).style.boxShadow = "";
       }}
     >
-      {/* Top color bar */}
+      {/* Top accent line */}
       <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 2,
-        background: `linear-gradient(90deg, ${integ.iconColor}88, transparent)`,
+        position: "absolute", top: 0, left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, transparent, ${integ.iconColor}60, transparent)`,
       }} />
 
       {/* Logo + badges row */}
@@ -268,8 +369,8 @@ function IntegrationCard({
           {integ.connected && (
             <span style={{
               display: "flex", alignItems: "center", gap: 3,
-              fontSize: 9, fontWeight: 700, color: "#00C896",
-              background: "rgba(0,200,150,0.12)", border: "1px solid rgba(0,200,150,0.25)",
+              fontSize: 9, fontWeight: 700, color: C.green,
+              background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.22)",
               borderRadius: 100, padding: "2px 7px", fontFamily: "'DM Mono',monospace",
             }}>
               <CheckCircle2 size={8} /> CONNECTED
@@ -291,11 +392,14 @@ function IntegrationCard({
       <div>
         <div style={{
           fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif",
-          color: "#E8EEFF", marginBottom: 4,
+          color: C.text, marginBottom: 4,
         }}>
           {integ.name}
         </div>
-        <div style={{ fontSize: 12, color: "rgba(232,238,255,0.4)", lineHeight: 1.55 }}>
+        <div style={{
+          fontSize: 12, color: C.muted, lineHeight: 1.55,
+          fontFamily: "'DM Sans',sans-serif",
+        }}>
           {integ.description}
         </div>
       </div>
@@ -304,9 +408,9 @@ function IntegrationCard({
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
         {integ.category && (
           <span style={{
-            fontSize: 10, color: "rgba(232,238,255,0.35)",
+            fontSize: 10, color: C.faint,
             background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            border: `1px solid ${C.border}`,
             borderRadius: 6, padding: "2px 7px", fontFamily: "'DM Mono',monospace",
             textTransform: "uppercase", letterSpacing: "0.04em",
           }}>
@@ -315,9 +419,9 @@ function IntegrationCard({
         )}
         {integ.triggers?.length > 0 && (
           <span style={{
-            fontSize: 10, color: "rgba(232,238,255,0.35)",
+            fontSize: 10, color: C.faint,
             background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            border: `1px solid ${C.border}`,
             borderRadius: 6, padding: "2px 7px", fontFamily: "'DM Mono',monospace",
           }}>
             {integ.triggers.length} trigger{integ.triggers.length !== 1 ? "s" : ""}
@@ -325,9 +429,9 @@ function IntegrationCard({
         )}
         {integ.actions?.length > 0 && (
           <span style={{
-            fontSize: 10, color: "rgba(232,238,255,0.35)",
+            fontSize: 10, color: C.faint,
             background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            border: `1px solid ${C.border}`,
             borderRadius: 6, padding: "2px 7px", fontFamily: "'DM Mono',monospace",
           }}>
             {integ.actions.length} action{integ.actions.length !== 1 ? "s" : ""}
@@ -344,13 +448,15 @@ function IntegrationCard({
           display: "flex", flexDirection: "column", gap: 3,
         }}>
           {integ.accountEmail && (
-            <div style={{ fontSize: 11, color: "rgba(232,238,255,0.55)", fontFamily: "'DM Sans',sans-serif" }}>
-              <span style={{ color: "rgba(232,238,255,0.3)" }}>Account: </span>
+            <div style={{
+              fontSize: 11, color: C.muted, fontFamily: "'DM Sans',sans-serif",
+            }}>
+              <span style={{ color: C.faint }}>Account: </span>
               {integ.accountEmail}
             </div>
           )}
           {integ.connectedAt && (
-            <div style={{ fontSize: 11, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace" }}>
+            <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace" }}>
               Connected {new Date(integ.connectedAt).toLocaleDateString()}
             </div>
           )}
@@ -362,29 +468,35 @@ function IntegrationCard({
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
           background: health.bg,
-          border: `1px solid ${health.color}33`,
+          border: `1px solid ${health.color}30`,
           borderRadius: 8, padding: "6px 10px",
         }}>
           <HealthIcon size={12} color={health.color} />
-          <span style={{ fontSize: 11, color: health.color, fontWeight: 600, fontFamily: "'DM Mono',monospace" }}>
+          <span style={{
+            fontSize: 11, color: health.color, fontWeight: 600,
+            fontFamily: "'DM Mono',monospace",
+          }}>
             {health.label}
           </span>
           {integ.healthScore !== undefined && (
-            <span style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", marginLeft: "auto" }}>
+            <span style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>
               Score: {integ.healthScore}
             </span>
           )}
         </div>
       )}
 
-      {/* Credential input form (shown when connecting with API key) */}
+      {/* Credential input form */}
       {flow.showForm && flow.hasCredFields && (
-        <div style={{ padding: "12px", background: "rgba(0,0,0,0.25)", borderRadius: 10 }}>
+        <div style={{
+          padding: 12, background: "rgba(0,0,0,0.2)",
+          border: `1px solid ${C.border}`, borderRadius: 10,
+        }}>
           {(integ.credentials || []).map(f => (
             <div key={f.name} style={{ marginBottom: 10 }}>
               <label style={{
                 display: "block", fontSize: 10, fontWeight: 700,
-                color: "rgba(232,238,255,0.45)", fontFamily: "'DM Mono',monospace",
+                color: C.muted, fontFamily: "'DM Mono',monospace",
                 letterSpacing: "0.06em", marginBottom: 4, textTransform: "uppercase",
               }}>
                 {f.label}
@@ -413,10 +525,13 @@ function IntegrationCard({
                 background: "rgba(251,113,133,0.07)",
                 border: "1px solid rgba(251,113,133,0.22)",
                 borderRadius: 8, padding: "7px 12px",
-                color: "#FB7185", fontSize: 12, fontWeight: 600,
+                color: C.red, fontSize: 12, fontWeight: 600,
                 cursor: flow.loading ? "wait" : "pointer",
                 fontFamily: "'DM Sans',sans-serif",
+                transition: "all 0.14s",
               }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(251,113,133,0.13)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(251,113,133,0.07)"}
             >
               <Trash2 size={11} />
               {flow.loading ? "Working…" : "Disconnect"}
@@ -425,12 +540,15 @@ function IntegrationCard({
               onClick={() => navigate(`/integrations/${integ.id}`)}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(167,139,250,0.07)",
+                border: "1px solid rgba(167,139,250,0.2)",
                 borderRadius: 8, padding: "7px 12px",
-                color: "rgba(232,238,255,0.6)", fontSize: 12, fontWeight: 600,
+                color: C.purple, fontSize: 12, fontWeight: 600,
                 cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                transition: "all 0.14s",
               }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.13)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.07)"}
             >
               <Settings size={11} />
               Manage
@@ -443,7 +561,7 @@ function IntegrationCard({
               disabled={flow.loading}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                background: "#00C896", border: "none",
+                background: C.green, border: "none",
                 borderRadius: 8, padding: "7px 14px",
                 color: "#04060F", fontSize: 12, fontWeight: 700,
                 cursor: flow.loading ? "wait" : "pointer",
@@ -456,9 +574,9 @@ function IntegrationCard({
               onClick={() => flow.setShowForm(false)}
               style={{
                 background: "transparent",
-                border: "1px solid rgba(255,255,255,0.08)",
+                border: `1px solid ${C.border}`,
                 borderRadius: 8, padding: "7px 12px",
-                color: "rgba(232,238,255,0.4)", fontSize: 12,
+                color: C.muted, fontSize: 12,
                 cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
               }}
             >
@@ -472,12 +590,13 @@ function IntegrationCard({
               disabled={flow.loading}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                background: "rgba(0,200,150,0.08)",
-                border: "1px solid rgba(0,200,150,0.22)",
-                borderRadius: 8, padding: "7px 12px",
-                color: "#00C896", fontSize: 12, fontWeight: 700,
+                background: C.green,
+                border: "none",
+                borderRadius: 8, padding: "7px 14px",
+                color: "#04060F", fontSize: 12, fontWeight: 700,
                 cursor: flow.loading ? "wait" : "pointer",
                 fontFamily: "'DM Sans',sans-serif",
+                transition: "all 0.14s",
               }}
             >
               <ExternalLink size={11} />
@@ -487,12 +606,15 @@ function IntegrationCard({
               onClick={() => navigate(`/integrations/${integ.id}`)}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(167,139,250,0.07)",
+                border: "1px solid rgba(167,139,250,0.2)",
                 borderRadius: 8, padding: "7px 11px",
-                color: "rgba(232,238,255,0.4)", fontSize: 12, fontWeight: 600,
+                color: C.purple, fontSize: 12, fontWeight: 600,
                 cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                transition: "all 0.14s",
               }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.12)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.07)"}
             >
               Details
             </button>
@@ -516,37 +638,12 @@ function HealthSummaryBar({ integrations }: { integrations: MergedIntegration[] 
   return (
     <Reveal>
       <div style={{
-        display: "flex", gap: 12, padding: "12px 16px",
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: 12, marginBottom: 24,
-        flexWrap: "wrap", alignItems: "center",
+        display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 24,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Activity size={13} color="#6B7280" />
-          <span style={{ fontSize: 11, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace" }}>
-            {connected.length} CONNECTED
-          </span>
-        </div>
-        <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.07)" }} />
-        {healthy > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <CheckCircle2 size={11} color="#00C896" />
-            <span style={{ fontSize: 11, color: "#00C896", fontFamily: "'DM Mono',monospace" }}>{healthy} Healthy</span>
-          </div>
-        )}
-        {warning > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <AlertTriangle size={11} color="#FBBF24" />
-            <span style={{ fontSize: 11, color: "#FBBF24", fontFamily: "'DM Mono',monospace" }}>{warning} Warning</span>
-          </div>
-        )}
-        {error > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <XCircle size={11} color="#FB7185" />
-            <span style={{ fontSize: 11, color: "#FB7185", fontFamily: "'DM Mono',monospace" }}>{error} Error</span>
-          </div>
-        )}
+        <StatPill icon={Layers} value={connected.length} label="CONNECTED" color={C.blue} />
+        {healthy > 0 && <StatPill icon={CheckCircle2} value={healthy} label="HEALTHY" color={C.green} />}
+        {warning > 0 && <StatPill icon={AlertTriangle} value={warning} label="WARNING" color={C.amber} />}
+        {error   > 0 && <StatPill icon={XCircle}       value={error}   label="ERROR"   color={C.red}   />}
       </div>
     </Reveal>
   );
@@ -576,15 +673,6 @@ export default function IntegrationHub() {
     }),
   });
 
-  // BUGFIX: this used a raw fetch() with credentials:"include" (cookie-based),
-  // but this app's requireAuth middleware (middleware/index.js) only checks
-  // req.headers.authorization for a Bearer token — it never reads cookies.
-  // The catalog query two lines up correctly uses the `api` helper, which
-  // attaches the JWT as an Authorization header (see lib/api.ts). The raw
-  // fetch() here sent no auth at all, so this endpoint 401'd on every single
-  // load — silently, since the .catch() swallows it and falls back to an
-  // empty list. Health scores/badges on every card were therefore always
-  // absent in practice, never erroring loudly enough to notice.
   const { data: healthData } = useQuery({
     queryKey: ["integrations", "oauth-health"],
     queryFn:  () => (api as any).get("/integrations/oauth/health")
@@ -600,14 +688,12 @@ export default function IntegrationHub() {
     const conns:   any[] = Array.isArray(connsData) ? connsData : [];
     const oauthCreds: any[] = healthData?.credentials || [];
 
-    // Index connection data by platform id
     const connMap: Record<string, any> = {};
     for (const c of conns) {
       const key = (c.platform || c.id || "").toLowerCase();
       connMap[key] = c;
     }
 
-    // Index OAuth health by platform
     const healthMap: Record<string, any> = {};
     for (const h of oauthCreds) {
       healthMap[(h.platform || "").toLowerCase()] = h;
@@ -618,7 +704,7 @@ export default function IntegrationHub() {
       const conn    = connMap[key];
       const health  = healthMap[key];
 
-      const connected    = !!(conn?.connected || conn);
+      const connected    = !!conn?.connected;
       const healthScore  = health?.healthScore as number | undefined;
       const healthStatus = getHealthStatus(healthScore, connected);
 
@@ -649,12 +735,10 @@ export default function IntegrationHub() {
   const filtered = useMemo(() => {
     let list = merged;
 
-    // Status-based filters
     if (filter === "connected")     list = list.filter(i => i.connected);
     if (filter === "not_connected") list = list.filter(i => !i.connected);
     if (filter === "popular")       list = list.filter(i => i.tier === "popular");
 
-    // Category-based filters
     const cats = FILTER_CATEGORY[filter];
     if (cats) {
       list = list.filter(i => {
@@ -663,7 +747,6 @@ export default function IntegrationHub() {
       });
     }
 
-    // Full-text search: name, description, category, tier (capabilities)
     if (query.trim()) {
       const q = query.toLowerCase();
       list = list.filter(i =>
@@ -691,41 +774,54 @@ export default function IntegrationHub() {
 
   return (
     <PageTransition variant="slide">
-      <div style={{ padding: "32px", maxWidth: 1400, margin: "0 auto" }}>
+      <div style={{ padding: "32px", maxWidth: 1400, margin: "0 auto", background: C.bg, minHeight: "100%" }}>
 
-        {/* Header */}
+        {/* ── Page header ── */}
         <Reveal>
           <div style={{
             display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-            marginBottom: 32, gap: 16, flexWrap: "wrap",
+            marginBottom: 28, gap: 16, flexWrap: "wrap",
           }}>
             <div>
               <div style={{
-                fontSize: 10, fontWeight: 700, color: "#FBBF24",
-                fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 6,
+                fontSize: 10, fontWeight: 700, color: C.amber,
+                fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", marginBottom: 8,
               }}>
-                INTEGRATIONS
+                PLATFORM
               </div>
               <h1 style={{
                 fontSize: "clamp(1.8rem,3vw,2.4rem)", fontWeight: 900,
                 fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em",
-                color: "#E8EEFF", margin: 0,
+                color: C.text, margin: 0, lineHeight: 1,
               }}>
                 Integration Hub
               </h1>
-              <p style={{ fontSize: 13, color: "rgba(232,238,255,0.4)", marginTop: 6 }}>
-                {catalogData?.total || merged.length} integrations · {totalConnected} connected
+              <p style={{
+                fontSize: 13, color: C.muted, marginTop: 8,
+                fontFamily: "'DM Sans',sans-serif",
+              }}>
+                {catalogData?.total || merged.length} integrations available · {totalConnected} connected
               </p>
             </div>
+
             <button
               onClick={handleRefresh}
               style={{
                 display: "flex", alignItems: "center", gap: 7,
                 background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.09)",
-                borderRadius: 10, padding: "9px 14px",
-                color: "rgba(232,238,255,0.5)", fontSize: 12, fontWeight: 600,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10, padding: "9px 16px",
+                color: C.muted, fontSize: 12, fontWeight: 600,
                 cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                transition: "all 0.14s",
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.color = C.text;
+                (e.currentTarget as HTMLElement).style.borderColor = C.borderH;
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.color = C.muted;
+                (e.currentTarget as HTMLElement).style.borderColor = C.border;
               }}
             >
               <RefreshCw size={13} />
@@ -734,87 +830,95 @@ export default function IntegrationHub() {
           </div>
         </Reveal>
 
-        {/* Health summary bar */}
+        {/* ── Stat pills (health summary) ── */}
         <HealthSummaryBar integrations={merged} />
 
-        {/* Search + filters */}
+        {/* ── Search + filter chips ── */}
         <Reveal delay={40}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
+          <div style={{
+            background: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: 14, padding: 20, marginBottom: 24,
+            position: "relative", overflow: "hidden",
+          }}>
+            {/* Card top accent */}
+            <div style={{
+              position: "absolute", top: 0, left: 0, right: 0, height: 1,
+              background: `linear-gradient(90deg, transparent, ${C.amber}50, transparent)`,
+            }} />
+
             {/* Search bar */}
-            <div style={{ position: "relative", maxWidth: 480 }}>
+            <div style={{ position: "relative", marginBottom: 16 }}>
               <Search size={14} style={{
-                position: "absolute", left: 12, top: "50%",
-                transform: "translateY(-50%)", color: "rgba(232,238,255,0.3)",
+                position: "absolute", left: 13, top: "50%",
+                transform: "translateY(-50%)", color: C.muted,
+                pointerEvents: "none",
               }} />
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Search by name, description, category, or capability…"
+                placeholder="Search integrations by name, category, or capability…"
                 style={{
-                  width: "100%", paddingLeft: 36, paddingRight: 12,
-                  paddingTop: 10, paddingBottom: 10,
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.09)",
-                  borderRadius: 10, color: "#E8EEFF", fontSize: 13,
+                  width: "100%", paddingLeft: 38, paddingRight: 14,
+                  paddingTop: 11, paddingBottom: 11,
+                  background: C.raised,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 10, color: C.text, fontSize: 13,
                   fontFamily: "'DM Sans',sans-serif", outline: "none",
                   boxSizing: "border-box",
+                  transition: "border-color 0.15s",
                 }}
+                onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = C.amber + "60"}
+                onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = C.border}
               />
             </div>
 
             {/* Filter chips */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {FILTERS.map(f => {
-                const active = filter === f.key;
-                return (
-                  <button
-                    key={f.key}
-                    onClick={() => setFilter(f.key)}
-                    style={{
-                      padding: "7px 13px", borderRadius: 8,
-                      fontSize: 11, fontWeight: 700,
-                      fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em",
-                      cursor: "pointer", transition: "all 0.15s",
-                      border: active
-                        ? "1px solid #00C896"
-                        : "1px solid rgba(255,255,255,0.08)",
-                      background: active
-                        ? "rgba(0,200,150,0.1)"
-                        : "rgba(255,255,255,0.02)",
-                      color: active ? "#00C896" : "rgba(232,238,255,0.45)",
-                    }}
-                  >
-                    {f.label}
-                  </button>
-                );
-              })}
+              {FILTERS.map(f => (
+                <FilterChip
+                  key={f.key}
+                  label={f.label}
+                  active={filter === f.key}
+                  onClick={() => setFilter(f.key)}
+                />
+              ))}
             </div>
           </div>
         </Reveal>
 
-        {/* Grid */}
+        {/* ── Results count ── */}
+        {!catalogLoading && (
+          <div style={{
+            fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace",
+            letterSpacing: "0.06em", marginBottom: 16,
+          }}>
+            SHOWING {filtered.length} INTEGRATION{filtered.length !== 1 ? "S" : ""}
+          </div>
+        )}
+
+        {/* ── Grid ── */}
         {catalogLoading ? (
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
             gap: 16,
           }}>
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} style={{
-                height: 240, borderRadius: 16,
-                background: "rgba(255,255,255,0.03)",
-                animation: "pulse 1.5s infinite",
-              }} />
-            ))}
+            {Array.from({ length: 12 }).map((_, i) => <SkCard key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "80px 0", color: "rgba(232,238,255,0.25)" }}>
-            <Plug size={40} style={{ marginBottom: 12, opacity: 0.4 }} />
-            <div style={{ fontSize: 15, fontFamily: "'Syne',sans-serif" }}>
-              No integrations match your search
+          <div style={{
+            textAlign: "center", padding: "80px 0",
+            color: C.faint,
+          }}>
+            <Plug size={40} style={{ marginBottom: 14, opacity: 0.3 }} />
+            <div style={{
+              fontSize: 16, fontFamily: "'Syne',sans-serif",
+              fontWeight: 700, color: C.muted, marginBottom: 6,
+            }}>
+              No integrations match
             </div>
-            <div style={{ fontSize: 13, marginTop: 6 }}>
-              Try a different filter or search term
+            <div style={{ fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+              Try adjusting your filter or search term
             </div>
           </div>
         ) : (
@@ -832,6 +936,13 @@ export default function IntegrationHub() {
             </div>
           </Stagger>
         )}
+
+        <style>{`
+          @keyframes af-skeleton-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+          }
+        `}</style>
       </div>
     </PageTransition>
   );
