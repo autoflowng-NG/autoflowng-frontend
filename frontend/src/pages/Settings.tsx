@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { authAPI } from "../lib/api";
+import { authAPI, API_BASE_URL } from "../lib/api";
 import { NotificationPreferences } from "../components/NotificationPreferences";
 import { PageTransition } from "../components/PageTransition";
 import { useAuth } from "../contexts/AuthContext";
@@ -151,12 +151,12 @@ function ProfileTab() {
 
   React.useEffect(() => {
     const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-    fetch("/api/profile/me", { credentials: "include", headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/api/profile/me`, { credentials: "include", headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d) return;
         setProfile({ name: d.name || "", email: d.email || "", phone: d.phone || "", location: d.location || "", address: d.address || "", bio: d.bio || "" });
-        setAvatarUrl(d.avatar_url || null);
+        setAvatarUrl(d.avatar_url ? (d.avatar_url.startsWith("http") ? d.avatar_url : `${API_BASE_URL}${d.avatar_url}`) : null);
       })
       .catch(() => {});
   }, []);
@@ -169,14 +169,14 @@ function ProfileTab() {
       const fd = new FormData();
       fd.append("avatar", file);
       const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-      const res = await fetch("/api/profile/me/avatar", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/me/avatar`, {
         method: "POST", credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
-      setAvatarUrl(data.avatar_url);
+      setAvatarUrl(data.avatar_url ? (data.avatar_url.startsWith("http") ? data.avatar_url : `${API_BASE_URL}${data.avatar_url}`) : null);
       toast({ title: "Profile photo updated!" });
     } catch (e: any) {
       toast({ title: "Upload failed", description: e?.message, variant: "destructive" });
@@ -187,7 +187,7 @@ function ProfileTab() {
     setSaving(true);
     try {
       const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-      const res = await fetch("/api/profile/me", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/me`, {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: profile.name, phone: profile.phone, location: profile.location, address: profile.address, bio: profile.bio }),

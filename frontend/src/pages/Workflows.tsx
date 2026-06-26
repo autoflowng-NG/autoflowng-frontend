@@ -12,7 +12,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { LayoutGroup, AnimatePresence, motion } from "framer-motion";
 import { useWorkflows, useDeleteWorkflow, useToggleWorkflow } from "../hooks/useWorkflows";
 import { useOrgWorkflows } from "../hooks/useOrgWorkflows";
@@ -438,7 +438,7 @@ function FilterTab({ label, active, count, onClick }: { label: string; active: b
 
 /* ── Page ──────────────────────────────────────────────────────────── */
 export default function Workflows() {
-  const [, nav]     = useLocation();
+  const nav     = useNavigate();
   const { activeOrg } = useOrg();
   const orgQuery      = useOrgWorkflows();
   const personalQuery = useWorkflows();
