@@ -129,6 +129,14 @@ export const analyticsAPI = {
   ai:        (days = 30)     => api.get("/analytics/ai", { params: { days } }),
 };
 
+export const systemHealthAPI = {
+  summary: () => api.get("/system/health/summary"),
+};
+
+export const resourceUsageAPI = {
+  get: () => api.get("/dashboard/resource-usage"),
+};
+
 export const workflowsAPI = {
   list:      ()              => api.get("/workflows"),
   get:       (id: string)    => api.get(`/workflows/${id}`),
