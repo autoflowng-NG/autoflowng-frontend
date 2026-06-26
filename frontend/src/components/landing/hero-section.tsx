@@ -131,20 +131,35 @@ export function HeroSection() {
     return () => clearInterval(interval);
   }, []);
 
+  // If the background video's source fails to load (e.g. blocked by the
+  // CDN host's own robots.txt for crawlers, or just a network failure),
+  // unmount the <video> entirely rather than leaving a failed element in
+  // the DOM. Some renderers paint a <video> with no decoded frame as an
+  // opaque black box, which — even sitting at z-0 below the z-10 text —
+  // has been observed to blank out the section in automated screenshots.
+  const [videoFailed, setVideoFailed] = useState(false);
+
   return (
     <section className="relative min-h-screen flex flex-col justify-center items-start overflow-hidden bg-black">
       {/* Background video */}
       <div className="absolute inset-0 z-0">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          aria-hidden="true"
-          className="w-full h-full object-cover object-center opacity-80"
-        >
-          <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/bg-hero-0BnFGdr81Ifnj3WbBZoNt1KE4D5DMT.mp4" type="video/mp4" />
-        </video>
+        {!videoFailed && (
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            aria-hidden="true"
+            className="w-full h-full object-cover object-center opacity-80"
+            onError={() => setVideoFailed(true)}
+          >
+            <source
+              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/bg-hero-0BnFGdr81Ifnj3WbBZoNt1KE4D5DMT.mp4"
+              type="video/mp4"
+              onError={() => setVideoFailed(true)}
+            />
+          </video>
+        )}
         {/* Subtle overlay to ensure text readability on the left */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60" />
