@@ -15,6 +15,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
 import { Logo } from "./Logo";
 import { useServerStatus } from "../hooks/useServerStatus";
@@ -49,56 +50,56 @@ const T = {
   muted:       "rgba(226,232,255,0.22)",
 };
 
-/* ── Nav config (unchanged from Phase 10A) ──────────────────────────── */
+/* ── Nav config — labelKey resolved via t() at render time ───────────── */
 const NAV = [
-  { path: "/dashboard",    label: "Dashboard",       icon: LayoutDashboard },
-  { path: "/workflows",    label: "Workflows",        icon: GitBranch },
-  { path: "/automations",  label: "Automations",      icon: Zap },
-  { path: "/ai-chat",      label: "AI Assistant",     icon: Bot },
-  { path: "/knowledge-hub",label: "Explore",          icon: Compass },
-  { path: "/news",         label: "News",             icon: Newspaper },
-  { path: "/dashboard/creative-agents", label: "Creative Agents", icon: Wand2 },
-  { path: "/connections",  label: "Integration Hub",  icon: Layers },
-  { path: "/intelligence", label: "Intelligence",     icon: Cpu },
-  { path: "/plans",        label: "Plans",            icon: CreditCard },
-  { path: "/referrals",    label: "Referrals",        icon: Users },
-  { path: "/settings",     label: "Settings",         icon: Settings },
-  { path: "/node-library", label: "Node Library",     icon: Layers },
-  { path: "/credentials",  label: "Credentials",      icon: Key },
-  { path: "/webhooks",     label: "Webhooks",         icon: Webhook },
-  { path: "/analytics",    label: "Analytics",        icon: BarChart3 },
-  { path: "/media-cloud",  label: "Media Cloud",      icon: Library },
-  { path: "/reports",      label: "Reports",          icon: FileText },
+  { path: "/dashboard",    labelKey: "nav.dashboard",       icon: LayoutDashboard },
+  { path: "/workflows",    labelKey: "nav.workflows",        icon: GitBranch },
+  { path: "/automations",  labelKey: "nav.automations",      icon: Zap },
+  { path: "/ai-chat",      labelKey: "nav.ai_assistant",     icon: Bot },
+  { path: "/knowledge-hub",labelKey: "nav.explore",          icon: Compass },
+  { path: "/news",         labelKey: "nav.news",             icon: Newspaper },
+  { path: "/dashboard/creative-agents", labelKey: "nav.creative_agents", icon: Wand2 },
+  { path: "/connections",  labelKey: "nav.connections",      icon: Layers },
+  { path: "/intelligence", labelKey: "nav.intelligence",     icon: Cpu },
+  { path: "/plans",        labelKey: "nav.plans",            icon: CreditCard },
+  { path: "/referrals",    labelKey: "nav.referrals",        icon: Users },
+  { path: "/settings",     labelKey: "nav.settings",         icon: Settings },
+  { path: "/node-library", labelKey: "nav.node_library",     icon: Layers },
+  { path: "/credentials",  labelKey: "nav.credentials",      icon: Key },
+  { path: "/webhooks",     labelKey: "nav.webhooks",         icon: Webhook },
+  { path: "/analytics",    labelKey: "nav.analytics",        icon: BarChart3 },
+  { path: "/media-cloud",  labelKey: "nav.media_cloud",      icon: Library },
+  { path: "/reports",      labelKey: "nav.reports",          icon: FileText },
 ];
 
 const ADMIN_NAV = [
-  { path: "/admin", label: "Admin", icon: ShieldCheck, badge: "ADMIN", badgeColor: "#FB7185" },
+  { path: "/admin", labelKey: "nav.admin", icon: ShieldCheck, badgeKey: "nav.badge_admin", badgeColor: "#FB7185" },
 ];
 const SUPER_ADMIN_NAV = [
-  { path: "/super-admin",            label: "Super Admin",   icon: Crown,  badge: "SA",  badgeColor: "#F59E0B" },
-  { path: "/queue-mission-control",  label: "Queue Control", icon: Cpu,    badge: "OPS", badgeColor: "#8B5CF6" },
+  { path: "/super-admin",            labelKey: "nav.super_admin",   icon: Crown,  badgeKey: "nav.badge_sa",  badgeColor: "#F59E0B" },
+  { path: "/queue-mission-control",  labelKey: "nav.queue_control", icon: Cpu,    badgeKey: "nav.badge_ops", badgeColor: "#8B5CF6" },
 ];
 
-/* ── Nav sections — groups with labels ──────────────────────────────── */
+/* ── Nav sections — groups with sectionKey resolved via t() ──────────── */
 const NAV_SECTIONS = [
   {
-    label: "MAIN",
+    sectionKey: "nav.section_main",
     items: ["/dashboard", "/workflows", "/automations"],
   },
   {
-    label: "AI & CONTENT",
+    sectionKey: "nav.section_ai_content",
     items: ["/ai-chat", "/knowledge-hub", "/news", "/dashboard/creative-agents"],
   },
   {
-    label: "PLATFORM",
+    sectionKey: "nav.section_platform",
     items: ["/connections", "/intelligence", "/plans", "/referrals", "/settings"],
   },
   {
-    label: "DEVELOPER",
+    sectionKey: "nav.section_developer",
     items: ["/node-library", "/credentials", "/webhooks"],
   },
   {
-    label: "INSIGHTS",
+    sectionKey: "nav.section_insights",
     items: ["/analytics", "/media-cloud", "/reports"],
   },
 ];
@@ -111,18 +112,20 @@ const STATUS_COLORS: Record<string, string> = {
 function NavItem({
   item, active, isCollapsed, isMobile, onClose,
 }: {
-  item: typeof NAV[0] & { badge?: string; badgeColor?: string };
+  item: typeof NAV[0] & { badgeKey?: string; badgeColor?: string };
   active: boolean;
   isCollapsed: boolean;
   isMobile: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const Icon = item.icon;
+  const label = t(item.labelKey);
   return (
     <Link
       to={item.path}
       onClick={isMobile ? onClose : undefined}
-      title={isCollapsed ? item.label : undefined}
+      title={isCollapsed ? label : undefined}
       style={{
         display: "flex",
         alignItems: "center",
@@ -161,8 +164,8 @@ function NavItem({
       />
       {!isCollapsed && (
         <>
-          <span style={{ flex: 1, letterSpacing: "-0.01em" }}>{item.label}</span>
-          {item.badge && (
+          <span style={{ flex: 1, letterSpacing: "-0.01em" }}>{label}</span>
+          {item.badgeKey && (
             <span style={{
               fontSize: 9,
               fontWeight: 800,
@@ -174,7 +177,7 @@ function NavItem({
               fontFamily: "'DM Mono', monospace",
               letterSpacing: "0.04em",
             }}>
-              {item.badge}
+              {t(item.badgeKey)}
             </span>
           )}
         </>
@@ -195,6 +198,7 @@ function SidebarContent({
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const { status, latency } = useServerStatus();
+  const { t } = useTranslation();
 
   const role = user?.role ?? "user";
   const isCollapsed = !isMobile && collapsed;
@@ -208,10 +212,10 @@ function SidebarContent({
   const navByPath = Object.fromEntries(allNav.map(n => [n.path, n]));
 
   const statusLabel =
-    status === "online"   ? `Online${latency ? ` · ${latency}ms` : ""}` :
-    status === "waking"   ? "Waking up…" :
-    status === "checking" ? "Checking…" :
-    status === "offline"  ? "Offline" : "Checking…";
+    status === "online"   ? `${t('shell.status_online')}${latency ? ` · ${latency}ms` : ""}` :
+    status === "waking"   ? t('shell.status_waking') :
+    status === "checking" ? t('shell.status_checking') :
+    status === "offline"  ? t('shell.status_offline') : t('shell.status_checking');
 
   const roleBadge = getRoleBadge(role);
 
@@ -313,7 +317,7 @@ function SidebarContent({
                 .filter(Boolean);
               if (sectionItems.length === 0) return null;
               return (
-                <div key={section.label} style={{ marginBottom: 4 }}>
+                <div key={section.sectionKey} style={{ marginBottom: 4 }}>
                   <div style={{
                     fontSize: 9, fontWeight: 700,
                     color: T.muted,
@@ -321,7 +325,7 @@ function SidebarContent({
                     letterSpacing: "0.08em",
                     padding: "10px 14px 4px",
                   }}>
-                    {section.label}
+                    {t(section.sectionKey)}
                   </div>
                   {sectionItems.map(item => {
                     const active = pathname === item.path ||
@@ -350,7 +354,7 @@ function SidebarContent({
                   fontFamily: "'DM Mono', monospace",
                   letterSpacing: "0.08em",
                   padding: "10px 14px 4px",
-                }}>STAFF</div>
+                }}>{t('nav.section_staff')}</div>
                 {staffPaths.map(p => {
                   const item = navByPath[p];
                   if (!item) return null;
@@ -455,7 +459,7 @@ function SidebarContent({
                 fontFamily: "'DM Sans', sans-serif",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
-                {user?.name || "User"}
+                {user?.name || t('shell.user_fallback')}
               </div>
               {roleBadge && (
                 <div style={{
@@ -471,7 +475,7 @@ function SidebarContent({
             </div>
             <button
               onClick={logout}
-              title="Log out"
+              title={t('shell.log_out')}
               style={{
                 background: "transparent", border: "none",
                 color: T.muted, cursor: "pointer",
@@ -499,6 +503,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const location = useLocation();
   const nav = useNavigate();
+  const { t } = useTranslation();
 
   /* Invite token re-route (unchanged) */
   useEffect(() => {
@@ -622,9 +627,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             color: "#FB7185",
             flexShrink: 0,
           }}>
-            Your free trial has ended.{" "}
+            {t('shell.trial_ended_banner')}{" "}
             <a href="/plans" style={{ color: "#FB7185", fontWeight: 700, textDecoration: "underline" }}>
-              Subscribe to restore access →
+              {t('shell.subscribe_restore')}
             </a>
           </div>
         )}
