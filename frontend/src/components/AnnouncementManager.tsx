@@ -47,6 +47,8 @@ export default function AnnouncementManager() {
   });
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function load() {
     const r = await authFetch("/announcements/admin");
@@ -55,7 +57,11 @@ export default function AnnouncementManager() {
   useEffect(() => { load(); }, []);
 
   async function save(activate_now = false) {
+    if (!form.title.trim()) { setError("Title is required."); return; }
+    if (!form.body.trim())  { setError("Body is required."); return; }
     setSaving(true);
+    setError(null);
+    setSuccess(null);
     try {
       const payload: any = { ...form, activate_now };
       ["scheduled_for","expires_at","action_url"].forEach(k => { if (!payload[k]) payload[k] = null; });
@@ -65,8 +71,14 @@ export default function AnnouncementManager() {
       if (r.ok) {
         setForm({ title:"", body:"", type:"informational", priority:"normal", scheduled_for:"", expires_at:"", send_email:false, action_url:"" });
         setEditingId(null);
+        setSuccess(activate_now ? "Announcement created and activated!" : "Announcement saved as draft.");
         load();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d?.error || `Server error (${r.status})`);
       }
+    } catch (e: any) {
+      setError(e?.message || "Network error — check your connection.");
     } finally { setSaving(false); }
   }
 
@@ -147,6 +159,8 @@ export default function AnnouncementManager() {
               </button>
             )}
           </div>
+          {error   && <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(251,113,133,0.1)", border: "1px solid rgba(251,113,133,0.25)", color: "#FB7185", fontSize: 12, fontFamily: "'DM Sans',sans-serif" }}>{error}</div>}
+          {success && <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.2)", color: "#00C896", fontSize: 12, fontFamily: "'DM Sans',sans-serif" }}>{success}</div>}
         </div>
       </div>
 
