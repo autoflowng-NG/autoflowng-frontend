@@ -123,7 +123,19 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   const addNode = (type: string) => {
     const nt = NODE_TYPES.find(n => n.type === type)!;
-    const newNode: Node = { id: `n${nextId.current++}`, type, label: nt.label, x: 100 + Math.random() * 200, y: 100 + Math.random() * 200, config: {} };
+    // Place new nodes in a visible column starting at x=20, stacked vertically
+    // so they never overflow off the right edge on mobile
+    const existingCount = nodes.length;
+    const col = Math.floor(existingCount / 4);
+    const row = existingCount % 4;
+    const newNode: Node = {
+      id: `n${nextId.current++}`,
+      type,
+      label: nt.label,
+      x: 20 + col * 170,  // start at 20px from left, step right per column
+      y: 30 + row * 90,   // stack vertically with 90px gap
+      config: {},
+    };
     setNodes(ns => [...ns, newNode]);
   };
 

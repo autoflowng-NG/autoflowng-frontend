@@ -535,21 +535,23 @@ export default function AIChat() {
   const sessions: Session[] = sessionsData || [];
   const activeSession = sessions.find(s => s.session_id === session) || null;
 
-  /* Load history (preserved exactly) */
+  /* Load history — useEffect instead of onSuccess (onSuccess removed in React Query v5) */
   const { data: history } = useQuery({
     queryKey: queryKeys.aiHistory(session),
     queryFn:  () => aiAPI.history(session, 60).then((d: any) => d.messages || []),
-    onSuccess: (data: any[]) => {
-      if (data.length > 0 && msgs.length === 0) {
-        setMsgs(data.map((m: any, i: number) => ({
-          role: m.role,
-          content: m.content || m.message,
-          id: m.id || String(i),
-          ts: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
-        })));
-      }
-    },
-  } as any);
+    staleTime: 0, // always re-fetch when session changes
+  });
+
+  // Populate msgs whenever history data arrives for the current session
+  useEffect(() => {
+    if (!history || (history as any[]).length === 0) return;
+    setMsgs((history as any[]).map((m: any, i: number) => ({
+      role: m.role,
+      content: m.content || m.message,
+      id: m.id || String(i),
+      ts: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+    })));
+  }, [history]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -595,8 +597,8 @@ export default function AIChat() {
   };
 
   const switchSession = (id: string) => {
+    setMsgs([]); // clear first so useEffect repopulates from fresh history fetch
     setSession(id);
-    setMsgs([]); // history query will reload for new session
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
