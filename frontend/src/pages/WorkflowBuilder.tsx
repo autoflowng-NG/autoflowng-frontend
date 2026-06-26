@@ -20,8 +20,210 @@ const NODE_TYPES = [
   { type: "database",  label: "Database",    icon: Database,     color: "#00C896" },
 ];
 
+// Trigger types surfaced in the Config tab picker.
+// Excludes WhatsApp/Facebook/Telegram/event/news_trigger/cron — those either
+// have no builder-facing config story yet or are managed elsewhere.
+const TRIGGER_TYPES = [
+  { value: "manual",                   label: "Manual" },
+  { value: "schedule",                 label: "Schedule" },
+  { value: "webhook",                  label: "Webhook" },
+  { value: "gmail_new_email",          label: "Gmail — New Email" },
+  { value: "gmail_new_email_matching", label: "Gmail — New Email (Filtered)" },
+  { value: "slack_new_message",        label: "Slack — New Message" },
+  { value: "slack_mention",            label: "Slack — Mentioned" },
+  { value: "twitter_new_mention",      label: "Twitter/X — New Mention" },
+  { value: "twitter_new_dm",           label: "Twitter/X — New DM" },
+  { value: "linkedin_new_comment",     label: "LinkedIn — New Comment" },
+  { value: "linkedin_new_connection",  label: "LinkedIn — New Connection" },
+];
+
 interface Node { id: string; type: string; label: string; x: number; y: number; config?: any; }
 interface Edge { from: string; to: string; id: string; }
+
+// Shared input/label styles matching the existing Config tab style
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.09)",
+  borderRadius: 10,
+  padding: "10px 14px",
+  color: "#E8EEFF",
+  fontSize: 13,
+  fontFamily: "'DM Sans',sans-serif",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "rgba(232,238,255,0.5)",
+  fontFamily: "'DM Mono',monospace",
+  letterSpacing: "0.06em",
+  marginBottom: 6,
+  marginTop: 12,
+};
+
+/** Per-platform config fields rendered below the trigger-type selector. */
+function TriggerConfigFields({
+  triggerType,
+  triggerConfig,
+  setTriggerConfig,
+}: {
+  triggerType: string;
+  triggerConfig: Record<string, any>;
+  setTriggerConfig: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+}) {
+  const set = (key: string, value: any) =>
+    setTriggerConfig(c => ({ ...c, [key]: value }));
+
+  if (triggerType === "gmail_new_email" || triggerType === "gmail_new_email_matching") {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <label style={labelStyle}>FILTER: FROM (optional)</label>
+        <input
+          style={inputStyle}
+          value={triggerConfig.filter_from || ""}
+          placeholder="e.g. boss@company.com"
+          onChange={e => set("filter_from", e.target.value)}
+        />
+        <label style={labelStyle}>FILTER: LABEL (default: INBOX)</label>
+        <input
+          style={inputStyle}
+          value={triggerConfig.filter_label || ""}
+          placeholder="e.g. INBOX"
+          onChange={e => set("filter_label", e.target.value)}
+        />
+        {triggerType === "gmail_new_email_matching" && (
+          <>
+            <label style={labelStyle}>FILTER: SUBJECT CONTAINS</label>
+            <input
+              style={inputStyle}
+              value={triggerConfig.filter_subject || ""}
+              placeholder="e.g. Invoice"
+              onChange={e => set("filter_subject", e.target.value)}
+            />
+          </>
+        )}
+        <label style={labelStyle}>POLL INTERVAL (seconds, min 30)</label>
+        <input
+          type="number"
+          min={30}
+          style={inputStyle}
+          value={triggerConfig.poll_interval_seconds || 60}
+          onChange={e => set("poll_interval_seconds", Math.max(30, Number(e.target.value)))}
+        />
+      </div>
+    );
+  }
+
+  if (triggerType === "slack_new_message" || triggerType === "slack_mention") {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <label style={labelStyle}>CHANNEL ID (required)</label>
+        <input
+          style={{ ...inputStyle, borderColor: !triggerConfig.channel_id ? "rgba(251,113,133,0.4)" : undefined }}
+          value={triggerConfig.channel_id || ""}
+          placeholder="e.g. C0123456789"
+          onChange={e => set("channel_id", e.target.value)}
+        />
+        {!triggerConfig.channel_id && (
+          <div style={{ fontSize: 11, color: "#FB7185", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>
+            channel_id is required to activate this trigger
+          </div>
+        )}
+        <label style={labelStyle}>CHANNEL NAME (display only)</label>
+        <input
+          style={inputStyle}
+          value={triggerConfig.channel_name || ""}
+          placeholder="e.g. #general"
+          onChange={e => set("channel_name", e.target.value)}
+        />
+        <label style={labelStyle}>FILTER: MESSAGE CONTAINS (optional)</label>
+        <input
+          style={inputStyle}
+          value={triggerConfig.filter_text || ""}
+          placeholder="e.g. urgent"
+          onChange={e => set("filter_text", e.target.value)}
+        />
+        <label style={labelStyle}>POLL INTERVAL (seconds, min 15)</label>
+        <input
+          type="number"
+          min={15}
+          style={inputStyle}
+          value={triggerConfig.poll_interval_seconds || 30}
+          onChange={e => set("poll_interval_seconds", Math.max(15, Number(e.target.value)))}
+        />
+      </div>
+    );
+  }
+
+  if (triggerType === "twitter_new_mention" || triggerType === "twitter_new_dm") {
+    return (
+      <div style={{ marginTop: 4 }}>
+        {triggerType === "twitter_new_mention" && (
+          <>
+            <label style={labelStyle}>FILTER: TWEET CONTAINS (optional)</label>
+            <input
+              style={inputStyle}
+              value={triggerConfig.filter_text || ""}
+              placeholder="e.g. help"
+              onChange={e => set("filter_text", e.target.value)}
+            />
+          </>
+        )}
+        <label style={labelStyle}>POLL INTERVAL (seconds, min 60)</label>
+        <input
+          type="number"
+          min={60}
+          style={inputStyle}
+          value={triggerConfig.poll_interval_seconds || 120}
+          onChange={e => set("poll_interval_seconds", Math.max(60, Number(e.target.value)))}
+        />
+        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>
+          Twitter enforces strict rate limits — intervals under 60s will be clamped.
+        </div>
+      </div>
+    );
+  }
+
+  if (triggerType === "linkedin_new_comment" || triggerType === "linkedin_new_connection") {
+    return (
+      <div style={{ marginTop: 4 }}>
+        {triggerType === "linkedin_new_comment" && (
+          <>
+            <label style={labelStyle}>POST URN / POST ID (required)</label>
+            <input
+              style={{ ...inputStyle, borderColor: !triggerConfig.post_id ? "rgba(251,113,133,0.4)" : undefined }}
+              value={triggerConfig.post_id || ""}
+              placeholder="e.g. urn:li:activity:123456789"
+              onChange={e => set("post_id", e.target.value)}
+            />
+            {!triggerConfig.post_id && (
+              <div style={{ fontSize: 11, color: "#FB7185", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>
+                post_id is required to activate linkedin_new_comment
+              </div>
+            )}
+          </>
+        )}
+        <label style={labelStyle}>POLL INTERVAL (seconds, min 120)</label>
+        <input
+          type="number"
+          min={120}
+          style={inputStyle}
+          value={triggerConfig.poll_interval_seconds || 300}
+          onChange={e => set("poll_interval_seconds", Math.max(120, Number(e.target.value)))}
+        />
+        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>
+          LinkedIn enforces strict rate limits — intervals under 120s will be clamped.
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 function NodeBox({ node, selected, onSelect, onDelete }: { node: Node; selected: boolean; onSelect: (id: string) => void; onDelete: (id: string) => void; }) {
   const nt = NODE_TYPES.find(n => n.type === node.type) || NODE_TYPES[1];
@@ -112,9 +314,16 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   let nextId = useRef(1);
 
+  // Trigger type and per-platform config state
+  const [triggerType, setTriggerType]     = useState("manual");
+  const [triggerConfig, setTriggerConfig] = useState<Record<string, any>>({});
+
   useEffect(() => {
     if (!data) return;
     setName((data as any).name || "Workflow");
+    // Hydrate trigger state from saved workflow
+    setTriggerType((data as any).trigger_type || "manual");
+    setTriggerConfig((data as any).trigger_config || {});
     const ns = (data as any).nodes || [];
     const es = (data as any).edges || [];
     setNodes(ns.map((n: any, i: number) => ({ id: n.id || `n${i}`, type: n.type || "action", label: n.label || n.name || "Node", x: n.x ?? 80 + i * 180, y: n.y ?? 150, config: n.config || {} })));
@@ -123,8 +332,6 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   const addNode = (type: string) => {
     const nt = NODE_TYPES.find(n => n.type === type)!;
-    // Place new nodes in a visible column starting at x=20, stacked vertically
-    // so they never overflow off the right edge on mobile
     const existingCount = nodes.length;
     const col = Math.floor(existingCount / 4);
     const row = existingCount % 4;
@@ -132,8 +339,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       type,
       label: nt.label,
-      x: 20 + col * 170,  // start at 20px from left, step right per column
-      y: 30 + row * 90,   // stack vertically with 90px gap
+      x: 20 + col * 170,
+      y: 30 + row * 90,
       config: {},
     };
     setNodes(ns => [...ns, newNode]);
@@ -148,7 +355,35 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const save = async () => {
     setSaving(true);
     try {
-      await updateWF.mutateAsync({ name, nodes, edges });
+      // Validate platform trigger config before saving (non-blocking on warnings).
+      // Note: this call intentionally omits `steps` — this screen never computes
+      // step objects client-side (nodesToSteps() only exists server-side in
+      // routes/workflows.js), so sending `steps: []` would make validateWorkflow()
+      // believe there are zero real steps and validate against that, which is
+      // misleading. Omitting the field entirely makes validateWorkflow() skip
+      // step-level checks, which is the honest behavior since this call only
+      // cares about trigger_type/trigger_config validity.
+      if (triggerType !== "manual" && triggerType !== "schedule" && triggerType !== "webhook") {
+        try {
+          const validation = await workflowsAPI.validate({
+            name,
+            trigger_type: triggerType,
+            trigger_config: triggerConfig,
+          });
+          if (validation.errors && validation.errors.length > 0) {
+            toast({ title: "Cannot save", description: validation.errors.join("; "), variant: "destructive" });
+            setSaving(false);
+            return;
+          }
+          if (validation.warnings && validation.warnings.length > 0) {
+            toast({ title: "Saved with warnings", description: validation.warnings.join("; ") });
+          }
+        } catch {
+          // Validation endpoint unavailable — proceed with save anyway
+        }
+      }
+      // Include trigger_type and trigger_config in the save payload
+      await updateWF.mutateAsync({ name, nodes, edges, trigger_type: triggerType, trigger_config: triggerConfig });
       toast({ title: "Saved!", description: "Workflow updated." });
     } catch (e: any) {
       toast({ title: "Save failed", description: e?.message, variant: "destructive" });
@@ -284,14 +519,64 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
             <div className="af-glass" style={{ borderRadius: 16, padding: "24px", maxWidth: 600 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 20 }}>Workflow Settings</div>
+
+              {/* Workflow name */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>NAME</label>
                 <input value={name} onChange={e => setName(e.target.value)} data-testid="input-config-name" style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "10px 14px", color: "#E8EEFF", fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
               </div>
+
+              {/* Trigger type selector */}
+              <div style={{ marginBottom: 4 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>TRIGGER TYPE</label>
+                <select
+                  value={triggerType}
+                  onChange={e => {
+                    setTriggerType(e.target.value);
+                    // Reset platform config when switching trigger types
+                    setTriggerConfig({});
+                  }}
+                  style={{
+                    width: "100%",
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.09)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    color: "#E8EEFF",
+                    fontSize: 13,
+                    fontFamily: "'DM Sans',sans-serif",
+                    outline: "none",
+                    cursor: "pointer",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {TRIGGER_TYPES.map(tt => (
+                    <option key={tt.value} value={tt.value} style={{ background: "#04060F" }}>
+                      {tt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Per-platform config fields */}
+              <div style={{ marginBottom: 24 }}>
+                <TriggerConfigFields
+                  triggerType={triggerType}
+                  triggerConfig={triggerConfig}
+                  setTriggerConfig={setTriggerConfig}
+                />
+              </div>
+
+              {/* Statistics */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 12 }}>STATISTICS</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {[{ label: "Total Nodes", val: nodes.length }, { label: "Connections", val: edges.length }, { label: "Trigger", val: (data as any)?.trigger_type || "Manual" }, { label: "Status", val: (data as any)?.is_active ? "Active" : "Paused" }].map(s => (
+                  {[
+                    { label: "Total Nodes", val: nodes.length },
+                    { label: "Connections", val: edges.length },
+                    { label: "Trigger", val: TRIGGER_TYPES.find(t => t.value === triggerType)?.label || triggerType },
+                    { label: "Status", val: (data as any)?.is_active ? "Active" : "Paused" },
+                  ].map(s => (
                     <div key={s.label} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 14px" }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#00C896", fontFamily: "'DM Mono',monospace" }}>{s.val}</div>
                       <div style={{ fontSize: 11, color: "rgba(232,238,255,0.35)" }}>{s.label}</div>
@@ -299,6 +584,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                   ))}
                 </div>
               </div>
+
               <button onClick={save} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8, background: "#00C896", border: "none", borderRadius: 10, padding: "10px 20px", color: "#04060F", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
                 <Save size={14} /> {saving ? "Saving…" : "Save Changes"}
               </button>
