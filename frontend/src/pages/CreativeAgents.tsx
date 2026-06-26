@@ -576,12 +576,12 @@ function RecentQuickGeneratesPanel({ onResumeTracking }: { onResumeTracking: (ai
                   </div>
                 </div>
               </div>
-              {isDone && asset.public_url && (
+              {isDone && (asset.public_url || asset.presigned_url) && (
                 <div style={{ marginTop: 10 }}>
-                  <video src={asset.public_url} controls style={{ width: '100%', borderRadius: 8, maxHeight: 200, background: '#000' }} />
+                  <video src={asset.public_url || asset.presigned_url} controls style={{ width: '100%', borderRadius: 8, maxHeight: 200, background: '#000' }} />
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <a href="/media-cloud" style={{ fontSize: 11, color: C.green, textDecoration: 'none', fontFamily: "'DM Mono',monospace" }}>Open in Media Cloud →</a>
-                    <a href={asset.public_url} download style={{ fontSize: 11, color: C.muted, textDecoration: 'none', fontFamily: "'DM Mono',monospace" }}>⬇️ Download</a>
+                    <a href={asset.public_url || asset.presigned_url} download style={{ fontSize: 11, color: C.muted, textDecoration: 'none', fontFamily: "'DM Mono',monospace" }}>⬇️ Download</a>
                   </div>
                 </div>
               )}
