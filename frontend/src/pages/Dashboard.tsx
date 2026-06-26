@@ -15,9 +15,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
-import { analyticsAPI, workflowsAPI, automationsAPI } from "../lib/api";
+import { analyticsAPI, workflowsAPI, automationsAPI, systemHealthAPI, resourceUsageAPI } from "../lib/api";
 import { queryKeys } from "../lib/queryClient";
 import { Reveal } from "../components/Reveal";
 import { useLiveEvents, type LiveEvent, type LiveEventType, type LiveEventStatus } from "../hooks/useLiveEvents";
@@ -242,6 +243,7 @@ function StatusBadge({ status }: { status: string }) {
 
 /* ── Row action menu ───────────────────────────────────────────────── */
 function RowActionMenu({ run, onViewDetails }: { run: any; onViewDetails: () => void }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const nav = useNavigate();
@@ -253,10 +255,10 @@ function RowActionMenu({ run, onViewDetails }: { run: any; onViewDetails: () => 
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
   const actions = [
-    { label: "View Details", icon: Eye,       fn: () => { onViewDetails(); setOpen(false); } },
-    { label: "Re-run",       icon: RotateCcw, fn: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
-    { label: "View Logs",    icon: FileText,  fn: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
-    { label: "Cancel",       icon: XIcon,     fn: () => setOpen(false), danger: true },
+    { label: t('dashboard.action_view_details'), icon: Eye,       fn: () => { onViewDetails(); setOpen(false); } },
+    { label: t('dashboard.action_rerun'),       icon: RotateCcw, fn: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
+    { label: t('dashboard.action_view_logs'),    icon: FileText,  fn: () => { if (runId) nav(`/executions/${runId}`); setOpen(false); } },
+    { label: t('dashboard.action_cancel'),       icon: XIcon,     fn: () => setOpen(false), danger: true },
   ];
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -306,6 +308,7 @@ function RowActionMenu({ run, onViewDetails }: { run: any; onViewDetails: () => 
 function RecentRunsTable({ runs, loading, onRowClick }: {
   runs: any[]; loading: boolean; onRowClick: (r: any) => void;
 }) {
+  const { t } = useTranslation();
   const fmtTs = (ts: any) => {
     if (!ts) return "—";
     const d = new Date(ts);
@@ -324,15 +327,18 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
 
   return (
     <div>
-      <SectionHeader title="Recent Workflow Runs" sub="EXECUTION HISTORY · LIVE DATA" />
+      <SectionHeader title={t('dashboard.recent_workflow_runs')} sub={t('dashboard.execution_history_live')} />
       {/* Header row */}
       <div style={{
         display: "grid", gridTemplateColumns: COL,
         gap: 8, padding: "4px 10px 8px",
         borderBottom: `1px solid ${C.border}`, marginBottom: 4,
       }}>
-        {["RUN ID", "WORKFLOW", "STARTED", "DURATION", "STATUS", "ERROR", ""].map(h => (
-          <div key={h} style={{ fontSize: 9, fontWeight: 800, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>{h}</div>
+        {[
+          t('dashboard.col_run_id'), t('dashboard.col_workflow'), t('dashboard.col_started'),
+          t('dashboard.col_duration'), t('dashboard.col_status'), t('dashboard.col_error'), "",
+        ].map((h, idx) => (
+          <div key={`${h}-${idx}`} style={{ fontSize: 9, fontWeight: 800, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>{h}</div>
         ))}
       </div>
       {loading ? (
@@ -341,7 +347,7 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
         </div>
       ) : runs.length === 0 ? (
         <div style={{ textAlign: "center", padding: "40px 0", color: C.faint, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
-          No recent runs yet.
+          {t('dashboard.no_recent_runs')}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -365,11 +371,11 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
               >
                 <div style={{ fontSize: 10, color: C.blue, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortId(run.id || run.run_id)}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.workflow_name || run.name || "Workflow run"}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.workflow_name || run.name || t('dashboard.workflow_run_fallback')}</div>
                 <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>{fmtTs(run.started_at || run.created_at)}</div>
                 <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace" }}>{fmtDur(run.duration || run.duration_ms)}</div>
                 <StatusBadge status={st} />
-                <div style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: run.error ? 1 : 0.15 }}>{run.error || "none"}</div>
+                <div style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: run.error ? 1 : 0.15 }}>{run.error || t('dashboard.error_none')}</div>
                 <div onClick={e => e.stopPropagation()}><RowActionMenu run={run} onViewDetails={() => onRowClick(run)} /></div>
               </motion.div>
             );
@@ -393,16 +399,17 @@ const EV_META: Record<LiveEventType, { icon: any; color: string }> = {
 const LS_C: Record<LiveEventStatus, string> = { success: C.green, failed: C.red, running: C.blue, pending: C.amber };
 const LS_I: Record<LiveEventStatus, any>    = { success: CheckCircle2, failed: XCircle, running: RefreshCw, pending: Clock };
 
-function relTime(ts: number) {
+function relTime(ts: number, t: (key: string, opts?: any) => string) {
   const d = Math.floor((Date.now() - ts) / 1000);
-  if (d < 5) return "just now";
-  if (d < 60) return `${d}s ago`;
-  if (d < 3600) return `${Math.floor(d / 60)}m ago`;
-  return `${Math.floor(d / 3600)}h ago`;
+  if (d < 5) return t('dashboard.just_now');
+  if (d < 60) return t('dashboard.seconds_ago', { count: d });
+  if (d < 3600) return t('dashboard.minutes_ago', { count: Math.floor(d / 60) });
+  return t('dashboard.hours_ago', { count: Math.floor(d / 3600) });
 }
 
 /* ── Live event row ────────────────────────────────────────────────── */
 function EventRow({ ev, isNew, onClick }: { ev: LiveEvent; isNew: boolean; onClick?: () => void }) {
+  const { t } = useTranslation();
   const meta  = EV_META[ev.type] ?? EV_META.generic;
   const sc    = LS_C[ev.status];
   const SIcon = LS_I[ev.status];
@@ -441,7 +448,7 @@ function EventRow({ ev, isNew, onClick }: { ev: LiveEvent; isNew: boolean; onCli
           <SIcon size={9} color={sc} style={ev.status === "running" ? { animation: "spin-slow 1s linear infinite" } : undefined} />
           <span style={{ fontSize: 8, fontWeight: 800, color: sc, fontFamily: "'DM Mono',monospace" }}>{ev.status.toUpperCase()}</span>
         </div>
-        <span style={{ fontSize: 8, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{relTime(ev.ts)}</span>
+        <span style={{ fontSize: 8, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{relTime(ev.ts, t)}</span>
       </div>
     </motion.div>
   );
@@ -449,6 +456,7 @@ function EventRow({ ev, isNew, onClick }: { ev: LiveEvent; isNew: boolean; onCli
 
 /* ── Live event feed ───────────────────────────────────────────────── */
 function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
+  const { t } = useTranslation();
   const { events, isConnected, clearEvents } = useLiveEvents();
   const hasRunning  = events.some(e => e.status === "running");
   const newEventIds = events.slice(0, 3).map(e => e.id);
@@ -459,8 +467,8 @@ function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
       <ExecutionGlowBar running={hasRunning} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.02em" }}>Live Orchestration</div>
-          <div style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>REALTIME EVENTS</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.02em" }}>{t('dashboard.live_orchestration')}</div>
+          <div style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>{t('dashboard.realtime_events')}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <PulseRing active={isConnected} color={C.green} size={8} />
@@ -469,7 +477,7 @@ function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
               onClick={clearEvents}
               style={{ fontSize: 9, color: C.faint, background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace" }}
             >
-              clear
+              {t('dashboard.clear')}
             </button>
           )}
         </div>
@@ -491,7 +499,7 @@ function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
                 <Radio size={14} color="rgba(0,200,150,0.4)" />
               </div>
               <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Sans',sans-serif", textAlign: "center" }}>
-                {isConnected ? "Listening for orchestration events…" : "Waiting for connection…"}
+                {isConnected ? t('dashboard.listening_for_events') : t('dashboard.waiting_for_connection')}
               </div>
             </motion.div>
           ) : (
@@ -503,7 +511,7 @@ function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
       </div>
       {events.length > 0 && (
         <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace" }}>
-          {events.length} event{events.length !== 1 ? "s" : ""} · live feed
+          {events.length} {events.length !== 1 ? t('dashboard.event_count_plural') : t('dashboard.event_count_singular')} · {t('dashboard.live_feed')}
         </div>
       )}
     </Card>
@@ -511,49 +519,90 @@ function LiveEventFeed({ onEventClick }: { onEventClick: (ev: any) => void }) {
 }
 
 /* ── System Health Panel ───────────────────────────────────────────── */
-const SERVICES = [
-  { name: "API Gateway",       icon: Server },
-  { name: "Workflow Engine",   icon: GitBranch },
-  { name: "AI Services",       icon: Cpu },
-  { name: "Database",          icon: Database },
-  { name: "Redis Cluster",     icon: Activity },
-  { name: "WebSocket Gateway", icon: Radio },
-];
+// FIX: this card used to render a static SERVICES array where every
+// single entry was hardcoded to render the "Operational" badge — meaning
+// the card claimed all 6 services were healthy regardless of actual
+// system state, even during a real outage. It now calls
+// GET /api/system/health/summary (added in routes/health.js), which
+// performs real checks: a live DB query, a Redis ping, BullMQ queue
+// health, WebSocket stats, and AI-provider failure tracking — and
+// renders whatever that endpoint actually reports.
+const SERVICE_META: Record<string, { icon: any; labelKey: string }> = {
+  api_gateway:       { icon: Server,    labelKey: "dashboard.svc_api_gateway" },
+  workflow_engine:   { icon: GitBranch, labelKey: "dashboard.svc_workflow_engine" },
+  ai_services:       { icon: Cpu,       labelKey: "dashboard.svc_ai_services" },
+  database:          { icon: Database,  labelKey: "dashboard.svc_database" },
+  redis_cluster:     { icon: Activity,  labelKey: "dashboard.svc_redis_cluster" },
+  websocket_gateway: { icon: Radio,     labelKey: "dashboard.svc_websocket_gateway" },
+};
+
+const STATUS_BADGE_COLOR: Record<string, string> = {
+  operational: C.green,
+  degraded:    C.amber,
+  down:        C.red,
+  unknown:     C.faint,
+};
 
 function SystemHealth() {
+  const { t } = useTranslation();
+  const { data, isLoading } = useQuery({
+    queryKey: ["system-health-summary"],
+    queryFn:  () => systemHealthAPI.summary().then((d: any) => d.services || []),
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
+  });
+
+  const services: Array<{ key: string; status: string }> = data ?? [];
+  const statusLabelKey: Record<string, string> = {
+    operational: "dashboard.status_operational",
+    degraded:    "dashboard.status_degraded",
+    down:        "dashboard.status_down",
+    unknown:     "dashboard.status_unknown",
+  };
+
   return (
     <Card>
-      <SectionHeader title="System Health" sub="ALL SERVICES" />
+      <SectionHeader title={t('dashboard.system_health')} sub={t('dashboard.all_services')} />
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {SERVICES.map(svc => (
-          <div
-            key={svc.name}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "8px 10px", borderRadius: 8,
-              background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{
-                width: 24, height: 24, borderRadius: 6,
-                background: "rgba(0,200,150,0.08)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <svc.icon size={11} color={C.green} />
+        {isLoading ? (
+          [0, 1, 2, 3, 4, 5].map(i => <Sk key={i} h={40} r={8} />)
+        ) : (
+          Object.keys(SERVICE_META).map(key => {
+            const meta = SERVICE_META[key];
+            const svc = services.find(s => s.key === key);
+            const status = svc?.status ?? "unknown";
+            const color = STATUS_BADGE_COLOR[status] ?? C.faint;
+            return (
+              <div
+                key={key}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "8px 10px", borderRadius: 8,
+                  background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: 6,
+                    background: `${color}14`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <meta.icon size={11} color={color} />
+                  </div>
+                  <span style={{ fontSize: 12, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>{t(meta.labelKey)}</span>
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color,
+                  background: `${color}14`, border: `1px solid ${color}30`,
+                  borderRadius: 100, padding: "2px 8px",
+                  fontFamily: "'DM Mono',monospace",
+                }}>
+                  {t(statusLabelKey[status] ?? "dashboard.status_unknown")}
+                </span>
               </div>
-              <span style={{ fontSize: 12, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>{svc.name}</span>
-            </div>
-            <span style={{
-              fontSize: 10, fontWeight: 700, color: C.green,
-              background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)",
-              borderRadius: 100, padding: "2px 8px",
-              fontFamily: "'DM Mono',monospace",
-            }}>
-              Operational
-            </span>
-          </div>
-        ))}
+            );
+          })
+        )}
       </div>
     </Card>
   );
@@ -561,44 +610,48 @@ function SystemHealth() {
 
 /* ── Quick Actions ─────────────────────────────────────────────────── */
 const ACTIONS = [
-  { label: "New Workflow",   icon: GitBranch, path: "/workflows",   color: C.green },
-  { label: "New Automation", icon: Zap,       path: "/automations", color: C.blue },
-  { label: "Ask AI",         icon: Bot,       path: "/ai-chat",     color: C.purple },
-  { label: "View Plans",     icon: BarChart2, path: "/plans",       color: C.amber },
+  { labelKey: "dashboard.qa_new_workflow",   icon: GitBranch, path: "/workflows",   color: C.green },
+  { labelKey: "dashboard.qa_new_automation", icon: Zap,       path: "/automations", color: C.blue },
+  { labelKey: "dashboard.qa_ask_ai",         icon: Bot,       path: "/ai-chat",     color: C.purple },
+  { labelKey: "dashboard.qa_view_plans",     icon: BarChart2, path: "/plans",       color: C.amber },
 ];
 
 function QuickActions({ onNav }: { onNav: (path: string) => void }) {
+  const { t } = useTranslation();
   return (
     <Card>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 12 }}>
-        QUICK ACTIONS
+        {t('dashboard.quick_actions')}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {ACTIONS.map(a => (
-          <button
-            key={a.label}
-            data-testid={`quick-action-${a.label.toLowerCase().replace(/\s/g, "-")}`}
-            onClick={() => onNav(a.path)}
-            style={{
-              display: "flex", alignItems: "center", gap: 10,
-              background: `${a.color}08`, border: `1px solid ${a.color}20`,
-              borderRadius: 9, padding: "10px 14px", cursor: "pointer",
-              color: C.text, fontFamily: "'DM Sans',sans-serif",
-              fontSize: 13, fontWeight: 500, transition: "all 0.15s", textAlign: "left",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}14`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}35`; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}08`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}20`; }}
-          >
-            <div style={{
-              width: 28, height: 28, borderRadius: 7,
-              background: `${a.color}12`, border: `1px solid ${a.color}25`,
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
-              <a.icon size={13} color={a.color} />
-            </div>
-            {a.label}
-          </button>
-        ))}
+        {ACTIONS.map(a => {
+          const label = t(a.labelKey);
+          return (
+            <button
+              key={a.labelKey}
+              data-testid={`quick-action-${label.toLowerCase().replace(/\s/g, "-")}`}
+              onClick={() => onNav(a.path)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: `${a.color}08`, border: `1px solid ${a.color}20`,
+                borderRadius: 9, padding: "10px 14px", cursor: "pointer",
+                color: C.text, fontFamily: "'DM Sans',sans-serif",
+                fontSize: 13, fontWeight: 500, transition: "all 0.15s", textAlign: "left",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}14`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}35`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${a.color}08`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}20`; }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: 7,
+                background: `${a.color}12`, border: `1px solid ${a.color}25`,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <a.icon size={13} color={a.color} />
+              </div>
+              {label}
+            </button>
+          );
+        })}
       </div>
     </Card>
   );
@@ -606,19 +659,20 @@ function QuickActions({ onNav }: { onNav: (path: string) => void }) {
 
 /* ── Top Workflows ─────────────────────────────────────────────────── */
 function TopWorkflows({ workflows, loading, onNav }: { workflows: any[]; loading: boolean; onNav: (p: string) => void }) {
+  const { t } = useTranslation();
   const active = workflows.filter((w: any) => w.is_active);
   return (
     <Card>
-      <SectionHeader title="Your Workflows" sub={`${workflows.length} TOTAL`} action="View all" onAction={() => onNav("/workflows")} />
+      <SectionHeader title={t('dashboard.your_workflows')} sub={`${workflows.length} ${t('dashboard.total_suffix')}`} action={t('dashboard.view_all')} onAction={() => onNav("/workflows")} />
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {[0, 1, 2, 3].map(i => <Sk key={i} h={44} r={8} />)}
         </div>
       ) : workflows.length === 0 ? (
         <div style={{ textAlign: "center", padding: "36px 0", color: C.faint, fontSize: 13 }}>
-          No workflows yet.{" "}
+          {t('dashboard.no_workflows_yet')}{" "}
           <button onClick={() => onNav("/workflows")} style={{ background: "none", border: "none", color: C.purple, cursor: "pointer", fontWeight: 600 }}>
-            Create your first →
+            {t('dashboard.create_your_first')}
           </button>
         </div>
       ) : (
@@ -651,7 +705,7 @@ function TopWorkflows({ workflows, loading, onNav }: { workflows: any[]; loading
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wf.name}</div>
-                  <div style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{wf.trigger_type || "manual"}</div>
+                  <div style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{wf.trigger_type || t('dashboard.trigger_manual')}</div>
                 </div>
                 <span style={{
                   fontSize: 9, fontWeight: 800, color,
@@ -659,7 +713,7 @@ function TopWorkflows({ workflows, loading, onNav }: { workflows: any[]; loading
                   borderRadius: 100, padding: "2px 7px",
                   fontFamily: "'DM Mono',monospace",
                 }}>
-                  {isActive ? "ACTIVE" : "PAUSED"}
+                  {isActive ? t('dashboard.status_active') : t('dashboard.status_paused')}
                 </span>
               </button>
             );
@@ -671,10 +725,10 @@ function TopWorkflows({ workflows, loading, onNav }: { workflows: any[]; loading
 }
 
 /* ── Resource Usage ────────────────────────────────────────────────── */
-function ResourceMeter({ label, used, total, color, unit = "" }: {
-  label: string; used: number; total: number; color: string; unit?: string;
+function ResourceMeter({ label, percent, displayValue, color, unlimitedLabel }: {
+  label: string; percent: number | null; displayValue: string; color: string; unlimitedLabel: string;
 }) {
-  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+  const pct = percent ?? 0;
   const r = 26, stroke = 5, circ = 2 * Math.PI * r;
   const filled = (pct / 100) * circ;
   return (
@@ -682,25 +736,29 @@ function ResourceMeter({ label, used, total, color, unit = "" }: {
       <div style={{ position: "relative", width: 70, height: 70 }}>
         <svg width={70} height={70} style={{ transform: "rotate(-90deg)" }}>
           <circle cx={35} cy={35} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
-          <circle
-            cx={35} cy={35} r={r} fill="none"
-            stroke={color} strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${filled} ${circ - filled}`}
-            style={{ transition: "stroke-dasharray 0.8s ease" }}
-          />
+          {percent !== null && (
+            <circle
+              cx={35} cy={35} r={r} fill="none"
+              stroke={color} strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={`${filled} ${circ - filled}`}
+              style={{ transition: "stroke-dasharray 0.8s ease" }}
+            />
+          )}
         </svg>
         <div style={{
           position: "absolute", inset: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: C.text, fontFamily: "'Syne',sans-serif" }}>{pct}%</span>
+          <span style={{ fontSize: percent !== null ? 14 : 10, fontWeight: 800, color: C.text, fontFamily: "'Syne',sans-serif" }}>
+            {percent !== null ? `${percent}%` : "∞"}
+          </span>
         </div>
       </div>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>{label}</div>
         <div style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>
-          {used}{unit} / {total}{unit}
+          {percent !== null ? displayValue : unlimitedLabel}
         </div>
       </div>
     </div>
@@ -711,6 +769,7 @@ function ResourceMeter({ label, used, total, color, unit = "" }: {
 export default function Dashboard() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const { t } = useTranslation();
 
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: queryKeys.analytics("7d"),
@@ -729,6 +788,27 @@ export default function Dashboard() {
     queryKey: queryKeys.userStats,
     queryFn:  () => import("../lib/api").then(m => m.authAPI.stats()),
   });
+  // FIX: the Resource Usage card used to render hardcoded used={72}/58/64
+  // values with no backing data at all — see GET /api/dashboard/resource-usage
+  // (routes/dashboardResourceUsage.js) for the real computation against the
+  // plan limits already defined in config/plans.js.
+  const { data: resourceUsage, isLoading: loadingResourceUsage } = useQuery({
+    queryKey: ["dashboard-resource-usage"],
+    queryFn:  () => resourceUsageAPI.get(),
+    staleTime: 60 * 1000,
+  });
+  // FIX: the header's "All Systems Operational" badge used to render
+  // unconditionally regardless of actual system state — same bug class as
+  // the System Health card below. It now reflects the same real check.
+  const { data: healthSummary } = useQuery({
+    queryKey: ["system-health-summary"],
+    queryFn:  () => systemHealthAPI.summary().then((d: any) => d.services || []),
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
+  });
+  const allOperational = (healthSummary ?? []).length > 0 &&
+    (healthSummary ?? []).every((s: any) => s.status === "operational");
+  const anyDown = (healthSummary ?? []).some((s: any) => s.status === "down");
 
   const workflows   = wfData  || [];
   const automations = amData  || [];
@@ -793,21 +873,31 @@ export default function Dashboard() {
                 fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em",
                 color: C.text, margin: 0, lineHeight: 1.1,
               }}>
-                Welcome back, {user?.name?.split(" ")[0] || "there"} 👋
+                {t('dashboard.welcome', { name: user?.name?.split(" ")[0] || t('dashboard.welcome_fallback_name') })} 👋
               </h1>
               <p style={{ fontSize: 13, color: C.muted, fontFamily: "'DM Sans',sans-serif", margin: "6px 0 0" }}>
-                Your orchestration is running. Here's what's happening.
+                {t('dashboard.subtitle')}
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{
                 display: "flex", alignItems: "center", gap: 7,
-                background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.2)",
+                background: anyDown ? "rgba(239,68,68,0.08)" : allOperational ? "rgba(0,200,150,0.08)" : "rgba(245,158,11,0.08)",
+                border: `1px solid ${anyDown ? "rgba(239,68,68,0.2)" : allOperational ? "rgba(0,200,150,0.2)" : "rgba(245,158,11,0.2)"}`,
                 borderRadius: 100, padding: "6px 12px",
               }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block", boxShadow: `0 0 5px ${C.green}` }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.green, fontFamily: "'DM Mono',monospace" }}>
-                  All Systems Operational
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: anyDown ? C.red : allOperational ? C.green : C.amber,
+                  display: "inline-block",
+                  boxShadow: `0 0 5px ${anyDown ? C.red : allOperational ? C.green : C.amber}`,
+                }} />
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: anyDown ? C.red : allOperational ? C.green : C.amber,
+                  fontFamily: "'DM Mono',monospace",
+                }}>
+                  {anyDown ? t('dashboard.system_outage_detected') : allOperational ? t('dashboard.all_systems_operational') : t('dashboard.some_systems_degraded')}
                 </span>
               </div>
               <button
@@ -822,7 +912,7 @@ export default function Dashboard() {
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#6D28D9"}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#7C3AED"}
               >
-                <Plus size={14} /> Create
+                <Plus size={14} /> {t('dashboard.create')}
               </button>
             </div>
           </div>
@@ -842,13 +932,13 @@ export default function Dashboard() {
             (execution_metrics via GET /api/analytics), so those get a real
             week-over-week % and a real day-bucketed sparkline. */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(180px,100%),1fr))", gap: 14, marginBottom: 24 }}>
-          <KpiCard loading={loadingWF}    label="Active Workflows"   value={activeWF}    color={C.purple} icon={GitBranch} />
-          <KpiCard loading={loadingAM}    label="Active Automations" value={activeAM}    color={C.blue}   icon={Zap} />
-          <KpiCard loading={statsLoading} label="Events (7d)"        value={totalEvents}
-                    change={evChange ?? undefined} changeLabel={evChange !== null ? "vs prior period" : undefined}
+          <KpiCard loading={loadingWF}    label={t('dashboard.active_workflows')}   value={activeWF}    color={C.purple} icon={GitBranch} />
+          <KpiCard loading={loadingAM}    label={t('dashboard.active_automations')} value={activeAM}    color={C.blue}   icon={Zap} />
+          <KpiCard loading={statsLoading} label={t('dashboard.events_7d')}        value={totalEvents}
+                    change={evChange ?? undefined} changeLabel={evChange !== null ? t('dashboard.vs_prior_period') : undefined}
                     color={C.green} icon={Activity} sparkData={hasVolumeHistory ? totalsSpark : undefined} />
-          <KpiCard loading={statsLoading} label="AI Requests"        value={aiRequests}  color={C.amber}  icon={Bot} />
-          <KpiCard loading={statsLoading} label="Success Rate"
+          <KpiCard loading={statsLoading} label={t('dashboard.ai_requests')}        value={aiRequests}  color={C.amber}  icon={Bot} />
+          <KpiCard loading={statsLoading} label={t('dashboard.success_rate')}
                     value={successRate !== null ? `${successRate}%` : "—"}
                     color={C.green} icon={CheckCircle2}
                     sparkData={hasVolumeHistory ? successesSpark : undefined} />
@@ -885,11 +975,35 @@ export default function Dashboard() {
             </Reveal>
             <Reveal delay={160}>
               <Card>
-                <SectionHeader title="Resource Usage" sub="CURRENT BILLING PERIOD" />
+                <SectionHeader title={t('dashboard.resource_usage')} sub={t('dashboard.current_billing_period')} />
                 <div style={{ display: "flex", justifyContent: "space-around", paddingTop: 4 }}>
-                  <ResourceMeter label="AI Credits" used={72} total={100} color={C.purple} unit="%" />
-                  <ResourceMeter label="Storage"    used={58} total={100} color={C.amber}  unit="%" />
-                  <ResourceMeter label="Executions" used={64} total={100} color={C.green}  unit="%" />
+                  {loadingResourceUsage ? (
+                    [0, 1, 2].map(i => <Sk key={i} h={70} r={35} />)
+                  ) : (
+                    <>
+                      <ResourceMeter
+                        label={t('dashboard.res_ai_credits')}
+                        percent={resourceUsage?.ai_credits?.percent ?? null}
+                        displayValue={`${resourceUsage?.ai_credits?.used ?? 0} / ${resourceUsage?.ai_credits?.limit ?? 0}`}
+                        unlimitedLabel={`${resourceUsage?.ai_credits?.used ?? 0} · ${t('dashboard.res_unlimited')}`}
+                        color={C.purple}
+                      />
+                      <ResourceMeter
+                        label={t('dashboard.res_storage')}
+                        percent={resourceUsage?.storage?.percent ?? null}
+                        displayValue={`${resourceUsage?.storage?.used ?? 0}GB / ${resourceUsage?.storage?.limit ?? 0}GB`}
+                        unlimitedLabel={`${resourceUsage?.storage?.used ?? 0}GB · ${t('dashboard.res_unlimited')}`}
+                        color={C.amber}
+                      />
+                      <ResourceMeter
+                        label={t('dashboard.res_executions')}
+                        percent={resourceUsage?.executions?.percent ?? null}
+                        displayValue={`${resourceUsage?.executions?.used ?? 0} / ${resourceUsage?.executions?.limit ?? 0}`}
+                        unlimitedLabel={`${resourceUsage?.executions?.used ?? 0} · ${t('dashboard.res_unlimited')}`}
+                        color={C.green}
+                      />
+                    </>
+                  )}
                 </div>
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                   <button
@@ -903,7 +1017,7 @@ export default function Dashboard() {
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(124,58,237,0.14)"}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(124,58,237,0.08)"}
                   >
-                    Manage Plan →
+                    {t('dashboard.manage_plan')}
                   </button>
                 </div>
               </Card>
