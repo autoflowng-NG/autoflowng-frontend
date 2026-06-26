@@ -23,8 +23,8 @@ const footerLinks = {
     { name: "Contact", href: "#" },
   ],
   Legal: [
-    { name: "Privacy", href: "#" },
-    { name: "Terms", href: "#" },
+    { name: "Privacy", href: "/privacy.html" },
+    { name: "Terms", href: "/terms.html" },
     { name: "Security", href: "#security" },
   ],
 };
@@ -147,6 +147,8 @@ export function FooterSection() {
                     <li key={link.name}>
                       <a
                         href={link.href}
+                        target={link.href.endsWith(".html") ? "_blank" : undefined}
+                        rel={link.href.endsWith(".html") ? "noopener noreferrer" : undefined}
                         className="text-sm text-white/40 hover:text-white transition-colors inline-flex items-center gap-2"
                       >
                         {link.name}
