@@ -471,7 +471,7 @@ export default function Workflows() {
     try {
       const res: any = await workflowsAPI.create({ name: "New Workflow", description: "", nodes: [], edges: [] });
       const id = res?.workflow?.id || res?.id;
-      if (id) { await refetch(); nav(`/workflows/${id}`); }
+      if (id) { await refetch(); nav(`/workflow-builder/${id}`); }
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Could not create workflow", variant: "destructive" });
     } finally {

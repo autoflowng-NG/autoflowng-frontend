@@ -75,6 +75,9 @@ function Toast({ type, text, onDone }: { type: "success" | "error"; text: string
   );
 }
 
+// ── API base URL (resolves cross-origin Vercel → Railway) ─────────────────────
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
 // ── Avatar card ────────────────────────────────────────────────────────────────
 
 function AvatarCard({ profile, onRefetch }: { profile: any; onRefetch: () => void }) {
@@ -98,7 +101,7 @@ function AvatarCard({ profile, onRefetch }: { profile: any; onRefetch: () => voi
       const fd = new FormData();
       fd.append("avatar", file);
       const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-      const res = await fetch("/api/profile/me/avatar", {
+      const res = await fetch(`${API_BASE}/api/profile/me/avatar`, {
         method: "POST",
         credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
@@ -123,7 +126,7 @@ function AvatarCard({ profile, onRefetch }: { profile: any; onRefetch: () => voi
     setRemoving(true);
     try {
       const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-      await fetch("/api/profile/me/avatar", {
+      await fetch(`${API_BASE}/api/profile/me/avatar`, {
         method: "DELETE",
         credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
@@ -146,7 +149,7 @@ function AvatarCard({ profile, onRefetch }: { profile: any; onRefetch: () => voi
       <div style={{ position: "relative" }}>
         {profile?.avatar_url ? (
           <img
-            src={profile.avatar_url}
+            src={profile.avatar_url.startsWith("http") ? profile.avatar_url : `${API_BASE}${profile.avatar_url}`}
             alt="Profile"
             style={{ width: 96, height: 96, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(0,200,150,0.3)" }}
           />
@@ -275,7 +278,7 @@ function EditForm({ profile, onRefetch }: { profile: any; onRefetch: () => void 
     setSaving(true);
     try {
       const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-      const res = await fetch("/api/profile/me", {
+      const res = await fetch(`${API_BASE}/api/profile/me`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -443,7 +446,7 @@ export default function Profile() {
     queryKey: ["profile", "me"],
     queryFn:  () => {
       const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
-      return fetch("/api/profile/me", {
+      return fetch(`${API_BASE}/api/profile/me`, {
         credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
