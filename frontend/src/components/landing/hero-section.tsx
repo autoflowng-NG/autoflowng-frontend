@@ -116,12 +116,13 @@ function BlurWord({ word, trigger }: { word: string; trigger: number }) {
 }
 
 export function HeroSection() {
-  const [isVisible, setIsVisible] = useState(false);
+  // Default to visible so the hero content (headline, eyebrow, stats) is
+  // present in the very first render. This matters for Google's branding
+  // verification crawler, which screenshots the page on a limited render
+  // budget and may capture the page before a mount-triggered useEffect
+  // fires, otherwise leaving everything stuck at opacity-0.
+  const [isVisible] = useState(true);
   const [wordIndex, setWordIndex] = useState(0);
-
-  useEffect(() => {
-    setIsVisible(true);
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
