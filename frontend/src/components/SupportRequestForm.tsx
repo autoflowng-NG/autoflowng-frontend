@@ -50,7 +50,14 @@ export default function SupportRequestForm() {
     if (!form.subject.trim() || !form.message.trim()) return;
     setSubmitting(true); setOk(null);
     try {
-      const r = await authFetch("/support/requests", { method: "POST", body: JSON.stringify(form) });
+      const device_meta = {
+        browser:   navigator.userAgent,
+        os:        navigator.platform,
+        screen:    `${window.screen.width}x${window.screen.height}`,
+        url:       window.location.href,
+        userAgent: navigator.userAgent,
+      };
+      const r = await authFetch("/support/requests", { method: "POST", body: JSON.stringify({ ...form, device_meta }) });
       if (r.ok) {
         setOk("Submitted — we'll reach out shortly.");
         setForm({ category: "general", priority: "medium", subject: "", message: "", screenshot_url: "" });
