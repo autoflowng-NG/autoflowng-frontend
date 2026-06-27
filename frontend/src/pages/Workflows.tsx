@@ -12,9 +12,9 @@
  */
 
 import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { LayoutGroup, AnimatePresence, motion } from "framer-motion";
-import { useWorkflows, useDeleteWorkflow, useToggleWorkflow } from "../hooks/useWorkflows";
+import { useWorkflows, useDeleteWorkflow, useToggleWorkflow, useWorkflowTemplates, useActivateTemplate } from "../hooks/useWorkflows";
 import { useOrgWorkflows } from "../hooks/useOrgWorkflows";
 import { useOrg } from "../contexts/OrgContext";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
@@ -28,7 +28,7 @@ import {
   Plus, Search, GitBranch, Play, Pause, Trash2,
   Edit3, Activity, Clock, Zap, Radio, Loader,
   Filter, SortAsc, ChevronDown, MoreHorizontal,
-  CheckCircle2, XCircle, AlarmClock,
+  CheckCircle2, XCircle, AlarmClock, Lock, Link2,
 } from "lucide-react";
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
@@ -436,9 +436,182 @@ function FilterTab({ label, active, count, onClick }: { label: string; active: b
   );
 }
 
+/* ── AutomationsSection ─────────────────────────────────────────────── */
+function AutomationsSection() {
+  const { data: templates = [], isLoading } = useWorkflowTemplates();
+  const activate = useActivateTemplate();
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+
+  const categories: string[] = Array.from(new Set((templates as any[]).map((t: any) => t.category).filter(Boolean)));
+
+  const filtered = activeCategory
+    ? (templates as any[]).filter((t: any) => t.category === activeCategory)
+    : (templates as any[]);
+
+  const total   = (templates as any[]).length;
+  const ready   = (templates as any[]).filter((t: any) => t.ready === true).length;
+  const noConn  = (templates as any[]).filter((t: any) => t.ready === false).length;
+
+  const handleActivate = async (templateId: string) => {
+    setActivatingId(templateId);
+    try {
+      await activate.mutateAsync(templateId);
+    } catch {
+      setActivatingId(null);
+    }
+  };
+
+  return (
+    <div>
+      {/* Stat pills */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+        <StatPill icon={Zap}          value={total}  label="TOTAL"             color={C.blue}   />
+        <StatPill icon={CheckCircle2} value={ready}  label="READY TO USE"      color={C.green}  />
+        <StatPill icon={Lock}         value={noConn} label="NEEDS CONNECTION"   color={C.amber}  />
+      </div>
+
+      {/* Category filter */}
+      {categories.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
+          <button
+            onClick={() => setActiveCategory(null)}
+            style={{
+              padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer",
+              background: !activeCategory ? "rgba(124,58,237,0.15)" : "rgba(255,255,255,0.04)",
+              color: !activeCategory ? C.purple : C.muted,
+              fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+              transition: "all 0.13s",
+            }}
+          >All</button>
+          {categories.map((cat: string) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat === activeCategory ? null : cat)}
+              style={{
+                padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer",
+                background: activeCategory === cat ? "rgba(124,58,237,0.15)" : "rgba(255,255,255,0.04)",
+                color: activeCategory === cat ? C.purple : C.muted,
+                fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+                transition: "all 0.13s",
+              }}
+            >{cat}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Templates grid */}
+      {isLoading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px,1fr))", gap: 14 }}>
+          {[0,1,2,3,4,5].map(i => (
+            <div key={i} style={{ height: 140, borderRadius: 12, background: "rgba(255,255,255,0.04)", animation: "af-skeleton-pulse 1.8s ease-in-out infinite" }} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 24px", color: C.faint, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+          {activeCategory ? `No automations in "${activeCategory}"` : "No automation templates available yet."}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px,1fr))", gap: 14 }}>
+          {filtered.map((t: any) => {
+            const isActivating = activatingId === t.id;
+            const isReady = t.ready !== false;
+            return (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                style={{
+                  background: C.surface, border: `1px solid ${C.border}`,
+                  borderRadius: 12, padding: "16px",
+                  display: "flex", flexDirection: "column", gap: 10,
+                  transition: "border-color 0.14s",
+                }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = C.borderH}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = C.border}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+                    background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.2)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 18,
+                  }}>
+                    {t.icon || "⚡"}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: "'DM Sans',sans-serif", marginBottom: 3 }}>{t.name}</div>
+                    <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Sans',sans-serif", lineHeight: 1.45 }}>{t.description}</div>
+                  </div>
+                  {!isReady && (
+                    <div title="Needs connection" style={{ flexShrink: 0 }}>
+                      <Lock size={13} color={C.amber} />
+                    </div>
+                  )}
+                </div>
+
+                {t.required_platforms && t.required_platforms.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {t.required_platforms.map((p: string) => {
+                      const connected = t.connected_platforms?.includes?.(p);
+                      return (
+                        <span key={p} style={{
+                          fontSize: 9, fontWeight: 700,
+                          background: connected ? "rgba(0,200,150,0.08)" : "rgba(251,191,36,0.08)",
+                          border: `1px solid ${connected ? "rgba(0,200,150,0.2)" : "rgba(251,191,36,0.2)"}`,
+                          color: connected ? C.green : C.amber,
+                          borderRadius: 100, padding: "2px 7px",
+                          fontFamily: "'DM Mono',monospace",
+                          textTransform: "uppercase",
+                        }}>
+                          {connected ? "✓" : "!"} {p}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => isReady ? handleActivate(t.id) : undefined}
+                  disabled={isActivating || !isReady}
+                  style={{
+                    width: "100%", padding: "9px 0",
+                    background: isReady ? "rgba(0,200,150,0.12)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${isReady ? "rgba(0,200,150,0.25)" : C.border}`,
+                    borderRadius: 8, cursor: isReady ? "pointer" : "default",
+                    color: isReady ? C.green : C.faint,
+                    fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    opacity: isActivating ? 0.6 : 1,
+                    transition: "all 0.14s",
+                  }}
+                >
+                  {isActivating ? (
+                    <><Loader size={12} style={{ animation: "spin-slow 1s linear infinite" }} /> Activating…</>
+                  ) : isReady ? (
+                    <><Zap size={12} /> Use This Automation</>
+                  ) : (
+                    <><Lock size={12} /> Connect to Enable</>
+                  )}
+                </button>
+
+                {!isReady && (
+                  <a href="/connections" style={{ textAlign: "center", fontSize: 11, color: C.blue, fontFamily: "'DM Sans',sans-serif", textDecoration: "underline" }}>
+                    Set up connections →
+                  </a>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Page ──────────────────────────────────────────────────────────── */
 export default function Workflows() {
   const nav     = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeOrg } = useOrg();
   const orgQuery      = useOrgWorkflows();
   const personalQuery = useWorkflows();
@@ -446,6 +619,12 @@ export default function Workflows() {
   const deleteWF  = useDeleteWorkflow();
   const toggleWF  = useToggleWorkflow();
   const { toast } = useToast();
+
+  const section = (searchParams.get("tab") === "automations" ? "automations" : "workflows") as "workflows" | "automations";
+  const setSection = (s: "workflows" | "automations") => {
+    if (s === "workflows") searchParams.delete("tab"); else searchParams.set("tab", s);
+    setSearchParams(new URLSearchParams(searchParams));
+  };
 
   const [search,   setSearch]   = useState("");
   const [tab,      setTab]      = useState<"all" | "active" | "paused">("all");
@@ -507,34 +686,66 @@ export default function Workflows() {
                 ORCHESTRATION
               </div>
               <h1 style={{ fontSize: "clamp(1.5rem,3vw,2rem)", fontWeight: 900, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", color: C.text, margin: 0 }}>
-                Workflows
+                Workflows & Automations
               </h1>
               <p style={{ fontSize: 13, color: C.muted, marginTop: 5, fontFamily: "'DM Sans',sans-serif" }}>
-                Create, manage and execute your workflows.
+                Manage flows and one-click automations.
               </p>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.02, boxShadow: "0 6px 20px rgba(124,58,237,0.4)" }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleCreate}
-              disabled={creating}
-              data-testid="button-create-workflow"
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                background: "#7C3AED", border: "none", borderRadius: 10,
-                padding: "11px 20px", color: "#fff",
-                fontSize: 13, fontWeight: 600,
-                cursor: creating ? "not-allowed" : "pointer",
-                fontFamily: "'DM Sans',sans-serif",
-                boxShadow: "0 4px 14px rgba(124,58,237,0.3)",
-                opacity: creating ? 0.6 : 1,
-              }}
-            >
-              <Plus size={15} /> {creating ? "Creating…" : "Create Workflow"}
-            </motion.button>
+            {section === "workflows" && (
+              <motion.button
+                whileHover={{ scale: 1.02, boxShadow: "0 6px 20px rgba(124,58,237,0.4)" }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleCreate}
+                disabled={creating}
+                data-testid="button-create-workflow"
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "#7C3AED", border: "none", borderRadius: 10,
+                  padding: "11px 20px", color: "#fff",
+                  fontSize: 13, fontWeight: 600,
+                  cursor: creating ? "not-allowed" : "pointer",
+                  fontFamily: "'DM Sans',sans-serif",
+                  boxShadow: "0 4px 14px rgba(124,58,237,0.3)",
+                  opacity: creating ? 0.6 : 1,
+                }}
+              >
+                <Plus size={15} /> {creating ? "Creating…" : "Create Workflow"}
+              </motion.button>
+            )}
           </div>
         </Reveal>
 
+        {/* ── Segmented control ── */}
+        <Reveal delay={20}>
+          <div style={{
+            display: "inline-flex", background: "rgba(255,255,255,0.04)",
+            border: `1px solid ${C.border}`, borderRadius: 10, padding: 3,
+            marginBottom: 22, gap: 2,
+          }}>
+            {(["workflows", "automations"] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setSection(s)}
+                style={{
+                  padding: "7px 18px", borderRadius: 8, border: "none", cursor: "pointer",
+                  background: section === s ? "rgba(124,58,237,0.18)" : "transparent",
+                  color: section === s ? C.purple : C.muted,
+                  fontSize: 12, fontWeight: section === s ? 700 : 400,
+                  fontFamily: "'DM Sans',sans-serif",
+                  transition: "all 0.14s",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {s === "workflows" ? <GitBranch size={12} /> : <Zap size={12} />}
+                {s === "workflows" ? "Workflows" : "Quick Automations"}
+              </button>
+            ))}
+          </div>
+        </Reveal>
+
+        {section === "workflows" && (
+          <>
         {/* ── Stat pills ── */}
         <Reveal delay={40}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22 }}>
@@ -642,6 +853,14 @@ export default function Workflows() {
             )}
           </div>
         </Reveal>
+          </>
+        )}
+
+        {section === "automations" && (
+          <Reveal delay={40}>
+            <AutomationsSection />
+          </Reveal>
+        )}
       </div>
 
       <style>{`

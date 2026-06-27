@@ -4,6 +4,7 @@ import {
   useWorkflow, useUpdateWorkflow, useTriggerWorkflow,
   useWorkflowRuns, useWorkflowRun,
 } from "../hooks/useWorkflows";
+import { useConnections } from "../hooks/useConnections";
 import { workflowsAPI } from "../lib/api";
 import { useExecutionStream } from "../hooks/useExecutionStream";
 import { PageTransition } from "../components/PageTransition";
@@ -12,7 +13,7 @@ import {
   ArrowLeft, Save, Trash2, Settings2, ChevronDown, ChevronRight,
   Clock, CheckCircle2, XCircle, RefreshCw, Zap, GitBranch, Bot,
   Globe, Filter, Code, Database, Mail, MessageSquare, Send,
-  MessageCircle, Search, Radio, X, RotateCcw,
+  MessageCircle, Search, Radio, X, RotateCcw, Lock, AlertTriangle,
 } from "lucide-react";
 
 interface WorkflowBuilderProps { id: string; }
@@ -25,21 +26,22 @@ interface CatalogNode {
   color: string;
   category: "AI" | "Messaging" | "Social" | "Logic" | "Data" | "Utility";
   description: string;
+  requiredPlatform?: string;
 }
 
 const NODE_CATALOG: CatalogNode[] = [
   // AI
   { executorType: "ai_generate",   label: "AI Generate",     icon: Bot,           color: "#A78BFA", category: "AI",        description: "Run a prompt through the AI engine" },
   // Messaging
-  { executorType: "gmail_send",    label: "Gmail Send",       icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Send a new email via Gmail" },
-  { executorType: "gmail_reply",   label: "Gmail Reply",      icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Reply to a Gmail thread" },
-  { executorType: "slack_post",    label: "Slack Post",       icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Post a message to a Slack channel" },
-  { executorType: "telegram_send", label: "Telegram Send",    icon: Send,          color: "#38BDF8", category: "Messaging", description: "Send a Telegram message" },
-  { executorType: "whatsapp_send", label: "WhatsApp Send",    icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Send a WhatsApp message" },
+  { executorType: "gmail_send",    label: "Gmail Send",       icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Send a new email via Gmail",            requiredPlatform: "gmail" },
+  { executorType: "gmail_reply",   label: "Gmail Reply",      icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Reply to a Gmail thread",               requiredPlatform: "gmail" },
+  { executorType: "slack_post",    label: "Slack Post",       icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Post a message to a Slack channel",     requiredPlatform: "slack" },
+  { executorType: "telegram_send", label: "Telegram Send",    icon: Send,          color: "#38BDF8", category: "Messaging", description: "Send a Telegram message",               requiredPlatform: "telegram" },
+  { executorType: "whatsapp_send", label: "WhatsApp Send",    icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Send a WhatsApp message",               requiredPlatform: "whatsapp" },
   // Social
-  { executorType: "twitter_post",  label: "Twitter Post",     icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post a tweet (max 280 chars)" },
-  { executorType: "linkedin_post", label: "LinkedIn Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Publish to your LinkedIn profile" },
-  { executorType: "facebook_post", label: "Facebook Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post to your Facebook page" },
+  { executorType: "twitter_post",  label: "Twitter Post",     icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post a tweet (max 280 chars)",          requiredPlatform: "twitter" },
+  { executorType: "linkedin_post", label: "LinkedIn Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Publish to your LinkedIn profile",      requiredPlatform: "linkedin" },
+  { executorType: "facebook_post", label: "Facebook Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post to your Facebook page",            requiredPlatform: "facebook" },
   // Logic
   { executorType: "condition",     label: "Condition",        icon: GitBranch,     color: "#FBBF24", category: "Logic",     description: "Branch based on a field value" },
   { executorType: "filter",        label: "Filter",           icon: Filter,        color: "#FBBF24", category: "Logic",     description: "Stop execution if condition not met" },
@@ -831,6 +833,30 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
   );
 }
 
+// ─── WarningBanner ────────────────────────────────────────────────────────────
+function WarningBanner({ missingPlatforms, onDismiss }: { missingPlatforms: string[]; onDismiss: () => void }) {
+  if (missingPlatforms.length === 0) return null;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
+      borderRadius: 10, padding: "10px 14px", margin: "8px 12px 0",
+      flexWrap: "wrap",
+    }}>
+      <AlertTriangle size={14} color="#FBBF24" style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1, fontSize: 12, color: "rgba(232,238,255,0.75)", fontFamily: "'DM Sans',sans-serif" }}>
+        This workflow uses{" "}
+        <strong style={{ color: "#FBBF24" }}>{missingPlatforms.join(", ")}</strong>
+        {" "}— connect {missingPlatforms.length === 1 ? "it" : "them"} before activating.{" "}
+        <a href="/connections" style={{ color: "#38BDF8", textDecoration: "underline" }}>Connect now →</a>
+      </span>
+      <button onClick={onDismiss} style={{ background: "none", border: "none", color: "rgba(232,238,255,0.3)", cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}>
+        <X size={13} />
+      </button>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const nav = useNavigate();
@@ -838,6 +864,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const updateWF   = useUpdateWorkflow(id);
   const triggerWF  = useTriggerWorkflow();
   const { toast }  = useToast();
+  const { data: connections = [] } = useConnections();
 
   const [nodes, setNodes]       = useState<Node[]>([]);
   const [edges, setEdges]       = useState<Edge[]>([]);
@@ -851,6 +878,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [connecting, setConnecting]               = useState<{ fromId: string } | null>(null);
   const [autoConnectPrompt, setAutoConnectPrompt] = useState<AutoConnectPrompt | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [warnDismissed, setWarnDismissed] = useState(false);
 
   // FIX #1 & #3: use the existing useWorkflowRun hook instead of raw useQuery
   // traceRunId is set after trigger by polling /runs for the newest run
@@ -1081,6 +1109,25 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     }
   };
 
+  // ── Platform connection gating ─────────────────────────────────────────────
+  const connectedPlatforms = useMemo(
+    () => new Set(
+      (connections as any[])
+        .map((c: any) => (c.platform || c.name || "").toLowerCase())
+        .filter(Boolean)
+    ),
+    [connections]
+  );
+
+  const missingPlatforms = useMemo(() => {
+    const required = new Set(
+      nodes
+        .map(n => NODE_CATALOG.find(c => c.executorType === n.executorType)?.requiredPlatform)
+        .filter((p): p is string => !!p)
+    );
+    return [...required].filter(p => !connectedPlatforms.has(p));
+  }, [nodes, connectedPlatforms]);
+
   // ── Filtered catalog ───────────────────────────────────────────────────────
   const q = search.toLowerCase();
   const filtered = q
@@ -1167,6 +1214,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           </button>
         </div>
 
+        {/* ── Pre-activation warning banner ── */}
+        {tab === "canvas" && !warnDismissed && missingPlatforms.length > 0 && (
+          <WarningBanner missingPlatforms={missingPlatforms} onDismiss={() => setWarnDismissed(true)} />
+        )}
+
         {/* ── Body ── */}
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
@@ -1195,21 +1247,31 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     )}
                     {items.map(entry => {
                       const Icon = entry.icon;
+                      const isLocked = !!(entry.requiredPlatform && !connectedPlatforms.has(entry.requiredPlatform));
                       return (
                         <button
                           key={entry.executorType}
                           data-testid={`add-node-${entry.executorType}`}
                           onClick={() => addNode(entry)}
-                          style={{ display: "flex", alignItems: "flex-start", gap: 8, width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: "7px 8px", cursor: "pointer", marginBottom: 2, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", textAlign: "left", transition: "all 0.13s" }}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 8, width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: "7px 8px", cursor: "pointer", marginBottom: 2, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", textAlign: "left", transition: "all 0.13s", opacity: isLocked ? 0.65 : 1 }}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${entry.color}12`; (e.currentTarget as HTMLElement).style.borderColor = `${entry.color}30`; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
                         >
-                          <div style={{ width: 28, height: 28, borderRadius: 7, background: `${entry.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 7, background: `${entry.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1, position: "relative" }}>
                             <Icon size={13} color={entry.color} />
+                            {isLocked && (
+                              <div style={{ position: "absolute", bottom: -3, right: -3, width: 12, height: 12, borderRadius: "50%", background: "#080B12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Lock size={7} color="#FBBF24" />
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EEFF", lineHeight: 1.3 }}>{entry.label}</div>
-                            <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", lineHeight: 1.4, marginTop: 1 }}>{entry.description}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EEFF", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 4 }}>
+                              {entry.label}
+                            </div>
+                            <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", lineHeight: 1.4, marginTop: 1 }}>
+                              {isLocked ? `Connect ${entry.requiredPlatform} to use` : entry.description}
+                            </div>
                           </div>
                         </button>
                       );
@@ -1242,7 +1304,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
               {nodes.length === 0 && (
                 <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
                   <GitBranch size={48} color="rgba(0,200,150,0.15)" style={{ marginBottom: 16 }} />
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(232,238,255,0.2)", fontFamily: "'Syne',sans-serif" }}>Add nodes from the left panel</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(232,238,255,0.2)", fontFamily: "'Syne',sans-serif" }}>Select a template or add nodes from the left</div>
                   <div style={{ fontSize: 13, color: "rgba(232,238,255,0.1)", marginTop: 6 }}>Drag to reposition · Tap connector dot to wire</div>
                 </div>
               )}
