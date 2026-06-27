@@ -176,7 +176,8 @@
     "section_staff": "STAF",
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "Alur Kerja & Otomatisasi"
   },
   "billing": {
     "subscription_cancelled": "Langganan Anda telah dibatalkan.",

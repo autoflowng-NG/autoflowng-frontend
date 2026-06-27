@@ -176,7 +176,8 @@
     "section_staff": "スタッフ",
     "badge_admin": "管理者",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "ワークフロー & オートメーション"
   },
   "billing": {
     "subscription_cancelled": "サブスクリプションがキャンセルされました。",

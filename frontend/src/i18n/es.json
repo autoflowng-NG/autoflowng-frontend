@@ -176,7 +176,8 @@
     "section_staff": "PERSONAL",
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "Flujos de trabajo & Automatizaciones"
   },
   "billing": {
     "subscription_cancelled": "Tu suscripción ha sido cancelada.",

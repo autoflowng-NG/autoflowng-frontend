@@ -176,7 +176,8 @@
     "section_staff": "EKİP",
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "İş Akışları & Otomasyonlar"
   },
   "billing": {
     "subscription_cancelled": "Aboneliğiniz iptal edildi.",

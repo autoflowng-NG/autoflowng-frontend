@@ -176,7 +176,8 @@
     "section_staff": "ПЕРСОНАЛ",
     "badge_admin": "АДМИН",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "Рабочие процессы & Автоматизации"
   },
   "billing": {
     "subscription_cancelled": "Ваша подписка отменена.",

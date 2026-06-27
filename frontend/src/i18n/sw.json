@@ -176,7 +176,8 @@
     "section_staff": "WAFANYAKAZI",
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "Mtiririko wa Kazi & Otomatiki"
   },
   "billing": {
     "subscription_cancelled": "Usajili wako umefutwa.",

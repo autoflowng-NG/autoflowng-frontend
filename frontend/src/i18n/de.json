@@ -176,7 +176,8 @@
     "section_staff": "MITARBEITER",
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "Workflows & Automatisierungen"
   },
   "billing": {
     "subscription_cancelled": "Ihr Abonnement wurde gekündigt.",

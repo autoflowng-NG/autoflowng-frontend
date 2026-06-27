@@ -176,7 +176,8 @@
     "section_staff": "员工",
     "badge_admin": "管理员",
     "badge_sa": "SA",
-    "badge_ops": "OPS"
+    "badge_ops": "OPS",
+    "workflows_automations": "工作流 & 自动化"
   },
   "billing": {
     "subscription_cancelled": "您的订阅已取消。",
