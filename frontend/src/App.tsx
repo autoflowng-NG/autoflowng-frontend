@@ -1,9 +1,15 @@
 import { lazy, Suspense } from "react";
 import { Component, ReactNode } from "react";
-class LandingErrorBoundary extends Component<{children:ReactNode},{hasError:boolean}> {
-  state={hasError:false};
-  static getDerivedStateFromError(){return{hasError:true};}
-  render(){return this.state.hasError?<div className="text-white p-8">Error loading page. <a href="/" className="text-amber-500">Reload</a></div>:this.props.children;}
+interface LandingEBProps { children: ReactNode; }
+interface LandingEBState { hasError: boolean; }
+class LandingErrorBoundary extends Component<LandingEBProps, LandingEBState> {
+  state: LandingEBState = { hasError: false };
+  static getDerivedStateFromError(): LandingEBState { return { hasError: true }; }
+  render() {
+    return this.state.hasError
+      ? <div className="text-white p-8">Error loading page. <a href="/" className="text-amber-500">Reload</a></div>
+      : (this as unknown as { props: LandingEBProps }).props.children;
+  }
 }
 /**
  * AutoFlowNG — App Router (Phase 13B)
@@ -46,7 +52,6 @@ const Dashboard    = lazy(() => import('./pages/Dashboard'));
 // in this router — invites could never be completed by clicking the link.
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const Workflows    = lazy(() => import('./pages/Workflows'));
-const Automations  = lazy(() => import('./pages/Automations'));
 // Integration Hub — replaces both /connections and /marketplace
 const IntegrationHub     = lazy(() => import('./pages/IntegrationHub'));
 const Intelligence = lazy(() => import('./pages/IntelligenceOpsCenter'));
@@ -160,7 +165,7 @@ function GlobalBackButton() {
   const location = useLocation();
   const navigate = useNavigate();
   const noBack = ["/","/login","/register","/dashboard","/workflows",
-    "/automations","/connections","/intelligence","/profile",
+    "/connections","/intelligence","/profile",
     "/referrals","/wallet","/settings","/ai-chat","/marketplace",
     "/credentials","/node-library","/webhooks","/analytics",
     "/reports","/plans","/appeals"];
@@ -233,7 +238,8 @@ function AppProviders() {
               sessionStorage. The page handles its own auth-gating. */}
           <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route path="/workflows/*"   element={<RequireAuth><Workflows /></RequireAuth>} />
-          <Route path="/automations/*" element={<RequireAuth><Automations /></RequireAuth>} />
+          <Route path="/automations"   element={<Navigate to="/workflows?tab=automations" replace />} />
+          <Route path="/automations/*" element={<Navigate to="/workflows?tab=automations" replace />} />
           <Route path="/connections"   element={<RequireAuth><IntegrationHub /></RequireAuth>} />
           <Route path="/intelligence"  element={<RequireAuth><Intelligence /></RequireAuth>} />
           <Route path="/profile"       element={<RequireAuth><Profile /></RequireAuth>} />
