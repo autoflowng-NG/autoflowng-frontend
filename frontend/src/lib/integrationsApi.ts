@@ -26,6 +26,17 @@ export const integrationsAPI = {
     `${(globalThis as any).__VITE_API_URL__ || ''}/api/integrations/${id}/oauth/start`,
 };
 
+// ── Discord (bot-invite flow — not OAuth2, see routes/integrations.js) ────────
+// Discord runs on one shared DISCORD_BOT_TOKEN rather than per-user OAuth2,
+// so it has its own two-step connect flow instead of the popup-based
+// handleOAuth() every other integration uses: (1) open the bot invite link
+// so the customer can add the bot to their server, then (2) submit the
+// resulting Server ID so the backend can verify the bot is actually there.
+export const discordAPI = {
+  inviteUrl: () => (api as any).get('/integrations/discord/invite-url'),
+  connect:   (guildId: string) => (api as any).post('/integrations/discord/connect', { guildId }),
+};
+
 // ── Node Library ───────────────────────────────────────────────────────────────
 export const nodeLibraryAPI = {
   list:    () => (api as any).get('/integrations/nodes'),
