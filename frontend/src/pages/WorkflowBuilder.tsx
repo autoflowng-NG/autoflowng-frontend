@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import {
   useWorkflow, useUpdateWorkflow, useTriggerWorkflow,
   useWorkflowRuns, useWorkflowRun,
 } from "../hooks/useWorkflows";
 import { workflowsAPI } from "../lib/api";
+import { useExecutionStream } from "../hooks/useExecutionStream";
 import { PageTransition } from "../components/PageTransition";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -50,6 +51,8 @@ const NODE_CATALOG: CatalogNode[] = [
   // Utility
   { executorType: "code",          label: "Code / Transform", icon: Code,          color: "#A78BFA", category: "Utility",   description: "Transform text or run a code operation" },
   { executorType: "set_variable",  label: "Set Variable",     icon: Settings2,     color: "#A78BFA", category: "Utility",   description: "Store a value in workflow context" },
+  // Logic — multi-branch
+  { executorType: "router",        label: "Router",           icon: GitBranch,     color: "#FBBF24", category: "Logic",     description: "Fan out to multiple branches simultaneously (like make.com)" },
 ];
 
 const CATEGORY_ORDER: CatalogNode["category"][] = ["AI", "Messaging", "Social", "Logic", "Data", "Utility"];
@@ -426,6 +429,27 @@ function NodeConfigFields({ node, setNodes }: { node: Node; setNodes: React.Disp
         </div>
       );
     }
+
+    case "router":
+      return (
+        <div>
+          <div style={{ fontSize: 11, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", lineHeight: 1.7, marginTop: 8 }}>
+            <div style={{ color: "#FBBF24", fontWeight: 700, marginBottom: 6 }}>MULTI-BRANCH ROUTER</div>
+            Connect this node to <strong style={{ color: "#E8EEFF" }}>multiple nodes</strong> using the right connector dot.
+            Each connected node runs as its own parallel branch — like a Router module in make.com.
+          </div>
+          <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8 }}>
+            <div style={{ fontSize: 10, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", lineHeight: 1.6 }}>
+              Example: Router → Gmail Reply<br />
+              Router → Slack Post<br />
+              Router → Twitter Post<br />
+              <span style={{ color: "#FBBF24" }}>All 3 run at the same time.</span>
+            </div>
+          </div>
+          <label style={labelStyle}>ROUTER LABEL (optional)</label>
+          <input style={inputStyle} value={cfg.label || ""} placeholder="e.g. Notify all channels" onChange={e => setNodeConfig("label", e.target.value)} />
+        </div>
+      );
 
     case "set_variable":
       return (
@@ -809,7 +833,7 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
-  const [, nav] = useLocation();
+  const nav = useNavigate();
   const { data, isLoading } = useWorkflow(id);
   const updateWF   = useUpdateWorkflow(id);
   const triggerWF  = useTriggerWorkflow();
@@ -838,34 +862,44 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [triggerType, setTriggerType]     = useState("manual");
   const [triggerConfig, setTriggerConfig] = useState<Record<string, any>>({});
 
-  // FIX #3: use proper hook — it already handles refetchInterval (stops when not running)
-  // We extend it with our own enabled check based on traceRunId
+  // PRIMARY: WebSocket execution stream — gives real-time node status via WS events
+  const { execution } = useExecutionStream(id);
+  const wsIsActive = execution.phase === "running" || execution.phase === "starting";
+  const wsIsDone   = execution.phase === "completed" || execution.phase === "failed";
+
+  // FALLBACK: HTTP poll via useWorkflowRun when WS has no data yet
   const { data: traceRun } = useWorkflowRun(id, traceRunId ?? "");
 
-  // FIX #2: Build step status array indexed by step position (matching nodes array order)
-  // The executor's logs column: [{ step: 0, type, name, logs: [{level,msg}], attempt }]
-  // We also check steps_completed and overall status to infer which step is "running"
+  // Build stepStatuses: prefer WebSocket node states, fall back to log-based polling
   const stepStatuses = useMemo<string[]>(() => {
-    if (!traceRun || !nodes.length) return [];
-    const logs: any[] = traceRun.logs || [];
+    if (!nodes.length) return [];
+
+    // WebSocket path — execution.nodes is keyed by node id
+    if ((wsIsActive || wsIsDone) && execution.nodes.length > 0) {
+      return nodes.map(n => {
+        const ns = execution.nodes.find((s: any) => s.id === n.id || s.name === n.label);
+        if (ns) return ns.status; // "pending"|"running"|"success"|"failed"|"skipped"
+        return wsIsActive ? "pending" : "pending";
+      });
+    }
+
+    // HTTP poll fallback — use logs array from run row
+    if (!traceRun) return [];
+    const logs: any[]          = traceRun.logs || [];
     const stepsCompleted: number = traceRun.steps_completed ?? 0;
-    const runStatus: string = traceRun.status || "running";
-    const isStillRunning = runStatus === "running";
+    const isStillRunning        = traceRun.status === "running";
 
     return nodes.map((_n, idx) => {
-      // Check if there's a log entry for this step index
       const logEntry = logs.find((l: any) => l.step === idx);
       if (logEntry) {
         const hasError = (logEntry.logs || []).some((l: any) => l.level === "error");
-        if (hasError) return "failed";
-        return "success";
+        return hasError ? "failed" : "success";
       }
-      // No log yet — infer from steps_completed
       if (idx < stepsCompleted) return "success";
       if (idx === stepsCompleted && isStillRunning) return "running";
       return "pending";
     });
-  }, [traceRun, nodes]);
+  }, [nodes, execution.nodes, wsIsActive, wsIsDone, traceRun]);
 
   // ── Hydration ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -894,15 +928,20 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: entry.executorType,
       label: entry.label,
-      x: 20 + (nodes.length % 4) * 170,
-      y: 30 + Math.floor(nodes.length / 4) * 90,
+      // Space nodes in a nice horizontal flow
+      x: nodes.length === 0 ? 40 : Math.max(...nodes.map(n => n.x)) + 180,
+      y: 140,
       config: {},
     };
     setNodes(ns => [...ns, newNode]);
-    // Offer auto-connect when adding the 2nd node
-    if (nodes.length === 1) {
-      const lastNode = nodes[0];
-      setAutoConnectPrompt({ fromId: lastNode.id, toId: newNode.id, fromLabel: lastNode.label, toLabel: newNode.label });
+    // Auto-connect: always prompt to wire to the most recent node
+    if (nodes.length >= 1) {
+      const lastNode = nodes[nodes.length - 1];
+      // Skip prompt if already connected
+      const alreadyLinked = edges.some(e => e.from === lastNode.id && e.to === newNode.id);
+      if (!alreadyLinked) {
+        setAutoConnectPrompt({ fromId: lastNode.id, toId: newNode.id, fromLabel: lastNode.label, toLabel: newNode.label });
+      }
     }
   };
 
@@ -982,10 +1021,16 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   // ── Trigger ────────────────────────────────────────────────────────────────
   const trigger = async () => {
+    if (nodes.length === 0) {
+      toast({ title: "No nodes", description: "Add at least one node to the canvas before running.", variant: "destructive" });
+      return;
+    }
+    // Clear old trace first so canvas resets
+    setTraceRunId(null);
     try {
-      // FIX #1: correct mutation shape — useTriggerWorkflow expects { id, data? }
       await triggerWF.mutateAsync({ id });
-      toast({ title: "Workflow running…", description: "Fetching run status." });
+      toast({ title: "Workflow triggered!", description: "Watching for live updates…" });
+      // Poll /runs to get the run id for HTTP fallback (WS may already be firing)
       await startTrace();
     } catch (e: any) {
       toast({ title: "Trigger failed", description: e?.message, variant: "destructive" });
@@ -1042,10 +1087,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     ? NODE_CATALOG.filter(n => n.label.toLowerCase().includes(q) || n.description.toLowerCase().includes(q))
     : NODE_CATALOG;
 
-  const selNode    = nodes.find(n => n.id === selected);
-  const selIdx     = selected ? nodes.findIndex(n => n.id === selected) : -1;
-  const isTracing  = !!traceRunId;
-  const traceIsLive = traceRun?.status === "running";
+  const selNode     = nodes.find(n => n.id === selected);
+  const selIdx      = selected ? nodes.findIndex(n => n.id === selected) : -1;
+  // Active trace = WS stream running OR we have a polled run id
+  const isTracing   = wsIsActive || wsIsDone || !!traceRunId;
+  const traceIsLive = wsIsActive || traceRun?.status === "running";
 
   if (isLoading) return (
     <div style={{ height: "100vh", background: "#04060F", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1074,8 +1120,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         <AutoConnectDialog
           prompt={autoConnectPrompt}
           onConfirm={() => {
+            // Add edge immediately — user sees the line appear right away
             setEdges(es => [...es, { id: `e${Date.now()}`, from: autoConnectPrompt.fromId, to: autoConnectPrompt.toId }]);
             setAutoConnectPrompt(null);
+            toast({ title: "✅ Nodes connected!", description: `${autoConnectPrompt.fromLabel} → ${autoConnectPrompt.toLabel}` });
           }}
           onDismiss={() => setAutoConnectPrompt(null)}
         />
@@ -1096,8 +1144,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
             <div style={{ display: "flex", alignItems: "center", gap: 6, background: traceIsLive ? "rgba(56,189,248,0.1)" : "rgba(0,200,150,0.1)", border: `1px solid ${traceIsLive ? "rgba(56,189,248,0.3)" : "rgba(0,200,150,0.3)"}`, borderRadius: 20, padding: "4px 10px", flexShrink: 0 }}>
               <Radio size={11} color={traceIsLive ? "#38BDF8" : "#00C896"} style={{ animation: traceIsLive ? "pulse-dot 1s ease-in-out infinite" : undefined }} />
               <span style={{ fontSize: 10, fontWeight: 800, color: traceIsLive ? "#38BDF8" : "#00C896", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>
-                {/* FIX #7: show COMPLETED for "completed" status */}
-                {traceIsLive ? "LIVE" : (traceRun?.status === "completed" ? "COMPLETED" : (traceRun?.status?.toUpperCase() || "TRACE"))}
+                {traceIsLive ? "LIVE"
+                  : wsIsDone ? execution.phase.toUpperCase()
+                  : (traceRun?.status === "completed" ? "COMPLETED" : (traceRun?.status?.toUpperCase() || "TRACE"))}
               </span>
             </div>
           )}
@@ -1198,24 +1247,86 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 </div>
               )}
 
-              {/* SVG edges */}
+              {/* SVG edges — solid lines with arrows + tap-to-delete, like make.com */}
               <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}>
+                <defs>
+                  {/* Arrow markers for each colour state */}
+                  <marker id="arrow-default" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="rgba(0,200,150,0.55)" />
+                  </marker>
+                  <marker id="arrow-done" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#00C896" />
+                  </marker>
+                  <marker id="arrow-trace" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="rgba(255,255,255,0.12)" />
+                  </marker>
+                  <marker id="arrow-hover" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#FB7185" />
+                  </marker>
+                </defs>
                 {edges.map(e => {
                   const fn = nodes.find(n => n.id === e.from);
                   const tn = nodes.find(n => n.id === e.to);
                   if (!fn || !tn) return null;
                   const x1 = fn.x + 148, y1 = fn.y + 36;
-                  const x2 = tn.x,       y2 = tn.y + 36;
+                  const x2 = tn.x - 2,   y2 = tn.y + 36;
                   const mx = (x1 + x2) / 2;
                   const fi = nodes.findIndex(n => n.id === e.from);
                   const ti = nodes.findIndex(n => n.id === e.to);
-                  // FIX #2: use stepStatuses array (indexed by node position)
                   const fromDone = fi >= 0 && (stepStatuses[fi] === "success" || stepStatuses[fi] === "completed");
                   const toDone   = ti >= 0 && (stepStatuses[ti] === "success" || stepStatuses[ti] === "completed");
-                  const edgeColor = (fromDone && toDone) ? "rgba(0,200,150,0.55)" : isTracing ? "rgba(255,255,255,0.06)" : "rgba(0,200,150,0.3)";
+                  const bothDone = fromDone && toDone;
+                  const edgeColor = bothDone ? "#00C896" : isTracing ? "rgba(255,255,255,0.12)" : "rgba(0,200,150,0.55)";
+                  const marker    = bothDone ? "url(#arrow-done)" : isTracing ? "url(#arrow-trace)" : "url(#arrow-default)";
+                  const midX = mx, midY = (y1 + y2) / 2;
                   return (
                     <g key={e.id}>
-                      <path d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} stroke={edgeColor} strokeWidth={fromDone && toDone ? 2 : 1.5} strokeDasharray="6 4" fill="none" style={{ transition: "stroke 0.4s" }} />
+                      {/* Solid bezier line */}
+                      <path
+                        d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                        stroke={edgeColor}
+                        strokeWidth={bothDone ? 2.5 : 2}
+                        fill="none"
+                        markerEnd={marker}
+                        style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
+                      />
+                      {/* Animated flow dot when running */}
+                      {isTracing && stepStatuses[fi] === "running" && (
+                        <circle r="3" fill="#38BDF8" opacity="0.9">
+                          <animateMotion dur="1.2s" repeatCount="indefinite"
+                            path={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} />
+                        </circle>
+                      )}
+                      {/* Invisible fat hit-area for tap-to-delete */}
+                      <path
+                        d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                        stroke="transparent"
+                        strokeWidth={18}
+                        fill="none"
+                        style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                        onClick={ev => {
+                          ev.stopPropagation();
+                          if (window.confirm(`Remove connection between these nodes?`)) {
+                            setEdges(es => es.filter(ed => ed.id !== e.id));
+                          }
+                        }}
+                        onMouseEnter={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "rgba(251,113,133,0.25)"); }}
+                        onMouseLeave={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "transparent"); }}
+                      />
+                      {/* Mid-point delete badge — shows on hover via CSS trick */}
+                      <g
+                        style={{ cursor: "pointer", pointerEvents: "all" }}
+                        onClick={ev => {
+                          ev.stopPropagation();
+                          setEdges(es => es.filter(ed => ed.id !== e.id));
+                        }}
+                      >
+                        <circle cx={midX} cy={midY} r={9} fill="rgba(8,11,22,0.95)" stroke="rgba(251,113,133,0.4)" strokeWidth={1.5} opacity={0} className="edge-delete-btn">
+                          <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                          <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                        </circle>
+                        <text x={midX} y={midY + 4} textAnchor="middle" fontSize="11" fill="#FB7185" fontWeight="bold" pointerEvents="none">×</text>
+                      </g>
                     </g>
                   );
                 })}
@@ -1244,13 +1355,15 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 </div>
               )}
 
-              {/* FIX #2: pass stepStatuses array instead of Map */}
-              {isTracing && traceRun && (
+              {/* FIX: use WS run data when available, fall back to polled run */}
+              {isTracing && (wsIsActive || wsIsDone || traceRun) && (
                 <TraceStatusBar
-                  run={traceRun}
+                  run={wsIsDone || wsIsActive
+                    ? { status: execution.phase, duration_ms: execution.durationMs }
+                    : traceRun}
                   stepStatuses={stepStatuses}
                   nodeCount={nodes.length}
-                  onDismiss={() => setTraceRunId(null)}
+                  onDismiss={() => { setTraceRunId(null); }}
                 />
               )}
             </div>
