@@ -158,7 +158,7 @@ function CatPill({ label, active, color, onClick }: {
     <button
       onClick={onClick}
       style={{
-        padding: "4px 11px", borderRadius: 100, border: "none", cursor: "pointer",
+        padding: "4px 11px", borderRadius: 100, cursor: "pointer",
         background: active ? `${color}18` : "rgba(255,255,255,0.04)",
         color: active ? color : C.faint,
         border: `1px solid ${active ? color + "35" : "rgba(255,255,255,0.07)"}`,
