@@ -16,6 +16,7 @@
  *   - mediaCloudAPI: Phase 43 asset listing helpers
  */
 
+declare global { interface ImportMeta { env: Record<string, string | undefined>; } }
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 // Fix (Bug 2): IntegrationDetail.tsx needs the backend's absolute base URL to
 // open OAuth popups (Railway), but BASE_URL was a module-private constant —
@@ -138,16 +139,18 @@ export const resourceUsageAPI = {
 };
 
 export const workflowsAPI = {
-  list:      ()              => api.get("/workflows"),
-  get:       (id: string)    => api.get(`/workflows/${id}`),
-  create:    (data: any)     => api.post("/workflows", data),
-  update:    (id: string, data: any) => api.put(`/workflows/${id}`, data),
-  delete:    (id: string)    => api.delete(`/workflows/${id}`),
-  toggle:    (id: string)    => api.post(`/workflows/${id}/toggle`),
-  trigger:   (id: string, data: any = {}) => api.post(`/workflows/${id}/trigger`, data),
-  runs:      (id: string)    => api.get(`/workflows/${id}/runs`),
-  run:       (id: string, runId: string) => api.get(`/workflows/${id}/runs/${runId}`),
-  validate:  (data: any)     => api.post("/workflows/validate", data),
+  list:             ()              => api.get("/workflows"),
+  get:              (id: string)    => api.get(`/workflows/${id}`),
+  create:           (data: any)     => api.post("/workflows", data),
+  update:           (id: string, data: any) => api.put(`/workflows/${id}`, data),
+  delete:           (id: string)    => api.delete(`/workflows/${id}`),
+  toggle:           (id: string)    => api.post(`/workflows/${id}/toggle`),
+  trigger:          (id: string, data: any = {}) => api.post(`/workflows/${id}/trigger`, data),
+  runs:             (id: string)    => api.get(`/workflows/${id}/runs`),
+  run:              (id: string, runId: string) => api.get(`/workflows/${id}/runs/${runId}`),
+  validate:         (data: any)     => api.post("/workflows/validate", data),
+  templates:        ()              => api.get("/workflows/templates"),
+  activateTemplate: (templateId: string) => api.post(`/workflows/from-template/${templateId}`),
 };
 
 export const automationsAPI = {
