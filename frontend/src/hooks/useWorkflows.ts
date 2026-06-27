@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workflowsAPI, automationsAPI } from "../lib/api";
 import { queryKeys, invalidate } from "../lib/queryClient";
+import { useNavigate } from "react-router-dom";
 
 export function useWorkflows() {
   return useQuery({
@@ -91,49 +92,33 @@ export function useTriggerWorkflow() {
   });
 }
 
-export function useAutomations() {
-  return useQuery({
-    queryKey: queryKeys.automations,
-    queryFn:  () => automationsAPI.list().then((d: any) => d.automations || []),
-  });
-}
-
-export function useToggleAutomation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: any) => automationsAPI.toggle(data),
-    onMutate:   async ({ templateId, enabled }: any) => {
-      await qc.cancelQueries({ queryKey: queryKeys.automations });
-      const prev = qc.getQueryData(queryKeys.automations);
-      qc.setQueryData(queryKeys.automations, (old: any) =>
-        old?.map((a: any) => a.template_id === templateId ? { ...a, enabled } : a)
-      );
-      return { prev };
-    },
-    onError:   (err, vars, ctx: any) => qc.setQueryData(queryKeys.automations, ctx.prev),
-    onSuccess: () => { invalidate.automations(); invalidate.analytics(); },
-  });
-}
-
-export function useRunAutomation() {
-  return useMutation({
-    mutationFn: (templateId: string) => automationsAPI.run(templateId),
-    onSuccess:  () => { invalidate.automations(); invalidate.analytics(); },
-  });
-}
-
-export function useAutomationLogs(templateId: string) {
-  return useQuery({
-    queryKey: queryKeys.automationLogs(templateId),
-    queryFn:  () => automationsAPI.logs(templateId).then((d: any) => d.logs || []),
-    enabled:  !!templateId,
-  });
-}
 
 export function useAgentTasks() {
   return useQuery({
     queryKey: queryKeys.tasks,
     queryFn:  () => automationsAPI.tasks.list().then((d: any) => d.tasks || []),
     refetchInterval: 10_000,
+  });
+}
+
+export function useWorkflowTemplates() {
+  return useQuery({
+    queryKey: ["workflow-templates"],
+    queryFn:  () => workflowsAPI.templates().then((d: any) => d.templates || d || []),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useActivateTemplate() {
+  const nav = useNavigate();
+  return useMutation({
+    mutationFn: (templateId: string) => workflowsAPI.activateTemplate(templateId),
+    onSuccess:  (res: any) => {
+      const id = res?.workflow?.id || res?.id;
+      if (id) {
+        invalidate.workflows();
+        nav(`/workflow-builder/${id}`);
+      }
+    },
   });
 }
