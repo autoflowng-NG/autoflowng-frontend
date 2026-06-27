@@ -13,6 +13,8 @@
 
 import { useEffect, useState } from "react";
 import { Star, X } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { isPlatformAdmin } from "../lib/rbac";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "autoflowng_token";
@@ -30,6 +32,7 @@ function authFetch(path: string, opts: RequestInit = {}) {
 }
 
 export default function TrialCompletionSurvey() {
+  const { user } = useAuth();
   const [open, setOpen]   = useState(false);
   const [rating, setRating] = useState(0);
   const [nps, setNps]       = useState<number | null>(null);
@@ -39,6 +42,8 @@ export default function TrialCompletionSurvey() {
 
   useEffect(() => {
     if (!localStorage.getItem(TOKEN_KEY)) return;
+    // Never show to admin/staff accounts
+    if (isPlatformAdmin(user?.role)) return;
     if (sessionStorage.getItem("autoflowng_trial_survey_dismissed") === "1") return;
 
     authFetch("/surveys/pending")
