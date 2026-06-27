@@ -1,28 +1,60 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
-import { useWorkflow, useUpdateWorkflow, useTriggerWorkflow, useWorkflowRuns } from "../hooks/useWorkflows";
+import {
+  useWorkflow, useUpdateWorkflow, useTriggerWorkflow,
+  useWorkflowRuns, useWorkflowRun,
+} from "../hooks/useWorkflows";
 import { workflowsAPI } from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Play, Plus, Trash2, Settings2, ChevronDown, ChevronRight, Activity, Clock, CheckCircle2, XCircle, RefreshCw, Zap, GitBranch, Bot, Bell, Globe, Filter, Code, Database } from "lucide-react";
+import {
+  ArrowLeft, Save, Trash2, Settings2, ChevronDown, ChevronRight,
+  Clock, CheckCircle2, XCircle, RefreshCw, Zap, GitBranch, Bot,
+  Globe, Filter, Code, Database, Mail, MessageSquare, Send,
+  MessageCircle, Search, Radio, X, RotateCcw,
+} from "lucide-react";
 
 interface WorkflowBuilderProps { id: string; }
 
-const NODE_TYPES = [
-  { type: "trigger",   label: "Trigger",    icon: Zap,          color: "#00C896" },
-  { type: "action",    label: "Action",      icon: Play,         color: "#38BDF8" },
-  { type: "condition", label: "Condition",   icon: GitBranch,    color: "#FBBF24" },
-  { type: "ai",        label: "AI Step",     icon: Bot,          color: "#A78BFA" },
-  { type: "notify",    label: "Notify",      icon: Bell,         color: "#FB7185" },
-  { type: "webhook",   label: "Webhook",     icon: Globe,        color: "#38BDF8" },
-  { type: "filter",    label: "Filter",      icon: Filter,       color: "#FBBF24" },
-  { type: "code",      label: "Code",        icon: Code,         color: "#A78BFA" },
-  { type: "database",  label: "Database",    icon: Database,     color: "#00C896" },
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+interface CatalogNode {
+  executorType: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  color: string;
+  category: "AI" | "Messaging" | "Social" | "Logic" | "Data" | "Utility";
+  description: string;
+}
+
+const NODE_CATALOG: CatalogNode[] = [
+  // AI
+  { executorType: "ai_generate",   label: "AI Generate",     icon: Bot,           color: "#A78BFA", category: "AI",        description: "Run a prompt through the AI engine" },
+  // Messaging
+  { executorType: "gmail_send",    label: "Gmail Send",       icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Send a new email via Gmail" },
+  { executorType: "gmail_reply",   label: "Gmail Reply",      icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Reply to a Gmail thread" },
+  { executorType: "slack_post",    label: "Slack Post",       icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Post a message to a Slack channel" },
+  { executorType: "telegram_send", label: "Telegram Send",    icon: Send,          color: "#38BDF8", category: "Messaging", description: "Send a Telegram message" },
+  { executorType: "whatsapp_send", label: "WhatsApp Send",    icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Send a WhatsApp message" },
+  // Social
+  { executorType: "twitter_post",  label: "Twitter Post",     icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post a tweet (max 280 chars)" },
+  { executorType: "linkedin_post", label: "LinkedIn Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Publish to your LinkedIn profile" },
+  { executorType: "facebook_post", label: "Facebook Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post to your Facebook page" },
+  // Logic
+  { executorType: "condition",     label: "Condition",        icon: GitBranch,     color: "#FBBF24", category: "Logic",     description: "Branch based on a field value" },
+  { executorType: "filter",        label: "Filter",           icon: Filter,        color: "#FBBF24", category: "Logic",     description: "Stop execution if condition not met" },
+  { executorType: "delay",         label: "Delay",            icon: Clock,         color: "#FBBF24", category: "Logic",     description: "Wait before continuing" },
+  // Data
+  { executorType: "database",      label: "Database",         icon: Database,      color: "#00C896", category: "Data",      description: "Read or write database records" },
+  { executorType: "webhook",       label: "Webhook",          icon: Globe,         color: "#00C896", category: "Data",      description: "Call an external HTTP endpoint" },
+  { executorType: "http_request",  label: "HTTP Request",     icon: Globe,         color: "#00C896", category: "Data",      description: "Make a generic HTTP request" },
+  // Utility
+  { executorType: "code",          label: "Code / Transform", icon: Code,          color: "#A78BFA", category: "Utility",   description: "Transform text or run a code operation" },
+  { executorType: "set_variable",  label: "Set Variable",     icon: Settings2,     color: "#A78BFA", category: "Utility",   description: "Store a value in workflow context" },
 ];
 
-// Trigger types surfaced in the Config tab picker.
-// Excludes WhatsApp/Facebook/Telegram/event/news_trigger/cron — those either
-// have no builder-facing config story yet or are managed elsewhere.
+const CATEGORY_ORDER: CatalogNode["category"][] = ["AI", "Messaging", "Social", "Logic", "Data", "Utility"];
+
+// ─── Trigger types ────────────────────────────────────────────────────────────
 const TRIGGER_TYPES = [
   { value: "manual",                   label: "Manual" },
   { value: "schedule",                 label: "Schedule" },
@@ -37,10 +69,36 @@ const TRIGGER_TYPES = [
   { value: "linkedin_new_connection",  label: "LinkedIn — New Connection" },
 ];
 
-interface Node { id: string; type: string; label: string; x: number; y: number; config?: any; }
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Node {
+  id: string;
+  executorType: string;
+  label: string;
+  x: number;
+  y: number;
+  config: Record<string, any>;
+}
+
 interface Edge { from: string; to: string; id: string; }
 
-// Shared input/label styles matching the existing Config tab style
+interface AutoConnectPrompt {
+  fromId: string;
+  toId: string;
+  fromLabel: string;
+  toLabel: string;
+}
+
+// FIX #7: backend sets status "completed" not "success". Handle both.
+type StepStatus = "pending" | "running" | "success" | "completed" | "failed" | "skipped" | "filtered" | "cancelled";
+
+// Normalise backend status strings to display status
+function normaliseStatus(s: string): StepStatus {
+  if (s === "completed") return "success";
+  if (s === "filtered" || s === "cancelled") return "skipped";
+  return s as StepStatus;
+}
+
+// ─── Shared styles ────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   width: "100%",
   background: "rgba(255,255,255,0.04)",
@@ -65,7 +123,7 @@ const labelStyle: React.CSSProperties = {
   marginTop: 12,
 };
 
-/** Per-platform config fields rendered below the trigger-type selector. */
+// ─── TriggerConfigFields (unchanged) ─────────────────────────────────────────
 function TriggerConfigFields({
   triggerType,
   triggerConfig,
@@ -82,38 +140,17 @@ function TriggerConfigFields({
     return (
       <div style={{ marginTop: 4 }}>
         <label style={labelStyle}>FILTER: FROM (optional)</label>
-        <input
-          style={inputStyle}
-          value={triggerConfig.filter_from || ""}
-          placeholder="e.g. boss@company.com"
-          onChange={e => set("filter_from", e.target.value)}
-        />
+        <input style={inputStyle} value={triggerConfig.filter_from || ""} placeholder="e.g. boss@company.com" onChange={e => set("filter_from", e.target.value)} />
         <label style={labelStyle}>FILTER: LABEL (default: INBOX)</label>
-        <input
-          style={inputStyle}
-          value={triggerConfig.filter_label || ""}
-          placeholder="e.g. INBOX"
-          onChange={e => set("filter_label", e.target.value)}
-        />
+        <input style={inputStyle} value={triggerConfig.filter_label || ""} placeholder="e.g. INBOX" onChange={e => set("filter_label", e.target.value)} />
         {triggerType === "gmail_new_email_matching" && (
           <>
             <label style={labelStyle}>FILTER: SUBJECT CONTAINS</label>
-            <input
-              style={inputStyle}
-              value={triggerConfig.filter_subject || ""}
-              placeholder="e.g. Invoice"
-              onChange={e => set("filter_subject", e.target.value)}
-            />
+            <input style={inputStyle} value={triggerConfig.filter_subject || ""} placeholder="e.g. Invoice" onChange={e => set("filter_subject", e.target.value)} />
           </>
         )}
         <label style={labelStyle}>POLL INTERVAL (seconds, min 30)</label>
-        <input
-          type="number"
-          min={30}
-          style={inputStyle}
-          value={triggerConfig.poll_interval_seconds || 60}
-          onChange={e => set("poll_interval_seconds", Math.max(30, Number(e.target.value)))}
-        />
+        <input type="number" min={30} style={inputStyle} value={triggerConfig.poll_interval_seconds || 60} onChange={e => set("poll_interval_seconds", Math.max(30, Number(e.target.value)))} />
       </div>
     );
   }
@@ -122,39 +159,14 @@ function TriggerConfigFields({
     return (
       <div style={{ marginTop: 4 }}>
         <label style={labelStyle}>CHANNEL ID (required)</label>
-        <input
-          style={{ ...inputStyle, borderColor: !triggerConfig.channel_id ? "rgba(251,113,133,0.4)" : undefined }}
-          value={triggerConfig.channel_id || ""}
-          placeholder="e.g. C0123456789"
-          onChange={e => set("channel_id", e.target.value)}
-        />
-        {!triggerConfig.channel_id && (
-          <div style={{ fontSize: 11, color: "#FB7185", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>
-            channel_id is required to activate this trigger
-          </div>
-        )}
+        <input style={{ ...inputStyle, borderColor: !triggerConfig.channel_id ? "rgba(251,113,133,0.4)" : undefined }} value={triggerConfig.channel_id || ""} placeholder="e.g. C0123456789" onChange={e => set("channel_id", e.target.value)} />
+        {!triggerConfig.channel_id && <div style={{ fontSize: 11, color: "#FB7185", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>channel_id is required to activate this trigger</div>}
         <label style={labelStyle}>CHANNEL NAME (display only)</label>
-        <input
-          style={inputStyle}
-          value={triggerConfig.channel_name || ""}
-          placeholder="e.g. #general"
-          onChange={e => set("channel_name", e.target.value)}
-        />
+        <input style={inputStyle} value={triggerConfig.channel_name || ""} placeholder="e.g. #general" onChange={e => set("channel_name", e.target.value)} />
         <label style={labelStyle}>FILTER: MESSAGE CONTAINS (optional)</label>
-        <input
-          style={inputStyle}
-          value={triggerConfig.filter_text || ""}
-          placeholder="e.g. urgent"
-          onChange={e => set("filter_text", e.target.value)}
-        />
+        <input style={inputStyle} value={triggerConfig.filter_text || ""} placeholder="e.g. urgent" onChange={e => set("filter_text", e.target.value)} />
         <label style={labelStyle}>POLL INTERVAL (seconds, min 15)</label>
-        <input
-          type="number"
-          min={15}
-          style={inputStyle}
-          value={triggerConfig.poll_interval_seconds || 30}
-          onChange={e => set("poll_interval_seconds", Math.max(15, Number(e.target.value)))}
-        />
+        <input type="number" min={15} style={inputStyle} value={triggerConfig.poll_interval_seconds || 30} onChange={e => set("poll_interval_seconds", Math.max(15, Number(e.target.value)))} />
       </div>
     );
   }
@@ -165,25 +177,12 @@ function TriggerConfigFields({
         {triggerType === "twitter_new_mention" && (
           <>
             <label style={labelStyle}>FILTER: TWEET CONTAINS (optional)</label>
-            <input
-              style={inputStyle}
-              value={triggerConfig.filter_text || ""}
-              placeholder="e.g. help"
-              onChange={e => set("filter_text", e.target.value)}
-            />
+            <input style={inputStyle} value={triggerConfig.filter_text || ""} placeholder="e.g. help" onChange={e => set("filter_text", e.target.value)} />
           </>
         )}
         <label style={labelStyle}>POLL INTERVAL (seconds, min 60)</label>
-        <input
-          type="number"
-          min={60}
-          style={inputStyle}
-          value={triggerConfig.poll_interval_seconds || 120}
-          onChange={e => set("poll_interval_seconds", Math.max(60, Number(e.target.value)))}
-        />
-        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>
-          Twitter enforces strict rate limits — intervals under 60s will be clamped.
-        </div>
+        <input type="number" min={60} style={inputStyle} value={triggerConfig.poll_interval_seconds || 120} onChange={e => set("poll_interval_seconds", Math.max(60, Number(e.target.value)))} />
+        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>Twitter enforces strict rate limits — intervals under 60s will be clamped.</div>
       </div>
     );
   }
@@ -194,30 +193,13 @@ function TriggerConfigFields({
         {triggerType === "linkedin_new_comment" && (
           <>
             <label style={labelStyle}>POST URN / POST ID (required)</label>
-            <input
-              style={{ ...inputStyle, borderColor: !triggerConfig.post_id ? "rgba(251,113,133,0.4)" : undefined }}
-              value={triggerConfig.post_id || ""}
-              placeholder="e.g. urn:li:activity:123456789"
-              onChange={e => set("post_id", e.target.value)}
-            />
-            {!triggerConfig.post_id && (
-              <div style={{ fontSize: 11, color: "#FB7185", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>
-                post_id is required to activate linkedin_new_comment
-              </div>
-            )}
+            <input style={{ ...inputStyle, borderColor: !triggerConfig.post_id ? "rgba(251,113,133,0.4)" : undefined }} value={triggerConfig.post_id || ""} placeholder="e.g. urn:li:activity:123456789" onChange={e => set("post_id", e.target.value)} />
+            {!triggerConfig.post_id && <div style={{ fontSize: 11, color: "#FB7185", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>post_id is required to activate linkedin_new_comment</div>}
           </>
         )}
         <label style={labelStyle}>POLL INTERVAL (seconds, min 120)</label>
-        <input
-          type="number"
-          min={120}
-          style={inputStyle}
-          value={triggerConfig.poll_interval_seconds || 300}
-          onChange={e => set("poll_interval_seconds", Math.max(120, Number(e.target.value)))}
-        />
-        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>
-          LinkedIn enforces strict rate limits — intervals under 120s will be clamped.
-        </div>
+        <input type="number" min={120} style={inputStyle} value={triggerConfig.poll_interval_seconds || 300} onChange={e => set("poll_interval_seconds", Math.max(120, Number(e.target.value)))} />
+        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>LinkedIn enforces strict rate limits — intervals under 120s will be clamped.</div>
       </div>
     );
   }
@@ -225,77 +207,607 @@ function TriggerConfigFields({
   return null;
 }
 
-function NodeBox({ node, selected, onSelect, onDelete }: { node: Node; selected: boolean; onSelect: (id: string) => void; onDelete: (id: string) => void; }) {
-  const nt = NODE_TYPES.find(n => n.type === node.type) || NODE_TYPES[1];
-  const Icon = nt.icon;
+// ─── NodeConfigFields ─────────────────────────────────────────────────────────
+function NodeConfigFields({ node, setNodes }: { node: Node; setNodes: React.Dispatch<React.SetStateAction<Node[]>> }) {
+  const setNodeConfig = (key: string, value: any) => {
+    setNodes(ns => ns.map(n =>
+      n.id === node.id ? { ...n, config: { ...n.config, [key]: value } } : n
+    ));
+  };
+
+  const cfg = node.config || {};
+  const taStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", fontFamily: "'DM Mono',monospace", fontSize: 12 };
+
+  switch (node.executorType) {
+    case "ai_generate":
+      return (
+        <div>
+          <label style={labelStyle}>SYSTEM PROMPT / INSTRUCTIONS</label>
+          <textarea rows={5} style={taStyle} value={cfg.prompt || ""} placeholder={"Describe what the AI should do.\nUse {{trigger.email.body}} to reference trigger data."} onChange={e => setNodeConfig("prompt", e.target.value)} />
+          <label style={labelStyle}>MAX TOKENS</label>
+          <input type="number" min={100} max={4000} style={inputStyle} value={cfg.max_tokens ?? 500} onChange={e => setNodeConfig("max_tokens", Math.min(4000, Math.max(100, Number(e.target.value))))} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>100 – 4000 tokens</div>
+        </div>
+      );
+
+    case "gmail_send":
+      return (
+        <div>
+          <label style={labelStyle}>TO (recipient email)</label>
+          <input style={inputStyle} value={cfg.to || ""} placeholder="{{trigger.email.from}} or user@example.com" onChange={e => setNodeConfig("to", e.target.value)} />
+          <label style={labelStyle}>SUBJECT</label>
+          <input style={inputStyle} value={cfg.subject || ""} placeholder="Re: {{trigger.email.subject}}" onChange={e => setNodeConfig("subject", e.target.value)} />
+          <label style={labelStyle}>BODY</label>
+          <textarea rows={4} style={taStyle} value={cfg.body || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("body", e.target.value)} />
+        </div>
+      );
+
+    case "gmail_reply":
+      return (
+        <div>
+          <label style={labelStyle}>REPLY BODY</label>
+          <textarea rows={4} style={taStyle} value={cfg.body || ""} placeholder="Leave blank to use AI output." onChange={e => setNodeConfig("body", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Automatically replies to the triggering email thread — no recipient needed.</div>
+        </div>
+      );
+
+    case "slack_post":
+      return (
+        <div>
+          <label style={labelStyle}>CHANNEL (ID or name)</label>
+          <input style={inputStyle} value={cfg.channel || ""} placeholder="e.g. C0123456789 or #general" onChange={e => setNodeConfig("channel", e.target.value)} />
+          <label style={labelStyle}>MESSAGE TEXT</label>
+          <textarea rows={3} style={taStyle} value={cfg.text || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("text", e.target.value)} />
+        </div>
+      );
+
+    case "telegram_send":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE TEXT</label>
+          <textarea rows={3} style={taStyle} value={cfg.text || ""} placeholder="Leave blank to use AI output." onChange={e => setNodeConfig("text", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Bot token and chat ID are set in your Telegram integration settings.</div>
+        </div>
+      );
+
+    case "whatsapp_send":
+      return (
+        <div>
+          <label style={labelStyle}>RECIPIENT NUMBER (with country code)</label>
+          <input style={inputStyle} value={cfg.to || ""} placeholder="+2348012345678" onChange={e => setNodeConfig("to", e.target.value)} />
+          <label style={labelStyle}>MESSAGE TEXT</label>
+          <textarea rows={3} style={taStyle} value={cfg.text || ""} placeholder="Leave blank to use AI output." onChange={e => setNodeConfig("text", e.target.value)} />
+        </div>
+      );
+
+    case "twitter_post": {
+      const tweetText = cfg.text || "";
+      return (
+        <div>
+          <label style={labelStyle}>TWEET TEXT (max 280 chars)</label>
+          <textarea rows={3} style={taStyle} value={tweetText} maxLength={280} placeholder="Leave blank to use AI output (will be truncated to 280 chars)." onChange={e => setNodeConfig("text", e.target.value)} />
+          <div style={{ fontSize: 10, color: tweetText.length > 250 ? "#FBBF24" : "rgba(232,238,255,0.3)", marginTop: 4, fontFamily: "'DM Mono',monospace", textAlign: "right" }}>{tweetText.length} / 280</div>
+        </div>
+      );
+    }
+
+    case "linkedin_post":
+      return (
+        <div>
+          <label style={labelStyle}>POST TEXT</label>
+          <textarea rows={4} style={taStyle} value={cfg.text || ""} placeholder="Leave blank to use AI output." onChange={e => setNodeConfig("text", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>LinkedIn enforces rate limits — posts too frequent may be rejected.</div>
+        </div>
+      );
+
+    case "facebook_post":
+      return (
+        <div>
+          <label style={labelStyle}>POST TEXT</label>
+          <textarea rows={4} style={taStyle} value={cfg.text || ""} placeholder="Leave blank to use AI output. Posts to your first connected Facebook page." onChange={e => setNodeConfig("text", e.target.value)} />
+        </div>
+      );
+
+    case "condition":
+      return (
+        <div>
+          <label style={labelStyle}>FIELD TO CHECK</label>
+          <input style={inputStyle} value={cfg.field || ""} placeholder="e.g. trigger.email.subject" onChange={e => setNodeConfig("field", e.target.value)} />
+          <label style={labelStyle}>OPERATOR</label>
+          <select style={{ ...inputStyle, cursor: "pointer" }} value={cfg.operator || "contains"} onChange={e => setNodeConfig("operator", e.target.value)}>
+            {["contains", "not_contains", "equals", "not_equals", "greater_than", "less_than", "exists", "not_exists"].map(op => (
+              <option key={op} value={op} style={{ background: "#04060F" }}>{op.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+          <label style={labelStyle}>VALUE</label>
+          <input style={inputStyle} value={cfg.value || ""} placeholder="e.g. Invoice" onChange={e => setNodeConfig("value", e.target.value)} />
+        </div>
+      );
+
+    case "filter":
+      return (
+        <div>
+          <label style={labelStyle}>CONDITION FIELD</label>
+          <input style={inputStyle} value={cfg.field || ""} placeholder="e.g. trigger.email.from" onChange={e => setNodeConfig("field", e.target.value)} />
+          <label style={labelStyle}>OPERATOR</label>
+          <select style={{ ...inputStyle, cursor: "pointer" }} value={cfg.operator || "contains"} onChange={e => setNodeConfig("operator", e.target.value)}>
+            {["contains", "equals", "not_equals", "exists"].map(op => (
+              <option key={op} value={op} style={{ background: "#04060F" }}>{op.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+          <label style={labelStyle}>VALUE</label>
+          <input style={inputStyle} value={cfg.value || ""} onChange={e => setNodeConfig("value", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Stops the workflow if the condition is NOT met.</div>
+        </div>
+      );
+
+    case "delay":
+      return (
+        <div>
+          <label style={labelStyle}>DELAY DURATION (seconds)</label>
+          <input type="number" min={1} style={inputStyle} value={cfg.seconds ?? 60} onChange={e => setNodeConfig("seconds", Math.max(1, Number(e.target.value)))} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", marginTop: 4, fontFamily: "'DM Mono',monospace" }}>1 = 1 second · 60 = 1 minute · 3600 = 1 hour</div>
+        </div>
+      );
+
+    case "database":
+      return (
+        <div>
+          <label style={labelStyle}>OPERATION</label>
+          <select style={{ ...inputStyle, cursor: "pointer" }} value={cfg.operation || "query"} onChange={e => setNodeConfig("operation", e.target.value)}>
+            {["query", "insert", "update", "delete"].map(op => (
+              <option key={op} value={op} style={{ background: "#04060F" }}>{op}</option>
+            ))}
+          </select>
+          <label style={labelStyle}>TABLE</label>
+          <input style={inputStyle} value={cfg.table || ""} placeholder="e.g. leads" onChange={e => setNodeConfig("table", e.target.value)} />
+          <label style={labelStyle}>FILTER / DATA (JSON)</label>
+          <textarea rows={3} style={taStyle} value={cfg.filter || ""} placeholder={'{"email": "{{trigger.email.from}}"}'} onChange={e => setNodeConfig("filter", e.target.value)} />
+        </div>
+      );
+
+    case "webhook":
+    case "http_request":
+      return (
+        <div>
+          <label style={labelStyle}>URL</label>
+          <input style={inputStyle} value={cfg.url || ""} placeholder="https://api.example.com/endpoint" onChange={e => setNodeConfig("url", e.target.value)} />
+          <label style={labelStyle}>METHOD</label>
+          <select style={{ ...inputStyle, cursor: "pointer" }} value={cfg.method || "POST"} onChange={e => setNodeConfig("method", e.target.value)}>
+            {["POST", "GET", "PUT", "PATCH", "DELETE"].map(m => (
+              <option key={m} value={m} style={{ background: "#04060F" }}>{m}</option>
+            ))}
+          </select>
+          <label style={labelStyle}>HEADERS (JSON, optional)</label>
+          <textarea rows={2} style={taStyle} value={cfg.headers || ""} placeholder={'{"Authorization": "Bearer {{token}}"}'} onChange={e => setNodeConfig("headers", e.target.value)} />
+          <label style={labelStyle}>BODY (JSON or text, optional)</label>
+          <textarea rows={3} style={taStyle} value={cfg.body || ""} onChange={e => setNodeConfig("body", e.target.value)} />
+        </div>
+      );
+
+    case "code": {
+      const op = cfg.operation || "uppercase";
+      return (
+        <div>
+          <label style={labelStyle}>OPERATION</label>
+          <select style={{ ...inputStyle, cursor: "pointer" }} value={op} onChange={e => setNodeConfig("operation", e.target.value)}>
+            {["uppercase", "lowercase", "trim", "word_count", "char_count", "truncate", "replace", "template", "extract_emails", "extract_urls", "extract_numbers", "json_parse", "json_extract"].map(o => (
+              <option key={o} value={o} style={{ background: "#04060F" }}>{o.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+          <label style={labelStyle}>INPUT FIELD (optional)</label>
+          <input style={inputStyle} value={cfg.input || ""} placeholder="Leave blank to use {{last_output}}" onChange={e => setNodeConfig("input", e.target.value)} />
+          {op === "truncate" && (
+            <>
+              <label style={labelStyle}>LENGTH</label>
+              <input type="number" min={1} style={inputStyle} value={cfg.length ?? 200} onChange={e => setNodeConfig("length", Number(e.target.value))} />
+            </>
+          )}
+          {op === "replace" && (
+            <>
+              <label style={labelStyle}>FIND</label>
+              <input style={inputStyle} value={cfg.find || ""} onChange={e => setNodeConfig("find", e.target.value)} />
+              <label style={labelStyle}>REPLACE WITH</label>
+              <input style={inputStyle} value={cfg.replace_with || ""} onChange={e => setNodeConfig("replace_with", e.target.value)} />
+            </>
+          )}
+          {op === "template" && (
+            <>
+              <label style={labelStyle}>TEMPLATE</label>
+              <textarea rows={3} style={taStyle} value={cfg.template || ""} placeholder="Hello {{trigger.email.from}}" onChange={e => setNodeConfig("template", e.target.value)} />
+            </>
+          )}
+          {op === "json_extract" && (
+            <>
+              <label style={labelStyle}>PATH</label>
+              <input style={inputStyle} value={cfg.path || ""} placeholder="e.g. data.user.email" onChange={e => setNodeConfig("path", e.target.value)} />
+            </>
+          )}
+        </div>
+      );
+    }
+
+    case "set_variable":
+      return (
+        <div>
+          <label style={labelStyle}>VARIABLE NAME</label>
+          <input style={inputStyle} value={cfg.key || ""} placeholder="e.g. customer_email" onChange={e => setNodeConfig("key", e.target.value)} />
+          <label style={labelStyle}>VALUE</label>
+          <input style={inputStyle} value={cfg.value || ""} placeholder="{{trigger.email.from}} or a static value" onChange={e => setNodeConfig("value", e.target.value)} />
+        </div>
+      );
+
+    default: {
+      const rawJson = JSON.stringify(cfg, null, 2);
+      return (
+        <div>
+          <label style={labelStyle}>RAW CONFIG (JSON)</label>
+          <textarea
+            rows={8}
+            style={taStyle}
+            defaultValue={rawJson}
+            onBlur={e => {
+              try {
+                const parsed = JSON.parse(e.target.value);
+                setNodes(ns => ns.map(n => n.id === node.id ? { ...n, config: parsed } : n));
+              } catch {
+                // invalid JSON — ignore
+              }
+            }}
+          />
+        </div>
+      );
+    }
+  }
+}
+
+// ─── ContextVariables accordion ───────────────────────────────────────────────
+function ContextVariables() {
+  const [open, setOpen] = useState(false);
+  const vars = [
+    { v: "{{trigger.email.from}}",    d: "sender email" },
+    { v: "{{trigger.email.subject}}", d: "email subject" },
+    { v: "{{trigger.email.body}}",    d: "email body text" },
+    { v: "{{trigger.slack.text}}",    d: "Slack message text" },
+    { v: "{{trigger.slack.channel}}", d: "Slack channel ID" },
+    { v: "{{ai_output}}",             d: "last AI Generate output" },
+    { v: "{{last_output}}",           d: "previous step output" },
+  ];
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "rgba(232,238,255,0.45)", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: 700, letterSpacing: "0.06em", padding: 0, width: "100%" }}
+      >
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        AVAILABLE VARIABLES
+      </button>
+      {open && (
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+          {vars.map(({ v, d }) => (
+            <div key={v} style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 9, fontFamily: "'DM Mono',monospace", color: "#00C896", flexShrink: 0, userSelect: "all" }}>{v}</span>
+              <span style={{ fontSize: 9, fontFamily: "'DM Mono',monospace", color: "rgba(232,238,255,0.3)", textAlign: "right" }}>{d}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Auto-connect confirmation dialog ─────────────────────────────────────────
+function AutoConnectDialog({
+  prompt,
+  onConfirm,
+  onDismiss,
+}: {
+  prompt: AutoConnectPrompt;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "0 0 32px", pointerEvents: "none" }}>
+      <div style={{ background: "rgba(8,11,22,0.98)", border: "1px solid rgba(0,200,150,0.25)", borderRadius: 16, padding: "18px 20px", maxWidth: 320, width: "calc(100% - 32px)", boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,200,150,0.08)", pointerEvents: "auto" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 10 }}>CONNECT NODES?</div>
+        <div style={{ fontSize: 13, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", marginBottom: 16, lineHeight: 1.5 }}>
+          Wire <span style={{ color: "#00C896", fontWeight: 700 }}>{prompt.fromLabel}</span>{" → "}<span style={{ color: "#00C896", fontWeight: 700 }}>{prompt.toLabel}</span> automatically?
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onConfirm} style={{ flex: 1, background: "#00C896", border: "none", borderRadius: 10, padding: "11px 0", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Yes, connect</button>
+          <button onClick={onDismiss} style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "11px 0", color: "rgba(232,238,255,0.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Skip</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Trace helpers ────────────────────────────────────────────────────────────
+// FIX #7: map all backend status variants to display colors
+const TRACE_COLORS: Record<string, string> = {
+  pending:   "rgba(232,238,255,0.2)",
+  running:   "#38BDF8",
+  success:   "#00C896",
+  completed: "#00C896",
+  failed:    "#FB7185",
+  skipped:   "#FBBF24",
+  filtered:  "#FBBF24",
+  cancelled: "#FBBF24",
+};
+
+function TraceStatusIcon({ status }: { status: string }) {
+  const n = normaliseStatus(status);
+  if (n === "success")  return <CheckCircle2 size={11} color="#00C896" />;
+  if (n === "failed")   return <XCircle size={11} color="#FB7185" />;
+  if (n === "skipped")  return <XCircle size={11} color="#FBBF24" />;
+  if (n === "running")  return <RefreshCw size={11} color="#38BDF8" style={{ animation: "spin-slow 1s linear infinite" }} />;
+  return <Clock size={11} color="rgba(232,238,255,0.25)" />;
+}
+
+// ─── NodeBox ──────────────────────────────────────────────────────────────────
+function NodeBox({
+  node, selected, connecting, traceStatus, onSelect, onDelete, onConnectorClick,
+}: {
+  node: Node;
+  selected: boolean;
+  connecting: boolean;
+  traceStatus: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onConnectorClick: (id: string, e: React.MouseEvent) => void;
+}) {
+  const entry = NODE_CATALOG.find(n => n.executorType === node.executorType) || NODE_CATALOG[0];
+  const Icon = entry.icon;
+  const traceColor = traceStatus ? (TRACE_COLORS[traceStatus] || TRACE_COLORS.pending) : null;
+
+  const borderColor = traceColor ?? (selected ? entry.color : "rgba(255,255,255,0.09)");
+
+  const boxShadow = traceStatus === "running"
+    ? "0 0 0 3px rgba(56,189,248,0.25), 0 0 20px rgba(56,189,248,0.15)"
+    : (traceStatus === "success" || traceStatus === "completed")
+    ? "0 0 0 2px rgba(0,200,150,0.2), 0 0 12px rgba(0,200,150,0.12)"
+    : traceStatus === "failed"
+    ? "0 0 0 2px rgba(251,113,133,0.25), 0 0 12px rgba(251,113,133,0.12)"
+    : selected
+    ? `0 0 20px ${entry.color}30`
+    : undefined;
+
   return (
     <div
       data-testid={`node-${node.id}`}
       onClick={() => onSelect(node.id)}
       style={{
         position: "absolute", left: node.x, top: node.y,
-        width: 140, background: "rgba(8,11,22,0.95)",
-        border: `1.5px solid ${selected ? nt.color : "rgba(255,255,255,0.09)"}`,
+        width: 148, background: "rgba(8,11,22,0.95)",
+        border: `1.5px solid ${borderColor}`,
         borderRadius: 12, padding: "12px 14px", cursor: "pointer", userSelect: "none",
-        boxShadow: selected ? `0 0 20px ${nt.color}30` : undefined,
-        transition: "border-color 0.18s, box-shadow 0.18s",
+        boxShadow,
+        transition: "border-color 0.25s, box-shadow 0.25s",
         zIndex: selected ? 10 : 1,
       }}
     >
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, borderRadius: "12px 12px 0 0", background: `linear-gradient(90deg, transparent, ${nt.color}88, transparent)` }} />
+      {/* Top accent */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, borderRadius: "12px 12px 0 0", background: `linear-gradient(90deg, transparent, ${traceColor ?? entry.color}88, transparent)` }} />
+
+      {/* Running shimmer */}
+      {traceStatus === "running" && (
+        <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.06) 50%, transparent 100%)", animation: "trace-shimmer 1.4s ease-in-out infinite", pointerEvents: "none" }} />
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: `${nt.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Icon size={13} color={nt.color} />
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon size={13} color={entry.color} />
         </div>
-        <div>
-          <div style={{ fontSize: 9, fontWeight: 700, color: nt.color, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{nt.label.toUpperCase()}</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#E8EEFF", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 80 }}>{node.label}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: entry.color, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{entry.label.toUpperCase()}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#E8EEFF", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{node.label}</div>
         </div>
       </div>
-      {/* Connectors */}
-      <div style={{ position: "absolute", top: "50%", left: -5, width: 10, height: 10, borderRadius: "50%", background: "#04060F", border: `2px solid ${nt.color}60`, transform: "translateY(-50%)" }} />
-      <div style={{ position: "absolute", top: "50%", right: -5, width: 10, height: 10, borderRadius: "50%", background: nt.color, border: `2px solid ${nt.color}`, transform: "translateY(-50%)" }} />
-      {selected && (
-        <button onClick={e => { e.stopPropagation(); onDelete(node.id); }} style={{ position: "absolute", top: -8, right: -8, width: 20, height: 20, borderRadius: "50%", background: "#FB7185", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 20 }}>
-          <Trash2 size={10} color="white" />
+
+      {/* Left connector */}
+      <div style={{ position: "absolute", top: "50%", left: -5, width: 10, height: 10, borderRadius: "50%", background: "#04060F", border: `2px solid ${entry.color}60`, transform: "translateY(-50%)" }} />
+
+      {/* Right connector — tap-to-connect */}
+      <div
+        onClick={e => { e.stopPropagation(); onConnectorClick(node.id, e); }}
+        style={{
+          position: "absolute", top: "50%", right: -5, width: 14, height: 14, borderRadius: "50%",
+          background: connecting ? "#00C896" : entry.color,
+          border: `2px solid ${connecting ? "#00C896" : entry.color}`,
+          transform: "translateY(-50%)",
+          cursor: "pointer",
+          boxShadow: connecting ? "0 0 8px #00C896" : undefined,
+          animation: connecting ? "pulse-dot 1s ease-in-out infinite" : undefined,
+          zIndex: 30,
+        }}
+      />
+
+      {/* Trace badge */}
+      {traceStatus && (
+        <div style={{ position: "absolute", top: -8, right: -8, width: 20, height: 20, borderRadius: "50%", background: "#04060F", border: `1.5px solid ${traceColor ?? "#FBBF24"}`, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20 }}>
+          <TraceStatusIcon status={traceStatus} />
+        </div>
+      )}
+
+      {/* Delete badge */}
+      {selected && !traceStatus && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(node.id); }}
+          style={{ position: "absolute", top: -10, right: -10, width: 24, height: 24, borderRadius: "50%", background: "#FB7185", border: "2px solid #04060F", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 20 }}
+        >
+          <Trash2 size={11} color="white" />
         </button>
       )}
     </div>
   );
 }
 
-function RunsPanel({ workflowId }: { workflowId: string }) {
+// ─── TraceStatusBar ───────────────────────────────────────────────────────────
+function TraceStatusBar({
+  run, stepStatuses, nodeCount, onDismiss,
+}: {
+  run: any;
+  // FIX #2: stepStatuses is now an array indexed by step position
+  stepStatuses: string[];
+  nodeCount: number;
+  onDismiss: () => void;
+}) {
+  // FIX #7: treat "completed" as success
+  const successCount = stepStatuses.filter(s => s === "success" || s === "completed").length;
+  const failedCount  = stepStatuses.filter(s => s === "failed").length;
+  const runningCount = stepStatuses.filter(s => s === "running").length;
+
+  const rawStatus   = run?.status || "running";
+  const isLive      = rawStatus === "running";
+  const isFailed    = rawStatus === "failed";
+  // FIX #7: backend sets "completed" not "success"
+  const isSuccess   = rawStatus === "success" || rawStatus === "completed";
+
+  const statusColor = isFailed ? "#FB7185" : isSuccess ? "#00C896" : "#38BDF8";
+  const statusLabel = isFailed ? "FAILED" : isSuccess ? "COMPLETED" : "RUNNING";
+
+  return (
+    <div style={{
+      position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 50,
+      background: "rgba(4,6,15,0.96)", borderTop: `1px solid ${statusColor}30`,
+      padding: "10px 16px", display: "flex", alignItems: "center", gap: 12,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, animation: isLive ? "pulse-dot 1s ease-in-out infinite" : undefined }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: statusColor, fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em" }}>{statusLabel}</span>
+      </div>
+
+      <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)" }} />
+
+      <div style={{ display: "flex", gap: 10, fontSize: 11, fontFamily: "'DM Mono',monospace" }}>
+        {runningCount > 0 && <span style={{ color: "#38BDF8" }}>{runningCount} running</span>}
+        <span style={{ color: "#00C896" }}>{successCount} done</span>
+        {failedCount > 0 && <span style={{ color: "#FB7185" }}>{failedCount} failed</span>}
+        <span style={{ color: "rgba(232,238,255,0.3)" }}>/ {nodeCount} steps</span>
+      </div>
+
+      <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden", minWidth: 40 }}>
+        <div style={{ height: "100%", width: `${nodeCount > 0 ? (successCount / nodeCount) * 100 : 0}%`, background: isFailed ? "#FB7185" : "#00C896", borderRadius: 4, transition: "width 0.4s ease" }} />
+      </div>
+
+      {run?.duration_ms && (
+        <span style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>{run.duration_ms}ms</span>
+      )}
+
+      <button onClick={onDismiss} style={{ background: "none", border: "none", color: "rgba(232,238,255,0.3)", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", flexShrink: 0 }}>
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+// ─── RunsPanel ────────────────────────────────────────────────────────────────
+function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (runId: string) => void }) {
   const { data: runs = [], isLoading } = useWorkflowRuns(workflowId);
-  const STATUS_ICON: Record<string, any> = {
-    success: <CheckCircle2 size={13} color="#00C896" />,
-    failed:  <XCircle size={13} color="#FB7185" />,
-    running: <RefreshCw size={13} color="#38BDF8" style={{ animation: "spin-slow 1s linear infinite" }} />,
-    pending: <Clock size={13} color="#FBBF24" />,
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // FIX #7: handle "completed" as success colour
+  const statusColor = (s: string) => {
+    if (s === "success" || s === "completed") return "#00C896";
+    if (s === "failed") return "#FB7185";
+    if (s === "running") return "#38BDF8";
+    return "#FBBF24";
   };
+  const statusIcon = (s: string) => {
+    if (s === "success" || s === "completed") return <CheckCircle2 size={13} color="#00C896" />;
+    if (s === "failed")  return <XCircle size={13} color="#FB7185" />;
+    if (s === "running") return <RefreshCw size={13} color="#38BDF8" style={{ animation: "spin-slow 1s linear infinite" }} />;
+    return <Clock size={13} color="#FBBF24" />;
+  };
+
   return (
     <div style={{ padding: "16px" }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 12 }}>EXECUTION HISTORY</div>
       {isLoading ? <div className="af-shimmer" style={{ height: 120, borderRadius: 8 }} /> :
        runs.length === 0 ? <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(232,238,255,0.2)", fontSize: 12 }}>No runs yet</div> :
        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-         {(runs as any[]).slice(0, 12).map((r: any) => (
-           <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 8 }}>
-             {STATUS_ICON[r.status] || STATUS_ICON.pending}
-             <div style={{ flex: 1, minWidth: 0 }}>
-               <div style={{ fontSize: 11, color: "#E8EEFF", fontFamily: "'DM Mono',monospace" }}>Run #{r.id?.slice?.(-6) || r.id}</div>
-               {r.duration && <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)" }}>{r.duration}ms</div>}
+         {(runs as any[]).slice(0, 20).map((r: any) => {
+           const isOpen = expandedId === r.id;
+           const sc = statusColor(r.status);
+           // FIX #5: logs is the actual field, shape: [{step, type, name, logs:[]}]
+           const steps: any[] = r.logs || [];
+           return (
+             <div key={r.id} style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${isOpen ? sc + "40" : "rgba(255,255,255,0.05)"}`, transition: "border-color 0.2s" }}>
+               <button
+                 onClick={() => setExpandedId(isOpen ? null : r.id)}
+                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: isOpen ? `${sc}0A` : "rgba(255,255,255,0.02)", border: "none", cursor: "pointer", textAlign: "left" }}
+               >
+                 {statusIcon(r.status)}
+                 <div style={{ flex: 1, minWidth: 0 }}>
+                   <div style={{ fontSize: 11, color: "#E8EEFF", fontFamily: "'DM Mono',monospace" }}>Run #{r.id?.slice?.(-6) || r.id}</div>
+                   {r.duration_ms != null && <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)" }}>{r.duration_ms}ms</div>}
+                 </div>
+                 <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>
+                   {r.started_at ? new Date(r.started_at).toLocaleTimeString() : ""}
+                 </div>
+                 <ChevronDown size={12} color="rgba(232,238,255,0.3)" style={{ flexShrink: 0, transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+               </button>
+
+               {isOpen && (
+                 <div style={{ padding: "0 12px 12px 12px", background: `${sc}06` }}>
+                   {/* FIX #5: render steps from logs array with correct fields */}
+                   {steps.length > 0 && (
+                     <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+                       <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 2 }}>STEPS</div>
+                       {steps.map((s: any, i: number) => {
+                         // logs entries: { step (index), type, name, logs: [{level,msg,ts}], attempt }
+                         const stepLogs: any[] = s.logs || [];
+                         const lastLog = stepLogs[stepLogs.length - 1];
+                         const hasError = stepLogs.some((l: any) => l.level === "error");
+                         const stepSc = hasError ? "#FB7185" : "#00C896";
+                         return (
+                           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "6px 8px", background: "rgba(0,0,0,0.15)", borderRadius: 6 }}>
+                             <div style={{ width: 6, height: 6, borderRadius: "50%", background: stepSc, flexShrink: 0, marginTop: 4 }} />
+                             <div style={{ flex: 1, minWidth: 0 }}>
+                               <div style={{ fontSize: 10, color: "#E8EEFF", fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                 {s.name || s.type || `step-${(s.step ?? i) + 1}`}
+                               </div>
+                               {lastLog?.msg && (
+                                 <div style={{ fontSize: 9, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                   {lastLog.msg}
+                                 </div>
+                               )}
+                             </div>
+                             <div style={{ fontSize: 9, color: stepSc, fontFamily: "'DM Mono',monospace", fontWeight: 700, flexShrink: 0 }}>
+                               {hasError ? "FAILED" : "OK"}
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+
+                   {onReplay && (
+                     <button
+                       onClick={() => onReplay(r.id)}
+                       style={{
+                         width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                         background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.3)",
+                         borderRadius: 8, padding: "9px 0",
+                         color: "#38BDF8", fontSize: 12, fontWeight: 700,
+                         cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                       }}
+                     >
+                       <RefreshCw size={12} /> Replay on canvas
+                     </button>
+                   )}
+                 </div>
+               )}
              </div>
-             <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>
-               {r.created_at ? new Date(r.created_at).toLocaleTimeString() : ""}
-             </div>
-           </div>
-         ))}
+           );
+         })}
        </div>
       }
     </div>
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [, nav] = useLocation();
   const { data, isLoading } = useWorkflow(id);
@@ -303,73 +815,111 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const triggerWF  = useTriggerWorkflow();
   const { toast }  = useToast();
 
-  const [nodes, setNodes]   = useState<Node[]>([]);
-  const [edges, setEdges]   = useState<Edge[]>([]);
+  const [nodes, setNodes]       = useState<Node[]>([]);
+  const [edges, setEdges]       = useState<Edge[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [name, setName]     = useState("Workflow");
-  const [tab, setTab]       = useState<"canvas"|"runs"|"config">("canvas");
-  const [saving, setSaving] = useState(false);
+  const [name, setName]         = useState("Workflow");
+  const [tab, setTab]           = useState<"canvas" | "runs" | "config">("canvas");
+  const [saving, setSaving]     = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOff, setDragOff]   = useState({ x: 0, y: 0 });
-  const canvasRef = useRef<HTMLDivElement>(null);
-  let nextId = useRef(1);
+  const [search, setSearch]     = useState("");
+  const [connecting, setConnecting]               = useState<{ fromId: string } | null>(null);
+  const [autoConnectPrompt, setAutoConnectPrompt] = useState<AutoConnectPrompt | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
-  // Trigger type and per-platform config state
+  // FIX #1 & #3: use the existing useWorkflowRun hook instead of raw useQuery
+  // traceRunId is set after trigger by polling /runs for the newest run
+  const [traceRunId, setTraceRunId] = useState<string | null>(null);
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const nextId    = useRef(1);
+
   const [triggerType, setTriggerType]     = useState("manual");
   const [triggerConfig, setTriggerConfig] = useState<Record<string, any>>({});
 
+  // FIX #3: use proper hook — it already handles refetchInterval (stops when not running)
+  // We extend it with our own enabled check based on traceRunId
+  const { data: traceRun } = useWorkflowRun(id, traceRunId ?? "");
+
+  // FIX #2: Build step status array indexed by step position (matching nodes array order)
+  // The executor's logs column: [{ step: 0, type, name, logs: [{level,msg}], attempt }]
+  // We also check steps_completed and overall status to infer which step is "running"
+  const stepStatuses = useMemo<string[]>(() => {
+    if (!traceRun || !nodes.length) return [];
+    const logs: any[] = traceRun.logs || [];
+    const stepsCompleted: number = traceRun.steps_completed ?? 0;
+    const runStatus: string = traceRun.status || "running";
+    const isStillRunning = runStatus === "running";
+
+    return nodes.map((_n, idx) => {
+      // Check if there's a log entry for this step index
+      const logEntry = logs.find((l: any) => l.step === idx);
+      if (logEntry) {
+        const hasError = (logEntry.logs || []).some((l: any) => l.level === "error");
+        if (hasError) return "failed";
+        return "success";
+      }
+      // No log yet — infer from steps_completed
+      if (idx < stepsCompleted) return "success";
+      if (idx === stepsCompleted && isStillRunning) return "running";
+      return "pending";
+    });
+  }, [traceRun, nodes]);
+
+  // ── Hydration ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!data) return;
     setName((data as any).name || "Workflow");
-    // Hydrate trigger state from saved workflow
     setTriggerType((data as any).trigger_type || "manual");
     setTriggerConfig((data as any).trigger_config || {});
     const ns = (data as any).nodes || [];
     const es = (data as any).edges || [];
-    setNodes(ns.map((n: any, i: number) => ({ id: n.id || `n${i}`, type: n.type || "action", label: n.label || n.name || "Node", x: n.x ?? 80 + i * 180, y: n.y ?? 150, config: n.config || {} })));
+    const hydrated = ns.map((n: any, i: number) => ({
+      id: n.id || `n${i}`,
+      executorType: n.type || "ai_generate",
+      label: n.label || n.name || "Node",
+      x: n.x ?? 80 + i * 180,
+      y: n.y ?? 150,
+      config: n.config || {},
+    }));
+    setNodes(hydrated);
     setEdges(es.map((e: any, i: number) => ({ id: `e${i}`, from: e.from || e.source, to: e.to || e.target })));
+    if (ns.length > 0) nextId.current = ns.length + 1;
   }, [data]);
 
-  const addNode = (type: string) => {
-    const nt = NODE_TYPES.find(n => n.type === type)!;
-    const existingCount = nodes.length;
-    const col = Math.floor(existingCount / 4);
-    const row = existingCount % 4;
+  // ── Add node ───────────────────────────────────────────────────────────────
+  const addNode = (entry: CatalogNode) => {
     const newNode: Node = {
       id: `n${nextId.current++}`,
-      type,
-      label: nt.label,
-      x: 20 + col * 170,
-      y: 30 + row * 90,
+      executorType: entry.executorType,
+      label: entry.label,
+      x: 20 + (nodes.length % 4) * 170,
+      y: 30 + Math.floor(nodes.length / 4) * 90,
       config: {},
     };
     setNodes(ns => [...ns, newNode]);
+    // Offer auto-connect when adding the 2nd node
+    if (nodes.length === 1) {
+      const lastNode = nodes[0];
+      setAutoConnectPrompt({ fromId: lastNode.id, toId: newNode.id, fromLabel: lastNode.label, toLabel: newNode.label });
+    }
   };
 
+  // ── Delete node ────────────────────────────────────────────────────────────
   const deleteNode = (nodeId: string) => {
     setNodes(ns => ns.filter(n => n.id !== nodeId));
     setEdges(es => es.filter(e => e.from !== nodeId && e.to !== nodeId));
     if (selected === nodeId) setSelected(null);
   };
 
+  // ── Save ───────────────────────────────────────────────────────────────────
   const save = async () => {
     setSaving(true);
     try {
-      // Validate platform trigger config before saving (non-blocking on warnings).
-      // Note: this call intentionally omits `steps` — this screen never computes
-      // step objects client-side (nodesToSteps() only exists server-side in
-      // routes/workflows.js), so sending `steps: []` would make validateWorkflow()
-      // believe there are zero real steps and validate against that, which is
-      // misleading. Omitting the field entirely makes validateWorkflow() skip
-      // step-level checks, which is the honest behavior since this call only
-      // cares about trigger_type/trigger_config validity.
       if (triggerType !== "manual" && triggerType !== "schedule" && triggerType !== "webhook") {
         try {
-          const validation = await workflowsAPI.validate({
-            name,
-            trigger_type: triggerType,
-            trigger_config: triggerConfig,
-          });
+          const validation = await workflowsAPI.validate({ name, trigger_type: triggerType, trigger_config: triggerConfig });
           if (validation.errors && validation.errors.length > 0) {
             toast({ title: "Cannot save", description: validation.errors.join("; "), variant: "destructive" });
             setSaving(false);
@@ -378,30 +928,81 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           if (validation.warnings && validation.warnings.length > 0) {
             toast({ title: "Saved with warnings", description: validation.warnings.join("; ") });
           }
-        } catch {
-          // Validation endpoint unavailable — proceed with save anyway
-        }
+        } catch { /* Validation endpoint unavailable — proceed */ }
       }
-      // Include trigger_type and trigger_config in the save payload
-      await updateWF.mutateAsync({ name, nodes, edges, trigger_type: triggerType, trigger_config: triggerConfig });
+      await updateWF.mutateAsync({
+        name,
+        // Map executorType back to "type" so the backend executor receives the correct step type
+        nodes: nodes.map(n => ({ ...n, type: n.executorType })),
+        edges,
+        trigger_type: triggerType,
+        trigger_config: triggerConfig,
+      });
       toast({ title: "Saved!", description: "Workflow updated." });
     } catch (e: any) {
       toast({ title: "Save failed", description: e?.message, variant: "destructive" });
     } finally { setSaving(false); }
   };
 
+  // ── Retry (re-trigger) from context of a failed node ─────────────────────
+  const retryFromNode = async (nodeIndex: number) => {
+    setRetrying(true);
+    try {
+      // FIX #6: backend doesn't handle from_node_id as a resume, it's just triggerData.
+      // We pass it as metadata so future backend support is ready. A new run starts.
+      await triggerWF.mutateAsync({ id, data: { from_node_index: nodeIndex, previous_run_id: traceRunId } });
+      toast({ title: "Re-triggered", description: "New run started. Previous run context sent as trigger data." });
+      // Poll for new run
+      await startTrace();
+    } catch (e: any) {
+      toast({ title: "Retry failed", description: e?.message, variant: "destructive" });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  // FIX #1: /trigger returns { ok, queued } — no run_id.
+  // Poll /runs after trigger to grab the newest run's id.
+  const startTrace = async () => {
+    // Wait a tick for the run to be inserted
+    await new Promise(r => setTimeout(r, 800));
+    try {
+      const res: any = await workflowsAPI.runs(id);
+      const runsList: any[] = res.runs || res || [];
+      const newest = runsList[0]; // list is DESC by started_at
+      if (newest?.id) {
+        setTraceRunId(newest.id);
+        setTab("canvas");
+      }
+    } catch {
+      // Can't get runs — fallback to runs tab
+      setTab("runs");
+    }
+  };
+
+  // ── Trigger ────────────────────────────────────────────────────────────────
   const trigger = async () => {
     try {
+      // FIX #1: correct mutation shape — useTriggerWorkflow expects { id, data? }
       await triggerWF.mutateAsync({ id });
-      toast({ title: "Workflow triggered!", description: "Execution started." });
-      setTab("runs");
+      toast({ title: "Workflow running…", description: "Fetching run status." });
+      await startTrace();
     } catch (e: any) {
       toast({ title: "Trigger failed", description: e?.message, variant: "destructive" });
     }
   };
 
+  // ── Drag ───────────────────────────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
+    if (connecting) {
+      if (connecting.fromId !== nodeId) {
+        const exists = edges.some(ed => ed.from === connecting.fromId && ed.to === nodeId);
+        if (!exists) setEdges(es => [...es, { id: `e${Date.now()}`, from: connecting.fromId, to: nodeId }]);
+      }
+      setConnecting(null);
+      return;
+    }
     setSelected(nodeId);
     const node = nodes.find(n => n.id === nodeId)!;
     setDragging(nodeId);
@@ -421,7 +1022,30 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     return () => { window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseUp); };
   }, [onMouseMove, onMouseUp]);
 
-  const selNode = nodes.find(n => n.id === selected);
+  // ── Right-dot connector click ──────────────────────────────────────────────
+  const onConnectorClick = (nodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (connecting) {
+      if (connecting.fromId !== nodeId) {
+        const exists = edges.some(ed => ed.from === connecting.fromId && ed.to === nodeId);
+        if (!exists) setEdges(es => [...es, { id: `e${Date.now()}`, from: connecting.fromId, to: nodeId }]);
+      }
+      setConnecting(null);
+    } else {
+      setConnecting({ fromId: nodeId });
+    }
+  };
+
+  // ── Filtered catalog ───────────────────────────────────────────────────────
+  const q = search.toLowerCase();
+  const filtered = q
+    ? NODE_CATALOG.filter(n => n.label.toLowerCase().includes(q) || n.description.toLowerCase().includes(q))
+    : NODE_CATALOG;
+
+  const selNode    = nodes.find(n => n.id === selected);
+  const selIdx     = selected ? nodes.findIndex(n => n.id === selected) : -1;
+  const isTracing  = !!traceRunId;
+  const traceIsLive = traceRun?.status === "running";
 
   if (isLoading) return (
     <div style={{ height: "100vh", background: "#04060F", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -431,186 +1055,356 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   return (
     <PageTransition variant="push" speed="snappy">
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#04060F", overflow: "hidden" }}>
-      {/* Top bar */}
-      <div style={{ height: 56, background: "rgba(8,11,22,0.97)", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0, zIndex: 20 }}>
-        <button onClick={() => nav("/workflows")} data-testid="button-back" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "rgba(232,238,255,0.5)", cursor: "pointer", fontSize: 13, padding: "6px 10px", borderRadius: 8, fontFamily: "'DM Sans',sans-serif" }}>
-          <ArrowLeft size={15} /> Back
-        </button>
-        <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.08)" }} />
-        <input value={name} onChange={e => setName(e.target.value)} data-testid="input-workflow-name" style={{ flex: 1, background: "none", border: "none", color: "#E8EEFF", fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", outline: "none" }} />
-        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-          {["canvas","runs","config"].map(t => (
-            <button key={t} onClick={() => setTab(t as any)} style={{ background: tab === t ? "rgba(0,200,150,0.1)" : "transparent", border: `1px solid ${tab === t ? "rgba(0,200,150,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 8, padding: "5px 12px", color: tab === t ? "#00C896" : "rgba(232,238,255,0.4)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              {t}
-            </button>
-          ))}
-        </div>
-        <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.08)" }} />
-        <button onClick={trigger} disabled={triggerWF.isPending} data-testid="button-trigger" style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.25)", borderRadius: 8, padding: "6px 14px", color: "#38BDF8", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-          <Zap size={13} /> Run
-        </button>
-        <button onClick={save} disabled={saving} data-testid="button-save" style={{ display: "flex", alignItems: "center", gap: 6, background: "#00C896", border: "none", borderRadius: 8, padding: "6px 16px", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-          <Save size={13} /> {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
+      <style>{`
+        @keyframes pulse-dot {
+          0%, 100% { box-shadow: 0 0 0 0 #00C89660; }
+          50%       { box-shadow: 0 0 0 6px #00C89600; }
+        }
+        @keyframes trace-shimmer {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
 
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Left panel: node types */}
-        {tab === "canvas" && (
-          <div style={{ width: 200, background: "rgba(8,11,22,0.97)", borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", padding: "12px 8px", flexShrink: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 10, padding: "0 6px" }}>ADD NODES</div>
-            {NODE_TYPES.map(nt => {
-              const Icon = nt.icon;
-              return (
-                <button key={nt.type} data-testid={`add-node-${nt.type}`} onClick={() => addNode(nt.type)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 8, padding: "8px 10px", cursor: "pointer", marginBottom: 4, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, transition: "all 0.15s" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${nt.color}12`; (e.currentTarget as HTMLElement).style.borderColor = `${nt.color}30`; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.05)"; }}
-                >
-                  <div style={{ width: 24, height: 24, borderRadius: 6, background: `${nt.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Icon size={12} color={nt.color} />
-                  </div>
-                  {nt.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+      {autoConnectPrompt && (
+        <AutoConnectDialog
+          prompt={autoConnectPrompt}
+          onConfirm={() => {
+            setEdges(es => [...es, { id: `e${Date.now()}`, from: autoConnectPrompt.fromId, to: autoConnectPrompt.toId }]);
+            setAutoConnectPrompt(null);
+          }}
+          onDismiss={() => setAutoConnectPrompt(null)}
+        />
+      )}
 
-        {/* Canvas */}
-        {tab === "canvas" && (
-          <div ref={canvasRef} onClick={() => setSelected(null)} style={{ flex: 1, position: "relative", overflow: "hidden", background: `radial-gradient(ellipse at 50% 50%, rgba(0,200,150,0.03) 0%, transparent 70%), repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 40px)` }}>
-            {nodes.length === 0 && (
-              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-                <GitBranch size={48} color="rgba(0,200,150,0.15)" style={{ marginBottom: 16 }} />
-                <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(232,238,255,0.2)", fontFamily: "'Syne',sans-serif" }}>Add nodes from the left panel</div>
-                <div style={{ fontSize: 13, color: "rgba(232,238,255,0.1)", marginTop: 6 }}>Drag to reposition · Click to select</div>
-              </div>
-            )}
-            {/* SVG edges */}
-            <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}>
-              {edges.map(e => {
-                const fn = nodes.find(n => n.id === e.from);
-                const tn = nodes.find(n => n.id === e.to);
-                if (!fn || !tn) return null;
-                const x1 = fn.x + 140, y1 = fn.y + 36;
-                const x2 = tn.x, y2 = tn.y + 36;
-                const mx = (x1 + x2) / 2;
-                return (
-                  <g key={e.id}>
-                    <path d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} stroke="rgba(0,200,150,0.3)" strokeWidth="1.5" strokeDasharray="6 4" fill="none" />
-                  </g>
-                );
-              })}
-            </svg>
-            {nodes.map(n => (
-              <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
-                <NodeBox node={n} selected={selected === n.id} onSelect={setSelected} onDelete={deleteNode} />
-              </div>
+      <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#04060F", overflow: "hidden" }}>
+
+        {/* ── Top bar ── */}
+        <div style={{ height: 56, background: "rgba(8,11,22,0.97)", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0, zIndex: 20 }}>
+          <button onClick={() => nav("/workflows")} data-testid="button-back" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "rgba(232,238,255,0.5)", cursor: "pointer", fontSize: 13, padding: "6px 10px", borderRadius: 8, fontFamily: "'DM Sans',sans-serif" }}>
+            <ArrowLeft size={15} /> Back
+          </button>
+          <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.08)" }} />
+          <input value={name} onChange={e => setName(e.target.value)} data-testid="input-workflow-name" style={{ flex: 1, background: "none", border: "none", color: "#E8EEFF", fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", outline: "none" }} />
+
+          {/* Live trace badge */}
+          {isTracing && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: traceIsLive ? "rgba(56,189,248,0.1)" : "rgba(0,200,150,0.1)", border: `1px solid ${traceIsLive ? "rgba(56,189,248,0.3)" : "rgba(0,200,150,0.3)"}`, borderRadius: 20, padding: "4px 10px", flexShrink: 0 }}>
+              <Radio size={11} color={traceIsLive ? "#38BDF8" : "#00C896"} style={{ animation: traceIsLive ? "pulse-dot 1s ease-in-out infinite" : undefined }} />
+              <span style={{ fontSize: 10, fontWeight: 800, color: traceIsLive ? "#38BDF8" : "#00C896", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>
+                {/* FIX #7: show COMPLETED for "completed" status */}
+                {traceIsLive ? "LIVE" : (traceRun?.status === "completed" ? "COMPLETED" : (traceRun?.status?.toUpperCase() || "TRACE"))}
+              </span>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["canvas", "runs", "config"] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(0,200,150,0.1)" : "transparent", border: `1px solid ${tab === t ? "rgba(0,200,150,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 8, padding: "5px 12px", color: tab === t ? "#00C896" : "rgba(232,238,255,0.4)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {t}
+              </button>
             ))}
           </div>
-        )}
+          <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.08)" }} />
+          <button onClick={trigger} disabled={triggerWF.isPending} data-testid="button-trigger" style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.25)", borderRadius: 8, padding: "6px 14px", color: "#38BDF8", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", opacity: triggerWF.isPending ? 0.6 : 1 }}>
+            <Zap size={13} /> {triggerWF.isPending ? "Running…" : "Run"}
+          </button>
+          <button onClick={save} disabled={saving} data-testid="button-save" style={{ display: "flex", alignItems: "center", gap: 6, background: "#00C896", border: "none", borderRadius: 8, padding: "6px 16px", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+            <Save size={13} /> {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
 
-        {/* Runs tab */}
-        {tab === "runs" && <div style={{ flex: 1, overflowY: "auto" }}><RunsPanel workflowId={id} /></div>}
+        {/* ── Body ── */}
+        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-        {/* Config tab */}
-        {tab === "config" && (
-          <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
-            <div className="af-glass" style={{ borderRadius: 16, padding: "24px", maxWidth: 600 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 20 }}>Workflow Settings</div>
-
-              {/* Workflow name */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>NAME</label>
-                <input value={name} onChange={e => setName(e.target.value)} data-testid="input-config-name" style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "10px 14px", color: "#E8EEFF", fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-              </div>
-
-              {/* Trigger type selector */}
-              <div style={{ marginBottom: 4 }}>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>TRIGGER TYPE</label>
-                <select
-                  value={triggerType}
-                  onChange={e => {
-                    setTriggerType(e.target.value);
-                    // Reset platform config when switching trigger types
-                    setTriggerConfig({});
-                  }}
-                  style={{
-                    width: "100%",
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.09)",
-                    borderRadius: 10,
-                    padding: "10px 14px",
-                    color: "#E8EEFF",
-                    fontSize: 13,
-                    fontFamily: "'DM Sans',sans-serif",
-                    outline: "none",
-                    cursor: "pointer",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  {TRIGGER_TYPES.map(tt => (
-                    <option key={tt.value} value={tt.value} style={{ background: "#04060F" }}>
-                      {tt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Per-platform config fields */}
-              <div style={{ marginBottom: 24 }}>
-                <TriggerConfigFields
-                  triggerType={triggerType}
-                  triggerConfig={triggerConfig}
-                  setTriggerConfig={setTriggerConfig}
+          {/* ── Left panel ── */}
+          {tab === "canvas" && (
+            <div style={{ width: 220, background: "rgba(8,11,22,0.97)", borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", padding: "10px 8px", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+              <div style={{ position: "relative", marginBottom: 10 }}>
+                <Search size={11} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "rgba(232,238,255,0.25)", pointerEvents: "none" }} />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search nodes…"
+                  style={{ ...inputStyle, paddingLeft: 28, fontSize: 12, borderRadius: 8, padding: "8px 10px 8px 28px" }}
                 />
               </div>
 
-              {/* Statistics */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 12 }}>STATISTICS</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {[
-                    { label: "Total Nodes", val: nodes.length },
-                    { label: "Connections", val: edges.length },
-                    { label: "Trigger", val: TRIGGER_TYPES.find(t => t.value === triggerType)?.label || triggerType },
-                    { label: "Status", val: (data as any)?.is_active ? "Active" : "Paused" },
-                  ].map(s => (
-                    <div key={s.label} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 14px" }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#00C896", fontFamily: "'DM Mono',monospace" }}>{s.val}</div>
-                      <div style={{ fontSize: 11, color: "rgba(232,238,255,0.35)" }}>{s.label}</div>
-                    </div>
-                  ))}
+              {(q ? [null] : CATEGORY_ORDER).map(cat => {
+                const items = cat ? filtered.filter(n => n.category === cat) : filtered;
+                if (items.length === 0) return null;
+                return (
+                  <div key={cat || "results"} style={{ marginBottom: 4 }}>
+                    {cat && (
+                      <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.25)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", padding: "6px 6px 4px", textTransform: "uppercase" }}>
+                        {cat}
+                      </div>
+                    )}
+                    {items.map(entry => {
+                      const Icon = entry.icon;
+                      return (
+                        <button
+                          key={entry.executorType}
+                          data-testid={`add-node-${entry.executorType}`}
+                          onClick={() => addNode(entry)}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 8, width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: "7px 8px", cursor: "pointer", marginBottom: 2, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", textAlign: "left", transition: "all 0.13s" }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${entry.color}12`; (e.currentTarget as HTMLElement).style.borderColor = `${entry.color}30`; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
+                        >
+                          <div style={{ width: 28, height: 28, borderRadius: 7, background: `${entry.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                            <Icon size={13} color={entry.color} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EEFF", lineHeight: 1.3 }}>{entry.label}</div>
+                            <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", lineHeight: 1.4, marginTop: 1 }}>{entry.description}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+
+              <div style={{ marginTop: "auto", padding: "10px 6px 4px", fontSize: 9, color: "rgba(232,238,255,0.2)", fontFamily: "'DM Mono',monospace", lineHeight: 1.6 }}>
+                TAP NODE TO ADD<br />
+                DRAG TO REPOSITION<br />
+                TAP RIGHT DOT → CONNECT
+              </div>
+            </div>
+          )}
+
+          {/* ── Canvas ── */}
+          {tab === "canvas" && (
+            <div
+              ref={canvasRef}
+              onClick={() => { setSelected(null); if (connecting) setConnecting(null); }}
+              style={{ flex: 1, position: "relative", overflow: "hidden", background: `radial-gradient(ellipse at 50% 50%, rgba(0,200,150,0.03) 0%, transparent 70%), repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 40px)` }}
+            >
+              {connecting && (
+                <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(0,200,150,0.15)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 20, padding: "8px 18px", fontSize: 12, color: "#00C896", fontFamily: "'DM Mono',monospace", zIndex: 100, pointerEvents: "none", whiteSpace: "nowrap" }}>
+                  Tap a node to connect — or tap canvas to cancel
                 </div>
+              )}
+
+              {nodes.length === 0 && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                  <GitBranch size={48} color="rgba(0,200,150,0.15)" style={{ marginBottom: 16 }} />
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(232,238,255,0.2)", fontFamily: "'Syne',sans-serif" }}>Add nodes from the left panel</div>
+                  <div style={{ fontSize: 13, color: "rgba(232,238,255,0.1)", marginTop: 6 }}>Drag to reposition · Tap connector dot to wire</div>
+                </div>
+              )}
+
+              {/* SVG edges */}
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}>
+                {edges.map(e => {
+                  const fn = nodes.find(n => n.id === e.from);
+                  const tn = nodes.find(n => n.id === e.to);
+                  if (!fn || !tn) return null;
+                  const x1 = fn.x + 148, y1 = fn.y + 36;
+                  const x2 = tn.x,       y2 = tn.y + 36;
+                  const mx = (x1 + x2) / 2;
+                  const fi = nodes.findIndex(n => n.id === e.from);
+                  const ti = nodes.findIndex(n => n.id === e.to);
+                  // FIX #2: use stepStatuses array (indexed by node position)
+                  const fromDone = fi >= 0 && (stepStatuses[fi] === "success" || stepStatuses[fi] === "completed");
+                  const toDone   = ti >= 0 && (stepStatuses[ti] === "success" || stepStatuses[ti] === "completed");
+                  const edgeColor = (fromDone && toDone) ? "rgba(0,200,150,0.55)" : isTracing ? "rgba(255,255,255,0.06)" : "rgba(0,200,150,0.3)";
+                  return (
+                    <g key={e.id}>
+                      <path d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} stroke={edgeColor} strokeWidth={fromDone && toDone ? 2 : 1.5} strokeDasharray="6 4" fill="none" style={{ transition: "stroke 0.4s" }} />
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {nodes.map((n, idx) => (
+                <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
+                  <NodeBox
+                    node={n}
+                    selected={selected === n.id}
+                    connecting={connecting?.fromId === n.id}
+                    // FIX #2: pass status by node index
+                    traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
+                    onSelect={setSelected}
+                    onDelete={deleteNode}
+                    onConnectorClick={onConnectorClick}
+                  />
+                </div>
+              ))}
+
+              {nodes.length > 0 && !isTracing && (
+                <div style={{ position: "absolute", bottom: 14, left: 14, zIndex: 10, pointerEvents: "none" }}>
+                  <div style={{ background: "rgba(8,11,22,0.8)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "4px 12px", fontSize: 10, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace" }}>
+                    {nodes.length} node{nodes.length !== 1 ? "s" : ""} · {edges.length} edge{edges.length !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              )}
+
+              {/* FIX #2: pass stepStatuses array instead of Map */}
+              {isTracing && traceRun && (
+                <TraceStatusBar
+                  run={traceRun}
+                  stepStatuses={stepStatuses}
+                  nodeCount={nodes.length}
+                  onDismiss={() => setTraceRunId(null)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ── Runs tab ── */}
+          {tab === "runs" && (
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              <RunsPanel
+                workflowId={id}
+                onReplay={(runId) => {
+                  setTraceRunId(runId);
+                  setTab("canvas");
+                }}
+              />
+            </div>
+          )}
+
+          {/* ── Config tab ── */}
+          {tab === "config" && (
+            <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+              <div className="af-glass" style={{ borderRadius: 16, padding: "24px", maxWidth: 600 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 20 }}>Workflow Settings</div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>NAME</label>
+                  <input value={name} onChange={e => setName(e.target.value)} data-testid="input-config-name" style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "10px 14px", color: "#E8EEFF", fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>TRIGGER TYPE</label>
+                  <select value={triggerType} onChange={e => { setTriggerType(e.target.value); setTriggerConfig({}); }} style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "10px 14px", color: "#E8EEFF", fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: "none", cursor: "pointer", boxSizing: "border-box" }}>
+                    {TRIGGER_TYPES.map(tt => <option key={tt.value} value={tt.value} style={{ background: "#04060F" }}>{tt.label}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginBottom: 24 }}>
+                  <TriggerConfigFields triggerType={triggerType} triggerConfig={triggerConfig} setTriggerConfig={setTriggerConfig} />
+                </div>
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 12 }}>STATISTICS</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    {[
+                      { label: "Total Nodes",  val: nodes.length },
+                      { label: "Connections",  val: edges.length },
+                      { label: "Trigger",      val: TRIGGER_TYPES.find(t => t.value === triggerType)?.label || triggerType },
+                      { label: "Status",       val: (data as any)?.is_active ? "Active" : "Paused" },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#00C896", fontFamily: "'DM Mono',monospace" }}>{s.val}</div>
+                        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.35)" }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={save} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8, background: "#00C896", border: "none", borderRadius: 10, padding: "10px 20px", color: "#04060F", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                  <Save size={14} /> {saving ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Right panel: node config ── */}
+          {tab === "canvas" && selected && selNode && (
+            <div style={{ width: 260, background: "rgba(8,11,22,0.97)", borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", padding: "16px", flexShrink: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 14 }}>NODE CONFIG</div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>LABEL</label>
+                <input
+                  data-testid="input-node-label"
+                  value={selNode.label}
+                  onChange={e => setNodes(ns => ns.map(n => n.id === selected ? { ...n, label: e.target.value } : n))}
+                  style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "8px 10px", color: "#E8EEFF", fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }}
+                />
               </div>
 
-              <button onClick={save} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8, background: "#00C896", border: "none", borderRadius: 10, padding: "10px 20px", color: "#04060F", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                <Save size={14} /> {saving ? "Saving…" : "Save Changes"}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>TYPE</label>
+                {(() => {
+                  const entry = NODE_CATALOG.find(n => n.executorType === selNode.executorType);
+                  const color = entry?.color || "#00C896";
+                  return (
+                    <div style={{ fontSize: 11, color, fontFamily: "'DM Mono',monospace", background: `${color}14`, border: `1px solid ${color}30`, borderRadius: 8, padding: "6px 10px", letterSpacing: "0.04em" }}>
+                      {selNode.executorType.toUpperCase()}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* FIX #2: trace step result uses stepStatuses[selIdx] */}
+              {isTracing && selIdx >= 0 && stepStatuses[selIdx] && stepStatuses[selIdx] !== "pending" && (() => {
+                const status = stepStatuses[selIdx];
+                const color = TRACE_COLORS[status] || TRACE_COLORS.pending;
+                // Find the log entry for this step index
+                const logEntry = (traceRun?.logs || []).find((l: any) => l.step === selIdx);
+                const stepLogs: any[] = logEntry?.logs || [];
+                const lastLog = stepLogs[stepLogs.length - 1];
+                const errorLog = stepLogs.find((l: any) => l.level === "error");
+                return (
+                  <div style={{ marginBottom: 14, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 12px", border: `1px solid ${color}30` }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 6 }}>STEP RESULT</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <TraceStatusIcon status={status} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color, fontFamily: "'DM Mono',monospace" }}>
+                        {status.toUpperCase()}
+                      </span>
+                    </div>
+                    {lastLog?.msg && !errorLog && (
+                      <div style={{ fontSize: 10, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginTop: 6, wordBreak: "break-all", maxHeight: 80, overflow: "hidden" }}>
+                        {lastLog.msg.slice(0, 160)}{lastLog.msg.length > 160 ? "…" : ""}
+                      </div>
+                    )}
+                    {errorLog && (
+                      <div style={{ fontSize: 10, color: "#FB7185", fontFamily: "'DM Mono',monospace", marginTop: 6, wordBreak: "break-all" }}>
+                        {errorLog.msg.slice(0, 160)}
+                      </div>
+                    )}
+
+                    {/* FIX #6: retry starts a fresh run, clarified in label */}
+                    {(status === "failed") && (
+                      <button
+                        onClick={() => retryFromNode(selIdx)}
+                        disabled={retrying}
+                        style={{
+                          marginTop: 10, width: "100%",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                          background: retrying ? "rgba(251,113,133,0.05)" : "rgba(251,113,133,0.12)",
+                          border: "1px solid rgba(251,113,133,0.35)",
+                          borderRadius: 8, padding: "9px 0",
+                          color: "#FB7185", fontSize: 12, fontWeight: 700,
+                          cursor: retrying ? "not-allowed" : "pointer",
+                          fontFamily: "'DM Sans',sans-serif",
+                        }}
+                      >
+                        <RotateCcw size={12} style={{ animation: retrying ? "spin-slow 1s linear infinite" : undefined }} />
+                        {retrying ? "Triggering…" : "Re-trigger workflow"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 2 }} />
+              <NodeConfigFields node={selNode} setNodes={setNodes} />
+              <ContextVariables />
+
+              <button
+                onClick={() => deleteNode(selected)}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.2)", borderRadius: 10, padding: "11px", color: "#FB7185", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", marginTop: 18 }}
+              >
+                <Trash2 size={13} /> Delete Node
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Right panel: node config */}
-        {tab === "canvas" && selected && selNode && (
-          <div style={{ width: 240, background: "rgba(8,11,22,0.97)", borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", padding: "16px", flexShrink: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 12 }}>NODE CONFIG</div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Label</label>
-              <input data-testid="input-node-label" value={selNode.label} onChange={e => setNodes(ns => ns.map(n => n.id === selected ? { ...n, label: e.target.value } : n))} style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "8px 10px", color: "#E8EEFF", fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Type</label>
-              <div style={{ fontSize: 12, color: "#00C896", fontFamily: "'DM Mono',monospace", background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.2)", borderRadius: 8, padding: "6px 10px" }}>{selNode.type.toUpperCase()}</div>
-            </div>
-            <button onClick={() => deleteNode(selected)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.2)", borderRadius: 8, padding: "8px", color: "#FB7185", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", marginTop: 8 }}>
-              <Trash2 size={12} /> Delete Node
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
     </PageTransition>
   );
 }
