@@ -6,15 +6,40 @@ import "./index.css";
 
 document.documentElement.classList.add("dark");
 
-window.onerror = function(msg, src, line, col, err) {
-  document.body.innerHTML = '<div style="color:red;padding:20px;font-size:16px;background:white">' +
-    '<h2>JS Error:</h2><pre>' + msg + '\n\nFile: ' + src + '\nLine: ' + line + '\n\n' + (err?.stack || '') + '</pre></div>';
-};
+// ── Stale chunk auto-recovery ─────────────────────────────────────────────────
+// When Vercel deploys a new build, old JS chunk filenames no longer exist.
+// Users with the old version cached get "Failed to fetch dynamically imported module".
+// We detect this and silently reload once to pick up the new build.
+function isChunkLoadError(msg) {
+  const s = typeof msg === "string" ? msg : String(msg || "");
+  return (
+    s.includes("Failed to fetch dynamically imported module") ||
+    s.includes("Importing a module script failed") ||
+    s.includes("Unable to preload CSS")
+  );
+}
 
-window.onunhandledrejection = function(e) {
-  document.body.innerHTML = '<div style="color:red;padding:20px;font-size:16px;background:white">' +
-    '<h2>Promise Error:</h2><pre>' + e.reason + '</pre></div>';
-};
+const RELOAD_KEY = "autoflowng_chunk_reload";
+
+window.addEventListener("error", (e) => {
+  if (isChunkLoadError(e.message || "")) {
+    if (!sessionStorage.getItem(RELOAD_KEY)) {
+      sessionStorage.setItem(RELOAD_KEY, "1");
+      window.location.reload();
+    }
+  }
+});
+
+window.addEventListener("unhandledrejection", (e) => {
+  const msg = e.reason?.message || String(e.reason || "");
+  if (isChunkLoadError(msg)) {
+    e.preventDefault();
+    if (!sessionStorage.getItem(RELOAD_KEY)) {
+      sessionStorage.setItem(RELOAD_KEY, "1");
+      window.location.reload();
+    }
+  }
+});
 
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
