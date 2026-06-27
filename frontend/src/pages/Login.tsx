@@ -9,6 +9,7 @@ import { GradientMesh } from "../components/GradientMesh";
 import { MagneticCursor } from "../components/MagneticCursor";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
+import TurnstileWidget from "../components/TurnstileWidget";
 
 interface LoginForm { email: string; password: string; }
 
@@ -21,17 +22,23 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>();
 
   const onSubmit = async (data: LoginForm) => {
+    if (!turnstileToken) {
+      setError("Please complete the security check before signing in.");
+      return;
+    }
     setLoading(true); setError("");
     try {
-      await login(data.email, data.password);
+      await login(data.email, data.password, turnstileToken);
       toast({ title: "Welcome back!", description: "Logged in successfully." });
       nav("/dashboard");
     } catch (e: any) {
       setError(e?.message || "Login failed. Please check your credentials.");
+      setTurnstileToken(null); // reset so widget re-challenges
     } finally { setLoading(false); }
   };
 
@@ -77,7 +84,15 @@ export default function Login() {
               </button>
               {errors.password && <p style={{ fontSize: 11, color: "#FB7185", marginTop: 4 }}>Password is required</p>}
             </div>
-            <button type="submit" data-testid="button-submit" disabled={loading} style={{ width: "100%", background: loading ? "rgba(0,200,150,0.5)" : "#00C896", border: "none", borderRadius: 12, padding: "14px", color: "#04060F", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.18s", boxShadow: "0 0 30px rgba(0,200,150,0.3)" }}>
+            <div style={{ marginBottom: 20 }}>
+              <TurnstileWidget
+                onSuccess={(token) => setTurnstileToken(token)}
+                onExpired={() => setTurnstileToken(null)}
+                onError={() => setTurnstileToken(null)}
+                theme="dark"
+              />
+            </div>
+            <button type="submit" data-testid="button-submit" disabled={loading || !turnstileToken} style={{ width: "100%", background: (loading || !turnstileToken) ? "rgba(0,200,150,0.5)" : "#00C896", border: "none", borderRadius: 12, padding: "14px", color: "#04060F", fontSize: 15, fontWeight: 700, cursor: (loading || !turnstileToken) ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.18s", boxShadow: "0 0 30px rgba(0,200,150,0.3)" }}>
               {loading ? <><div className="af-loader" style={{ width: 18, height: 18, borderWidth: 2 }} /> Signing in…</> : <>Sign in <ArrowRight size={16} /></>}
             </button>
           </form>
