@@ -22,7 +22,7 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<any>;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<any>;
   register: (formData: any) => Promise<any>;
   logout: () => void;
   updateUser: (partial: Partial<User>) => void;
@@ -73,9 +73,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("autoflowng:unauthorized", handleUnauthorized);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, turnstileToken?: string) => {
     try {
-      const data = await authAPI.login({ email, password });
+      const data = await authAPI.login({ email, password, 'cf-turnstile-response': turnstileToken });
       const tok = data.accessToken || data.token;
       if (tok) tokenStore.set(tok);
       setUser(data.user);
