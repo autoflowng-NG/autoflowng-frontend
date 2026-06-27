@@ -619,7 +619,7 @@ export default function Workflows() {
                       key={wf.id}
                       wf={wf}
                       delay={i * 0.03}
-                      onEdit={(id: string) => nav(`/workflows/${id}`)}
+                      onEdit={(id: string) => nav(`/workflow-builder/${id}`)}
                       onDelete={handleDelete}
                       onToggle={(id: string) => toggleWF.mutate(id)}
                       onTrigger={handleTrigger}
