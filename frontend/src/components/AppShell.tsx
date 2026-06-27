@@ -52,10 +52,9 @@ const T = {
 
 /* ── Nav config — labelKey resolved via t() at render time ───────────── */
 const NAV = [
-  { path: "/dashboard",    labelKey: "nav.dashboard",       icon: LayoutDashboard },
-  { path: "/workflows",    labelKey: "nav.workflows",        icon: GitBranch },
-  { path: "/automations",  labelKey: "nav.automations",      icon: Zap },
-  { path: "/ai-chat",      labelKey: "nav.ai_assistant",     icon: Bot },
+  { path: "/dashboard",    labelKey: "nav.dashboard",             icon: LayoutDashboard },
+  { path: "/workflows",    labelKey: "nav.workflows_automations",  icon: GitBranch },
+  { path: "/ai-chat",      labelKey: "nav.ai_assistant",           icon: Bot },
   { path: "/knowledge-hub",labelKey: "nav.explore",          icon: Compass },
   { path: "/news",         labelKey: "nav.news",             icon: Newspaper },
   { path: "/dashboard/creative-agents", labelKey: "nav.creative_agents", icon: Wand2 },
@@ -84,7 +83,7 @@ const SUPER_ADMIN_NAV = [
 const NAV_SECTIONS = [
   {
     sectionKey: "nav.section_main",
-    items: ["/dashboard", "/workflows", "/automations"],
+    items: ["/dashboard", "/workflows"],
   },
   {
     sectionKey: "nav.section_ai_content",
@@ -112,6 +111,7 @@ const STATUS_COLORS: Record<string, string> = {
 function NavItem({
   item, active, isCollapsed, isMobile, onClose,
 }: {
+  key?: React.Key;
   item: typeof NAV[0] & { badgeKey?: string; badgeColor?: string };
   active: boolean;
   isCollapsed: boolean;

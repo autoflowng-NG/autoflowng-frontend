@@ -33,8 +33,7 @@ interface PaletteItem {
 /* ── Static nav pages ───────────────────────────────────────────────── */
 const PAGES = [
   { id: "p-dashboard",   label: "Dashboard",    sublabel: "Command centre",     icon: LayoutDashboard, color: "#00C896", path: "/dashboard",   keywords: "home overview" },
-  { id: "p-workflows",   label: "Workflows",    sublabel: "Manage & run flows",  icon: GitBranch,       color: "#00C896", path: "/workflows",   keywords: "run trigger" },
-  { id: "p-automations", label: "Automations",  sublabel: "Auto-trigger rules",  icon: Zap,             color: "#38BDF8", path: "/automations", keywords: "rules events" },
+  { id: "p-workflows",   label: "Workflows & Automations", sublabel: "Manage flows & auto-trigger rules", icon: GitBranch, color: "#00C896", path: "/workflows", keywords: "run trigger automations rules events zap" },
   { id: "p-ai",          label: "AI Assistant", sublabel: "Chat with AI",        icon: Bot,             color: "#A78BFA", path: "/ai",          keywords: "chat gpt llm" },
   { id: "p-connections", label: "Connections",  sublabel: "OAuth & API keys",    icon: Link2,           color: "#38BDF8", path: "/connections", keywords: "oauth api integrations" },
   { id: "p-plans",       label: "Plans",        sublabel: "Billing & upgrade",   icon: CreditCard,      color: "#FBBF24", path: "/plans",       keywords: "billing payment upgrade" },
@@ -97,6 +96,7 @@ function GroupLabel({ label, loading }: { label: string; loading?: boolean }) {
 function ResultRow({
   item, active, onMouseEnter, onClick,
 }: {
+  key?: React.Key;
   item: PaletteItem; active: boolean; onMouseEnter: () => void; onClick: () => void;
 }) {
   const Icon = item.icon;
@@ -298,7 +298,7 @@ export function CommandPalette() {
       icon:  am.enabled ? ToggleRight : ToggleLeft,
       color: am.enabled ? "#38BDF8" : "rgba(232,238,255,0.3)",
       keywords: am.trigger_type || "",
-      onSelect: () => go("/automations"),
+      onSelect: () => go("/workflows?tab=automations"),
     }));
 
     /* Run logs */
@@ -326,7 +326,7 @@ export function CommandPalette() {
     /* Quick actions */
     const actions: PaletteItem[] = [
       { id: "a-new-wf",  kind: "action", label: "New Workflow",   sublabel: "Open workflow builder", icon: GitBranch,  color: "#00C896", keywords: "create build",  onSelect: () => go("/workflows") },
-      { id: "a-new-am",  kind: "action", label: "New Automation", sublabel: "Set up a trigger",      icon: Zap,        color: "#38BDF8", keywords: "trigger rule",  onSelect: () => go("/automations") },
+      { id: "a-new-am",  kind: "action", label: "New Automation", sublabel: "Set up a trigger",      icon: Zap,        color: "#38BDF8", keywords: "trigger rule",  onSelect: () => go("/workflows?tab=automations") },
       { id: "a-ask-ai",  kind: "action", label: "Ask AI",         sublabel: "Open AI assistant",     icon: Bot,        color: "#A78BFA", keywords: "chat gpt",      onSelect: () => go("/ai") },
       { id: "a-upgrade", kind: "action", label: "Upgrade plan",   sublabel: "View pricing",          icon: CreditCard, color: "#FBBF24", keywords: "pro billing",   onSelect: () => go("/plans") },
     ];
