@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { PlatformSVGIcon } from "../components/PlatformIcons";
 import api, { tokenStore, connectionsAPI } from "../lib/api";
-import { integrationsAPI } from "../lib/integrationsApi";
+import { integrationsAPI, discordAPI } from "../lib/integrationsApi";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
@@ -224,7 +224,15 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
 
-  const hasCredFields = (integ.credentials?.length ?? 0) > 0;
+  // Discord doesn't use OAuth2 (one shared bot token, not per-user tokens —
+  // see platforms/discord.js / registry.js authType:'bearer_token') and it
+  // has no credentials[] fields either, so it fell through to handleOAuth()
+  // by default and hit the backend's "This integration does not use OAuth2"
+  // guard every time. It needs its own two-step flow: open the bot invite
+  // link, then collect the resulting Server (Guild) ID.
+  const isDiscord = integ.id === "discord";
+
+  const hasCredFields = isDiscord || (integ.credentials?.length ?? 0) > 0;
 
   const handleOAuth = useCallback(() => {
     const token = tokenStore.get();
@@ -245,7 +253,67 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
     }
   }, [integ.id, toast, onDone]);
 
+  // Step 1 for Discord: fetch the invite URL and open it in a new tab so
+  // the user can pick a server and approve the bot, then reveal the
+  // Server ID field (handled by handleConnect below). discordAPI.inviteUrl()
+  // resolves to the parsed JSON body directly (see lib/api.ts's request()
+  // — it returns `data`, not an axios-style `{ data }` wrapper), so the
+  // shape here is simply `{ url: string }`.
+  //
+  // BUGFIX: window.open() must run synchronously inside the click handler
+  // to count as user-gesture-initiated — calling it only after an `await`
+  // (i.e. after the invite-url fetch resolves) gets silently blocked as a
+  // popup by Safari and many Chrome configurations. We open a blank tab
+  // immediately, then navigate that already-open tab once we have the URL.
+  const handleDiscordInvite = useCallback(async () => {
+    const tab = window.open("", "_blank");
+    setLoading(true);
+    try {
+      const res: any = await discordAPI.inviteUrl();
+      if (!res?.url) throw new Error("No invite URL returned");
+      if (tab) tab.location.href = res.url;
+      else window.open(res.url, "_blank"); // fallback if even the blank tab got blocked
+    } catch (e: any) {
+      tab?.close();
+      toast({
+        title: "Couldn't get Discord invite link",
+        description: e?.message || "Make sure DISCORD_CLIENT_ID is configured on the backend.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  // Step 2 for Discord: submit the Server ID the user pasted in after
+  // adding the bot. Backend verifies the bot is actually in that guild
+  // before saving anything (see POST /api/integrations/discord/connect).
+  const handleDiscordConnect = useCallback(async () => {
+    const guildId = (formData.guildId || "").trim();
+    if (!guildId) {
+      toast({ title: "Enter your Discord Server ID", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const result: any = await discordAPI.connect(guildId);
+      toast({ title: `Connected to ${result?.guildName || "Discord server"}!` });
+      setShowForm(false);
+      setFormData({});
+      onDone();
+    } catch (e: any) {
+      toast({
+        title: "Couldn't connect that server",
+        description: e?.message || "Make sure you added the bot to this server first.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [formData, toast, onDone]);
+
   const handleCredConnect = useCallback(async () => {
+    if (isDiscord) return handleDiscordConnect();
     setLoading(true);
     try {
       await integrationsAPI.connect(integ.id, formData);
@@ -258,7 +326,7 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
     } finally {
       setLoading(false);
     }
-  }, [integ.id, integ.name, formData, toast, onDone]);
+  }, [isDiscord, handleDiscordConnect, integ.id, integ.name, formData, toast, onDone]);
 
   const handleDisconnect = useCallback(async () => {
     setLoading(true);
@@ -278,17 +346,27 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   }, [integ.id, integ.name, toast, onDone]);
 
   const handleConnect = useCallback(() => {
+    if (isDiscord) {
+      setShowForm(true);
+      handleDiscordInvite();
+      return;
+    }
     if (hasCredFields) {
       setShowForm(true);
     } else {
       handleOAuth();
     }
-  }, [hasCredFields, handleOAuth]);
+  }, [isDiscord, handleDiscordInvite, hasCredFields, handleOAuth]);
+
+  // Discord's form field isn't driven by integ.credentials (it has none —
+  // it's not a generic API-key integration), so IntegrationCard renders
+  // this fixed single field instead when isDiscord is true.
+  const discordFields = [{ name: "guildId", label: "Discord Server ID", type: "text" }];
 
   return {
-    loading, showForm, formData, hasCredFields,
+    loading, showForm, formData, hasCredFields, isDiscord, discordFields,
     setShowForm, setFormData,
-    handleConnect, handleOAuth, handleCredConnect, handleDisconnect,
+    handleConnect, handleOAuth, handleCredConnect, handleDisconnect, handleDiscordInvite,
   };
 }
 
@@ -492,7 +570,30 @@ function IntegrationCard({
           padding: 12, background: "rgba(0,0,0,0.2)",
           border: `1px solid ${C.border}`, borderRadius: 10,
         }}>
-          {(integ.credentials || []).map(f => (
+          {flow.isDiscord && (
+            <div style={{
+              fontSize: 11, color: C.muted, lineHeight: 1.5,
+              fontFamily: "'DM Sans',sans-serif", marginBottom: 10,
+            }}>
+              1. A tab opened so you can add the bot to your server — pick a
+              server and approve it there.<br />
+              2. Enable Developer Mode (Discord Settings → Advanced), then
+              right-click your server icon → <b>Copy Server ID</b>, and paste
+              it below.{" "}
+              <button
+                onClick={flow.handleDiscordInvite}
+                disabled={flow.loading}
+                style={{
+                  background: "none", border: "none", padding: 0,
+                  color: C.blue, cursor: "pointer", fontSize: 11,
+                  textDecoration: "underline", fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                Reopen invite link
+              </button>
+            </div>
+          )}
+          {(flow.isDiscord ? flow.discordFields : (integ.credentials || [])).map(f => (
             <div key={f.name} style={{ marginBottom: 10 }}>
               <label style={{
                 display: "block", fontSize: 10, fontWeight: 700,

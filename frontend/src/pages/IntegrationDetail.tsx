@@ -71,9 +71,15 @@ export default function IntegrationDetail() {
   };
 
   // Per-integration field overrides — more descriptive than the generic auth-type labels
+  // BUGFIX: 'discord' used to have an apiKey/"Bot Token" field here, which
+  // looked like a working per-user connect form but was a dead end —
+  // platforms/discord.js's discordReq() reads only the single shared
+  // process.env.DISCORD_BOT_TOKEN; nothing ever reads whatever a user typed
+  // into this form back out of the Credential Vault. Removed so Discord
+  // falls through to the dedicated notice below instead of silently
+  // accepting a token that would never be used.
   const INTEGRATION_FIELDS: Record<string, { name: string; label: string; type: string }[]> = {
     telegram:    [{ name: "apiKey", label: "Bot Token",        type: "password" }],
-    discord:     [{ name: "apiKey", label: "Bot Token",        type: "password" }],
     openai:      [{ name: "apiKey", label: "OpenAI API Key",   type: "password" }],
     anthropic:   [{ name: "apiKey", label: "Anthropic API Key",type: "password" }],
     stripe:      [{ name: "apiKey", label: "Secret Key",       type: "password" }],
@@ -102,6 +108,13 @@ export default function IntegrationDetail() {
 
   const fields = INTEGRATION_FIELDS[integ.id] || AUTH_FIELDS[integ.authType] || [];
   const isOAuth = integ.authType === "oauth2";
+  // Discord runs on one shared bot token configured by the platform owner
+  // (Railway env var), not a per-user credential — so neither the OAuth
+  // button nor the generic API-key form apply to it. The real connect flow
+  // (invite the bot to a server, then submit the Server ID) lives on the
+  // Integration Hub page; this page just points there instead of rendering
+  // a form that would silently do nothing.
+  const isDiscord = integ.id === "discord";
 
   return (
     <PageTransition variant="slide">
@@ -191,6 +204,18 @@ export default function IntegrationDetail() {
                         {testResult.error && <div style={{ fontSize: 11, color: "rgba(232,238,255,0.4)", marginTop: 4 }}>{testResult.error}</div>}
                       </div>
                     )}
+                  </div>
+                ) : isDiscord ? (
+                  <div>
+                    <div style={{ fontSize: 12, color: "rgba(232,238,255,0.55)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+                      Discord connects differently — there's one shared bot
+                      for the whole platform rather than a personal token.
+                      Head to the Integration Hub to invite the bot to your
+                      server and link it.
+                    </div>
+                    <button onClick={() => navigate("/marketplace")} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", background: "rgba(0,200,150,0.12)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 10, color: "#00C896", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      <ExternalLink size={13} /> Go to Integration Hub
+                    </button>
                   </div>
                 ) : isOAuth ? (
                   <div>
