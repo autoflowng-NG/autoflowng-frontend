@@ -24,6 +24,14 @@ export const integrationsAPI = {
 
   oauthStart: (id: string) =>
     `${(globalThis as any).__VITE_API_URL__ || ''}/api/integrations/${id}/oauth/start`,
+
+  // Diagnostic: returns the exact redirect_uri the backend will send for
+  // every OAuth platform, plus whether each one's client ID/secret env vars
+  // are actually set. Use this instead of guessing why a provider rejects
+  // the redirect_uri (Google "redirect_uri_mismatch", Notion "Missing or
+  // invalid redirect_uri", etc) — paste the printed redirectUri values
+  // directly into that provider's developer console.
+  redirectConfig: () => (api as any).get('/integrations/oauth/redirect-config'),
 };
 
 // ── Discord (bot-invite flow — not OAuth2, see routes/integrations.js) ────────
