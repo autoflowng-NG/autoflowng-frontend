@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, CheckCircle2, XCircle, AlertTriangle, Clock,
   ExternalLink, Trash2, RefreshCw, Settings, Shield,
-  Activity, Zap, Plug, Layers,
+  Activity, Zap, Plug, Layers, Info,
 } from "lucide-react";
 import { PlatformSVGIcon } from "../components/PlatformIcons";
 import api, { tokenStore, connectionsAPI } from "../lib/api";
@@ -116,6 +116,7 @@ interface MergedIntegration {
   triggers: unknown[];
   actions: unknown[];
   authType?: string;
+  setupNote?: string;
   credentials?: { name: string; label: string; type: string }[];
   connected: boolean;
   accountEmail?: string;
@@ -232,7 +233,15 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   // link, then collect the resulting Server (Guild) ID.
   const isDiscord = integ.id === "discord";
 
+  // authType:'custom' with no credentials[] means the integration uses
+  // inline config (connection strings, URLs) passed per-node in the workflow
+  // builder — there is nothing to store here. Show the setupNote instead of
+  // pretending to start an OAuth flow or presenting an empty credential form.
+  const isCustomNoAuth = integ.authType === "custom" && !isDiscord && !(integ.credentials?.length);
+
   const hasCredFields = isDiscord || (integ.credentials?.length ?? 0) > 0;
+
+  const [showInfo, setShowInfo] = useState(false);
 
   const handleOAuth = useCallback(() => {
     const token = tokenStore.get();
@@ -351,12 +360,16 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
       handleDiscordInvite();
       return;
     }
+    if (isCustomNoAuth) {
+      setShowInfo(true);
+      return;
+    }
     if (hasCredFields) {
       setShowForm(true);
     } else {
       handleOAuth();
     }
-  }, [isDiscord, handleDiscordInvite, hasCredFields, handleOAuth]);
+  }, [isDiscord, isCustomNoAuth, handleDiscordInvite, hasCredFields, handleOAuth]);
 
   // Discord's form field isn't driven by integ.credentials (it has none —
   // it's not a generic API-key integration), so IntegrationCard renders
@@ -364,8 +377,8 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   const discordFields = [{ name: "guildId", label: "Discord Server ID", type: "text" }];
 
   return {
-    loading, showForm, formData, hasCredFields, isDiscord, discordFields,
-    setShowForm, setFormData,
+    loading, showForm, showInfo, formData, hasCredFields, isDiscord, isCustomNoAuth, discordFields,
+    setShowForm, setShowInfo, setFormData,
     handleConnect, handleOAuth, handleCredConnect, handleDisconnect, handleDiscordInvite,
   };
 }
@@ -564,6 +577,42 @@ function IntegrationCard({
         </div>
       )}
 
+      {/* Setup note panel — shown for authType:'custom' integrations that use
+          inline config (Redis URL, Mongo URI, HTTP URL) rather than stored
+          credentials. Replaces the Connect→OAuth dead-end. */}
+      {flow.showInfo && flow.isCustomNoAuth && (
+        <div style={{
+          padding: "12px 14px",
+          background: "rgba(56,189,248,0.06)",
+          border: "1px solid rgba(56,189,248,0.18)",
+          borderRadius: 10,
+          display: "flex", flexDirection: "column", gap: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <Info size={14} color={C.blue} style={{ marginTop: 1, flexShrink: 0 }} />
+            <span style={{
+              fontSize: 11, color: C.muted, lineHeight: 1.6,
+              fontFamily: "'DM Sans',sans-serif",
+            }}>
+              {integ.setupNote || "No stored credential needed — configure this integration per-action inside the workflow builder."}
+            </span>
+          </div>
+          <button
+            onClick={() => flow.setShowInfo(false)}
+            style={{
+              alignSelf: "flex-start",
+              background: "rgba(56,189,248,0.10)",
+              border: "1px solid rgba(56,189,248,0.25)",
+              borderRadius: 7, padding: "5px 12px",
+              color: C.blue, fontSize: 11, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+            }}
+          >
+            Got it
+          </button>
+        </div>
+      )}
+
       {/* Credential input form */}
       {flow.showForm && flow.hasCredFields && (
         <div style={{
@@ -667,6 +716,24 @@ function IntegrationCard({
               Manage
             </button>
           </>
+        ) : flow.showInfo ? (
+          /* Info panel is showing — only offer Details, no redundant Connect */
+          <button
+            onClick={() => navigate(`/integrations/${integ.id}`)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: "rgba(167,139,250,0.07)",
+              border: "1px solid rgba(167,139,250,0.2)",
+              borderRadius: 8, padding: "7px 11px",
+              color: C.purple, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              transition: "all 0.14s",
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.12)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.07)"}
+          >
+            Details
+          </button>
         ) : flow.showForm ? (
           <>
             <button
@@ -831,6 +898,7 @@ export default function IntegrationHub() {
         triggers:     integ.triggers || [],
         actions:      integ.actions  || [],
         authType:     integ.authType,
+        setupNote:    integ.setupNote,
         credentials:  integ.credentials,
         connected,
         accountEmail: conn?.platform_email || conn?.email,
