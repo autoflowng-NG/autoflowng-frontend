@@ -533,7 +533,7 @@ function MediaAssetPicker({ assetType, label, selected, onSelect }: {
 }
 
 /* ── RecentQuickGeneratesPanel ──────────────────────────────────────── */
-interface LibraryAsset { id: string; name: string; status: string; public_url?: string; custom_metadata?: { ai_video_job_id?: string; pipeline_project_id?: string; prompt?: string; provider?: string; aspect_ratio?: string; duration_sec?: number; }; created_at: string; updated_at: string; }
+interface LibraryAsset { id: string; name: string; status: string; public_url?: string; presigned_url?: string; custom_metadata?: { ai_video_job_id?: string; pipeline_project_id?: string; prompt?: string; provider?: string; aspect_ratio?: string; duration_sec?: number; }; created_at: string; updated_at: string; }
 
 function RecentQuickGeneratesPanel({ onResumeTracking }: { onResumeTracking: (aiVideoJobId: string, libraryAssetId: string) => void }) {
   const [assets, setAssets] = useState<LibraryAsset[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);

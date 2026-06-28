@@ -22,7 +22,7 @@ interface WorkflowBuilderProps { id: string; }
 interface CatalogNode {
   executorType: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; color?: string }>;
+  icon: React.ComponentType<{ size?: number | string; color?: string }>;
   color: string;
   category: "AI" | "Messaging" | "Social" | "Logic" | "Data" | "Utility";
   description: string;
