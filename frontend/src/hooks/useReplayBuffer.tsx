@@ -128,7 +128,7 @@ export function useReplayBuffer(): ReplayBufferApi {
       gapOpenedAt.current = null;
       setState(prev => {
         const gaps = [...prev.gaps];
-        const openIdx = gaps.findLastIndex(g => g.to === null);
+        let openIdx = -1; for (let i = gaps.length - 1; i >= 0; i--) { if ((gaps[i] as DisconnectGap).to === null) { openIdx = i; break; } }
         if (openIdx >= 0) {
           gaps[openIdx] = {
             ...gaps[openIdx],

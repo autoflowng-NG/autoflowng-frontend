@@ -122,3 +122,34 @@ export function useActivateTemplate() {
     },
   });
 }
+
+/* ── Automations hooks ──────────────────────────────────────────────── */
+export function useAutomations() {
+  return useQuery({
+    queryKey: ["automations"],
+    queryFn:  () => automationsAPI.list().then((d: any) => d.automations || d.tasks || []),
+  });
+}
+
+export function useToggleAutomation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { templateId: string; enabled: boolean }) =>
+      automationsAPI.toggle(data),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["automations"] }),
+  });
+}
+
+export function useRunAutomation() {
+  return useMutation({
+    mutationFn: (templateId: string) => automationsAPI.run(templateId),
+  });
+}
+
+export function useAutomationLogs(templateId: string) {
+  return useQuery({
+    queryKey: ["automation-logs", templateId],
+    queryFn:  () => automationsAPI.logs(templateId).then((d: any) => d.logs || []),
+    enabled:  !!templateId,
+  });
+}
