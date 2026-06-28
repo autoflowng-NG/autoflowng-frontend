@@ -10,7 +10,7 @@ document.documentElement.classList.add("dark");
 // When Vercel deploys a new build, old JS chunk filenames no longer exist.
 // Users with the old version cached get "Failed to fetch dynamically imported module".
 // We detect this and silently reload once to pick up the new build.
-function isChunkLoadError(msg) {
+function isChunkLoadError(msg: unknown) {
   const s = typeof msg === "string" ? msg : String(msg || "");
   return (
     s.includes("Failed to fetch dynamically imported module") ||
