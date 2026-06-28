@@ -241,7 +241,6 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
 
   const hasCredFields = isDiscord || (integ.credentials?.length ?? 0) > 0;
 
-  const [showInfo, setShowInfo] = useState(false);
 
   const handleOAuth = useCallback(() => {
     const token = tokenStore.get();
@@ -361,7 +360,7 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
       return;
     }
     if (isCustomNoAuth) {
-      setShowInfo(true);
+      // setupNote is shown inline — nothing to do on click
       return;
     }
     if (hasCredFields) {
@@ -377,8 +376,8 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   const discordFields = [{ name: "guildId", label: "Discord Server ID", type: "text" }];
 
   return {
-    loading, showForm, showInfo, formData, hasCredFields, isDiscord, isCustomNoAuth, discordFields,
-    setShowForm, setShowInfo, setFormData,
+    loading, showForm, formData, hasCredFields, isDiscord, isCustomNoAuth, discordFields,
+    setShowForm, setFormData,
     handleConnect, handleOAuth, handleCredConnect, handleDisconnect, handleDiscordInvite,
   };
 }
@@ -577,39 +576,24 @@ function IntegrationCard({
         </div>
       )}
 
-      {/* Setup note panel — shown for authType:'custom' integrations that use
-          inline config (Redis URL, Mongo URI, HTTP URL) rather than stored
-          credentials. Replaces the Connect→OAuth dead-end. */}
-      {flow.showInfo && flow.isCustomNoAuth && (
+      {/* Setup note — always visible for authType:'custom' integrations.
+          These use inline connection strings per-node in the workflow builder;
+          there is nothing to "connect" or store here. */}
+      {flow.isCustomNoAuth && (
         <div style={{
-          padding: "12px 14px",
-          background: "rgba(56,189,248,0.06)",
-          border: "1px solid rgba(56,189,248,0.18)",
+          padding: "10px 13px",
+          background: "rgba(56,189,248,0.05)",
+          border: "1px solid rgba(56,189,248,0.13)",
           borderRadius: 10,
-          display: "flex", flexDirection: "column", gap: 10,
+          display: "flex", alignItems: "flex-start", gap: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-            <Info size={14} color={C.blue} style={{ marginTop: 1, flexShrink: 0 }} />
-            <span style={{
-              fontSize: 11, color: C.muted, lineHeight: 1.6,
-              fontFamily: "'DM Sans',sans-serif",
-            }}>
-              {integ.setupNote || "No stored credential needed — configure this integration per-action inside the workflow builder."}
-            </span>
-          </div>
-          <button
-            onClick={() => flow.setShowInfo(false)}
-            style={{
-              alignSelf: "flex-start",
-              background: "rgba(56,189,248,0.10)",
-              border: "1px solid rgba(56,189,248,0.25)",
-              borderRadius: 7, padding: "5px 12px",
-              color: C.blue, fontSize: 11, fontWeight: 600,
-              cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-            }}
-          >
-            Got it
-          </button>
+          <Info size={13} color={C.blue} style={{ marginTop: 2, flexShrink: 0 }} />
+          <span style={{
+            fontSize: 11, color: C.muted, lineHeight: 1.6,
+            fontFamily: "'DM Sans',sans-serif",
+          }}>
+            {integ.setupNote || "No stored credential needed — configure this integration per-action inside the workflow builder."}
+          </span>
         </div>
       )}
 
@@ -716,8 +700,8 @@ function IntegrationCard({
               Manage
             </button>
           </>
-        ) : flow.showInfo ? (
-          /* Info panel is showing — only offer Details, no redundant Connect */
+        ) : flow.isCustomNoAuth ? (
+          /* No Connect button for inline-config integrations — only Details */
           <button
             onClick={() => navigate(`/integrations/${integ.id}`)}
             style={{
