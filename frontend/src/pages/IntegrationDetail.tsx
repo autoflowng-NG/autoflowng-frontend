@@ -115,6 +115,17 @@ export default function IntegrationDetail() {
   // Integration Hub page; this page just points there instead of rendering
   // a form that would silently do nothing.
   const isDiscord = integ.id === "discord";
+  // BUGFIX: postgresql/mysql/mongodb/redis/http_request all have
+  // authType:'custom' with no envRequired — by design, their connection
+  // details (a DB URL, a host/port, etc) are passed as a parameter on each
+  // individual workflow action, not stored as a platform-wide credential.
+  // This page was previously rendering the generic 'custom' auth form (a
+  // single "Token / Key" field) for all of them anyway, so tapping
+  // "Connect" silently saved a credential nothing downstream ever reads —
+  // a green "Connected" badge that didn't actually mean anything. Treat
+  // these as connectionless: no form, no false sense of being set up.
+  const isConnectionless = integ.authType === "webhook" ||
+    (integ.authType === "custom" && !(integ.envRequired?.length > 0));
 
   return (
     <PageTransition variant="slide">
@@ -205,13 +216,14 @@ export default function IntegrationDetail() {
                       </div>
                     )}
                   </div>
+                ) : isConnectionless ? (
+                  <div style={{ fontSize: 12, color: "rgba(232,238,255,0.55)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "12px 14px" }}>
+                    {integ.setupNote || "This node doesn't use a stored connection — configure it directly inside each workflow action that uses it."}
+                  </div>
                 ) : isDiscord ? (
                   <div>
                     <div style={{ fontSize: 12, color: "rgba(232,238,255,0.55)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-                      Discord connects differently — there's one shared bot
-                      for the whole platform rather than a personal token.
-                      Head to the Integration Hub to invite the bot to your
-                      server and link it.
+                      {integ.setupNote || "Discord connects differently — there's one shared bot for the whole platform rather than a personal token. Head to the Integration Hub to invite the bot to your server and link it."}
                     </div>
                     <button onClick={() => navigate("/marketplace")} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", background: "rgba(0,200,150,0.12)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 10, color: "#00C896", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                       <ExternalLink size={13} /> Go to Integration Hub
@@ -219,6 +231,11 @@ export default function IntegrationDetail() {
                   </div>
                 ) : isOAuth ? (
                   <div>
+                    {integ.setupNote && (
+                      <div style={{ fontSize: 12, color: "rgba(232,238,255,0.55)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+                        {integ.setupNote}
+                      </div>
+                    )}
                     {!integ.configured && (
                       <div style={{ fontSize: 12, color: "#FB7185", background: "rgba(251,113,133,0.07)", border: "1px solid rgba(251,113,133,0.15)", borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
                         OAuth credentials not configured. Set {integ.envRequired?.join(", ")} environment variables.
@@ -230,6 +247,11 @@ export default function IntegrationDetail() {
                   </div>
                 ) : (
                   <div>
+                    {integ.setupNote && (
+                      <div style={{ fontSize: 12, color: "rgba(232,238,255,0.55)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+                        {integ.setupNote}
+                      </div>
+                    )}
                     {fields.map(f => (
                       <div key={f.name} style={{ marginBottom: 12 }}>
                         <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{f.label}</label>
