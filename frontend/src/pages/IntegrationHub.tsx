@@ -577,6 +577,18 @@ function IntegrationCard({
             }}>
               1. A tab opened so you can add the bot to your server — pick a
               server and approve it there.<br />
+              {/* BUGFIX: the dropdown on Discord's invite screen is empty for
+                  any account that doesn't already own/admin a server, which
+                  reads as a broken connector rather than a missing
+                  prerequisite. Spelling this out here means support doesn't
+                  have to explain it case-by-case in chat. */}
+              <span style={{ color: C.faint }}>
+                Don't see your server in the dropdown, or it says "No items to
+                show"? You need a server first — in the Discord app, tap{" "}
+                <b>+</b> in the sidebar → <b>Create My Own</b>, give it any
+                name, then come back and tap "Reopen invite link" below.
+              </span>
+              <br />
               2. Enable Developer Mode (Discord Settings → Advanced), then
               right-click your server icon → <b>Copy Server ID</b>, and paste
               it below.{" "}
