@@ -25,11 +25,12 @@ import { WorkflowHealthBadge } from "../components/OrchestrationIntelligence";
 import { WorkflowPredictionBadge } from "../components/PredictiveInsightsPanel";
 import { useExecutionStream, formatDuration } from "../hooks/useExecutionStream";
 import {
-  Plus, Search, GitBranch, Play, Pause, Trash2,
+  Plus, Search, GitBranch, Trash2,
   Edit3, Activity, Clock, Zap, Radio, Loader,
   Filter, SortAsc, ChevronDown, MoreHorizontal,
   CheckCircle2, XCircle, AlarmClock, Lock, Link2,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
 const C = {
@@ -185,25 +186,13 @@ function RowMenu({ wf, onEdit, onDelete, onToggle, onTrigger, triggering }: any)
         <Edit3 size={12} />
       </button>
 
-      {/* Toggle */}
-      <button
+      {/* Toggle — on/off switch (Make.com style) */}
+      <Switch
+        checked={!!wf.is_active}
+        onCheckedChange={() => onToggle(wf.id)}
         data-testid={`toggle-workflow-${wf.id}`}
-        onClick={() => onToggle(wf.id)}
-        title={wf.is_active ? "Pause" : "Activate"}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 30, height: 30,
-          background: wf.is_active ? "rgba(251,191,36,0.06)" : "rgba(0,200,150,0.06)",
-          border: `1px solid ${wf.is_active ? "rgba(251,191,36,0.18)" : "rgba(0,200,150,0.18)"}`,
-          borderRadius: 7, cursor: "pointer",
-          color: wf.is_active ? C.amber : C.green,
-          transition: "all 0.14s",
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = "0.75"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-      >
-        {wf.is_active ? <Pause size={12} /> : <Play size={12} />}
-      </button>
+        aria-label={wf.is_active ? "Deactivate workflow" : "Activate workflow"}
+      />
 
       {/* Delete */}
       <button

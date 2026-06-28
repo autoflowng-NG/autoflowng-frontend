@@ -26,7 +26,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { aiAPI, workflowsAPI } from "../lib/api";
+import { aiAPI, workflowsAPI, connectionsAPI } from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { queryKeys } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -37,7 +37,7 @@ import {
   GitBranch, Settings2, Code2, BarChart3,
   CheckCircle, XCircle, AlertTriangle, ExternalLink, Play,
   Cpu, Mail, MessageCircle, Bell, Filter, GitMerge, Database,
-  Globe, Code, Timer,
+  Globe, Code, Timer, Power, WifiOff,
 } from "lucide-react";
 import { blueprintToSteps } from "../lib/blueprintToSteps";
 
@@ -193,6 +193,22 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  /* ── Connection-awareness state ── */
+  const [missingPlatforms, setMissingPlatforms] = useState<string[]>([]);
+  const [activating, setActivating] = useState(false);
+  const [isActive, setIsActive] = useState(false);
+
+  // Platform required per step type — mirrors executor.js findConn() mapping
+  const PLATFORM_REQUIRED: Record<string, string> = {
+    gmail_send: "gmail", gmail_reply: "gmail",
+    twitter_post: "twitter",
+    linkedin_post: "linkedin",
+    facebook_post: "facebook",
+    slack_post: "slack",
+    telegram_send: "telegram",
+    whatsapp_send: "whatsapp",
+  };
+
   /* ── Run Now state ── */
   const [runState, setRunState]   = useState<RunState>("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
@@ -277,6 +293,25 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
 
     const steps = blueprintToSteps(blueprint.nodes, blueprint.edges);
 
+    // Check which required platforms are not connected.
+    // FIX: this useEffect callback is not async (and shouldn't be — see the
+    // cleanup function returned below), so `await` cannot be used directly
+    // inside it. Converted to .then() chaining to match the existing
+    // workflowsAPI.validate() call further down in this same effect.
+    connectionsAPI.list().then((connsData: any) => {
+      if (cancelled) return;
+      const connected: Set<string> = new Set(
+        (connsData?.connections ?? connsData ?? []).map((c: any) => c.platform).filter(Boolean)
+      );
+      const requiredPlatforms = blueprint.nodes
+        .map(n => PLATFORM_REQUIRED[n.type])
+        .filter((p): p is string => !!p);
+      const missing = [...new Set(requiredPlatforms)].filter(p => !connected.has(p));
+      setMissingPlatforms(missing);
+    }).catch(() => {
+      // Non-fatal — connection check failure should not block workflow creation
+    });
+
     workflowsAPI.validate({
       name: blueprint.name,
       trigger_type: blueprint.trigger_type,
@@ -317,6 +352,20 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
     } catch (e: any) {
       setState("valid");
       toast({ title: "Create failed", description: e?.message || "Could not create workflow", variant: "destructive" });
+    }
+  };
+
+  const handleActivate = async () => {
+    if (!createdId || activating) return;
+    setActivating(true);
+    try {
+      await workflowsAPI.toggle(createdId);
+      setIsActive(true);
+      toast({ title: "Workflow activated", description: `${blueprint.name} is now live.` });
+    } catch (e: any) {
+      toast({ title: "Activation failed", description: e?.message || "Could not activate workflow", variant: "destructive" });
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -469,6 +518,31 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
         </div>
       )}
 
+      {/* Missing connection warning */}
+      {missingPlatforms.length > 0 && state !== "created" && (
+        <div style={{ padding: "0 14px 8px" }}>
+          {missingPlatforms.map((platform) => (
+            <div key={platform} style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)",
+              borderRadius: 8, padding: "8px 10px", marginTop: 6,
+              fontSize: 10.5, color: C.amber, fontFamily: "'DM Sans',sans-serif", lineHeight: 1.5,
+            }}>
+              <WifiOff size={11} color={C.amber} style={{ flexShrink: 0 }} />
+              <span>
+                This workflow needs <strong>{platform}</strong> connected before it will run.{" "}
+                <span
+                  onClick={() => navigate("/integration-hub")}
+                  style={{ textDecoration: "underline", cursor: "pointer" }}
+                >
+                  Connect in Integration Hub
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Inline run result panel ── */}
       {runResult && (
         <div style={{
@@ -566,6 +640,45 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
       }}>
         {state === "created" ? (
           <>
+            {/* Activate Now */}
+            {isActive ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 5,
+                fontSize: 11, fontWeight: 600, color: C.green,
+                fontFamily: "'DM Sans',sans-serif",
+                padding: "6px 12px",
+                background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.2)",
+                borderRadius: 7,
+              }}>
+                <CheckCircle size={11} /> Active — listening now
+              </div>
+            ) : (
+              <button
+                onClick={handleActivate}
+                disabled={activating || missingPlatforms.length > 0}
+                title={missingPlatforms.length > 0 ? `Connect ${missingPlatforms.join(", ")} first` : undefined}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: missingPlatforms.length > 0
+                    ? "rgba(255,255,255,0.04)"
+                    : activating ? "rgba(0,200,150,0.05)" : "rgba(0,200,150,0.15)",
+                  border: `1px solid ${missingPlatforms.length > 0 ? C.border : "rgba(0,200,150,0.3)"}`,
+                  borderRadius: 7, padding: "6px 12px",
+                  color: missingPlatforms.length > 0 ? C.faint : C.green,
+                  fontSize: 11, fontWeight: 600,
+                  cursor: (activating || missingPlatforms.length > 0) ? "not-allowed" : "pointer",
+                  fontFamily: "'DM Sans',sans-serif",
+                  transition: "all 0.15s",
+                  opacity: activating ? 0.7 : 1,
+                }}
+              >
+                {activating
+                  ? <><Loader2 size={11} style={{ animation: "spin-slow 1s linear infinite" }} /> Activating…</>
+                  : <><Power size={11} /> Activate Now</>
+                }
+              </button>
+            )}
+
             {/* Run Now */}
             <button
               onClick={handleRunNow}
