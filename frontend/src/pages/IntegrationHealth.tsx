@@ -4,7 +4,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Shield, Activity, AlertTriangle, CheckCircle, Clock, RefreshCw, Zap, XCircle, ChevronRight, RotateCcw } from 'lucide-react';
+import { Shield, Activity, AlertTriangle, CheckCircle, Clock, RefreshCw, Zap, XCircle, ChevronRight, RotateCcw, Link2, Copy } from 'lucide-react';
+import { integrationsAPI } from '../lib/integrationsApi';
 
 interface TriggerStat {
   workflow_id: string;
@@ -78,8 +79,39 @@ export default function IntegrationHealth() {
   const [credentials, setCredentials] = useState<OAuthCredential[]>([]);
   const [deadLetters, setDeadLetters] = useState<DeadLetter[]>([]);
   const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState<'triggers' | 'oauth' | 'dlq'>('triggers');
+  const [activeTab, setActiveTab]     = useState<'triggers' | 'oauth' | 'dlq' | 'redirects'>('triggers');
   const [replayingId, setReplayingId] = useState<string | null>(null);
+
+  // ── OAuth Redirect Config diagnostic ──────────────────────────────────────
+  // Separate from `refresh()` below: this calls GET /api/integrations/oauth/
+  // redirect-config through the Bearer-token api.ts client (the route uses
+  // requireAuth, which checks an Authorization header — not cookies, which
+  // is what this page's own apiFetch() sends). Fetched on demand, not on
+  // mount, since it's a debugging tool rather than routine page data.
+  const [redirectConfig, setRedirectConfig] = useState<any>(null);
+  const [redirectLoading, setRedirectLoading] = useState(false);
+  const [redirectError, setRedirectError] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const loadRedirectConfig = async () => {
+    setRedirectLoading(true);
+    setRedirectError(null);
+    try {
+      const res = await integrationsAPI.redirectConfig();
+      setRedirectConfig(res);
+    } catch (e: any) {
+      setRedirectError(e?.message || 'Failed to load redirect config — make sure you are logged in.');
+    } finally {
+      setRedirectLoading(false);
+    }
+  };
+
+  const copyToClipboard = (key: string, value: string) => {
+    navigator.clipboard?.writeText(value).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    });
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -218,10 +250,13 @@ export default function IntegrationHealth() {
 
       {/* Tab navigation */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 1 }}>
-        {(['triggers', 'oauth', 'dlq'] as const).map(tab => (
+        {(['triggers', 'oauth', 'dlq', 'redirects'] as const).map(tab => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setActiveTab(tab);
+              if (tab === 'redirects' && !redirectConfig) loadRedirectConfig();
+            }}
             style={{
               padding: '8px 20px', borderRadius: '8px 8px 0 0',
               background: activeTab === tab ? 'rgba(99,102,241,0.15)' : 'transparent',
@@ -230,7 +265,7 @@ export default function IntegrationHealth() {
               cursor: 'pointer', fontSize: 13, fontWeight: 500, textTransform: 'capitalize',
             }}
           >
-            {tab === 'dlq' ? 'Dead Letters' : tab === 'oauth' ? 'OAuth Health' : 'Trigger Health'}
+            {tab === 'dlq' ? 'Dead Letters' : tab === 'oauth' ? 'OAuth Health' : tab === 'redirects' ? 'Redirect Config' : 'Trigger Health'}
             {tab === 'dlq' && deadLetters.length > 0 && (
               <span style={{ marginLeft: 6, background: '#ef4444', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 11 }}>
                 {deadLetters.length}
@@ -276,11 +311,130 @@ export default function IntegrationHealth() {
           )}
         </div>
       )}
+
+      {/* Redirect Config tab — diagnostic for OAuth redirect_uri mismatches.
+          See routes/integrations.js GET /oauth/redirect-config. This shows
+          the EXACT redirect_uri string the backend sends to each provider,
+          so it can be copied straight into Google Cloud Console / Notion's
+          integration settings without guessing at BACKEND_URL's real value. */}
+      {activeTab === 'redirects' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, maxWidth: 560 }}>
+              Shows the exact redirect_uri this backend sends for each OAuth platform.
+              Copy a value and paste it into that provider's developer console if you're seeing
+              a "redirect_uri_mismatch" or "invalid redirect_uri" error.
+            </p>
+            <button
+              onClick={loadRedirectConfig}
+              disabled={redirectLoading}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#818cf8', fontSize: 12, fontWeight: 600, cursor: redirectLoading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+            >
+              <RefreshCw size={13} style={redirectLoading ? { animation: 'spin 1s linear infinite' } : undefined} />
+              {redirectLoading ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+
+          {redirectError && (
+            <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, color: '#f87171', fontSize: 13 }}>
+              {redirectError}
+            </div>
+          )}
+
+          {!redirectConfig && !redirectLoading && !redirectError && (
+            <EmptyState icon={<Link2 size={40} color="#374151" />} message="No data loaded yet" sub="Click Refresh to fetch the current redirect configuration" />
+          )}
+
+          {redirectConfig && (
+            <>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <ConfigBadge label="BACKEND_URL" value={redirectConfig.backendUrl} />
+                <ConfigBadge label="FRONTEND_URL" value={redirectConfig.frontendUrl} />
+              </div>
+
+              <div style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace', padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
+                {redirectConfig.note}
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Marketplace Connections (Notion, Slack, Twitter, LinkedIn, etc.)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Object.entries(redirectConfig.marketplaceConnections || {}).map(([id, cfg]: [string, any]) => (
+                    <RedirectRow key={id} id={id} cfg={cfg} copiedKey={copiedKey} onCopy={copyToClipboard} />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Legacy Connections (Gmail, Google, Slack, GitHub, etc.)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Object.entries(redirectConfig.legacyConnections || {}).map(([id, cfg]: [string, any]) => (
+                    <RedirectRow key={id} id={id} cfg={cfg} copiedKey={copiedKey} onCopy={copyToClipboard} />
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 6 }}>Discord</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>{redirectConfig.discord?.note}</div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+                  <span style={{ color: redirectConfig.discord?.configured ? '#22c55e' : '#ef4444' }}>
+                    Client ID: {redirectConfig.discord?.configured ? 'Configured' : 'Missing'}
+                  </span>
+                  <span style={{ color: redirectConfig.discord?.botTokenConfigured ? '#22c55e' : '#ef4444' }}>
+                    Bot Token: {redirectConfig.discord?.botTokenConfigured ? 'Configured' : 'Missing'}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
+
+function ConfigBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ padding: '8px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8 }}>
+      <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13, color: '#e5e7eb', fontFamily: 'monospace' }}>{value}</div>
+    </div>
+  );
+}
+
+function RedirectRow({ id, cfg, copiedKey, onCopy }: { id: string; cfg: any; copiedKey: string | null; onCopy: (key: string, value: string) => void }) {
+  const value = cfg?.redirectUri || '';
+  const copyKey = `${id}-redirect`;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#e5e7eb', textTransform: 'capitalize' }}>{id.replace(/_/g, ' ')}</span>
+          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: cfg?.configured ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: cfg?.configured ? '#22c55e' : '#ef4444' }}>
+            {cfg?.configured ? 'Configured' : 'Not Configured'}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{value}</div>
+      </div>
+      {value && !value.startsWith('(') && (
+        <button
+          onClick={() => onCopy(copyKey, value)}
+          title="Copy redirect_uri"
+          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: copiedKey === copyKey ? '#22c55e' : '#9ca3af', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+        >
+          <Copy size={11} /> {copiedKey === copyKey ? 'Copied!' : 'Copy'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function SummaryCard({ label, value, sub, icon, color }: { label: string; value: string; sub: string; icon: React.ReactNode; color: string }) {
   return (
