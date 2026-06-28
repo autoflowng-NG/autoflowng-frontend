@@ -41,6 +41,7 @@ import { OrgProvider } from './contexts/OrgContext';
 import { ExecutionHistoryProvider } from './contexts/ExecutionHistoryContext';
 import { hasRole, type PlatformRole } from './lib/rbac';
 import { CriticalAlertToaster } from './components/CriticalAlertToaster';
+import { Toaster } from './components/ui/toaster';
 import AppShell from './components/AppShell';
 
 // ── Existing lazy imports (Phases 1–12.5, unchanged) ──────────────────────────
@@ -219,6 +220,7 @@ function AppProviders() {
         <ExecutionHistoryProvider>
     <BrowserRouter>
       <CriticalAlertToaster />
+      <Toaster />
       <Suspense fallback={<Spinner />}>
         <GlobalBackButton />
         <Routes>
