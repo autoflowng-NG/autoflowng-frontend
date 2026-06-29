@@ -13,6 +13,7 @@ import {
   useEffect, useCallback, useMemo, type ReactNode,
 } from "react";
 import { useAuth } from "./AuthContext";
+import { setActiveOrgId } from "../lib/api";
 
 const API_BASE = (import.meta.env?.VITE_API_URL || "https://autoflowng-backend-production-dfa9.up.railway.app")
   .replace(/\/$/, "");
@@ -126,10 +127,17 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       const savedId = sessionStorage.getItem(STORAGE_KEY);
       if (savedId) {
         const found = fetched.find(o => String(o.id) === savedId);
-        if (found) { setActiveOrgState(found); return; }
+        if (found) {
+          setActiveOrgState(found);
+          setActiveOrgId(found.id);
+          return;
+        }
       }
       // Default to first org if any
-      if (fetched.length > 0 && !activeOrg) setActiveOrgState(fetched[0]);
+      if (fetched.length > 0 && !activeOrg) {
+        setActiveOrgState(fetched[0]);
+        setActiveOrgId(fetched[0].id);
+      }
     } catch (e) {
       console.warn("[OrgContext]", e);
     } finally {
@@ -141,6 +149,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   const setActiveOrg = useCallback((org: Org | null) => {
     setActiveOrgState(org);
+    setActiveOrgId(org?.id ?? null);
     if (org) sessionStorage.setItem(STORAGE_KEY, String(org.id));
     else sessionStorage.removeItem(STORAGE_KEY);
   }, []);
