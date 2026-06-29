@@ -39,7 +39,7 @@ import {
   GitBranch, Settings2, Code2, BarChart3,
   CheckCircle, XCircle, AlertTriangle, ExternalLink, Play,
   Cpu, Mail, MessageCircle, Bell, Filter, GitMerge, Database,
-  Globe, Code, Timer, Power, WifiOff,
+  Globe, Code, Timer, Power, WifiOff, X,
 } from "lucide-react";
 import { blueprintToSteps } from "../lib/blueprintToSteps";
 
@@ -133,6 +133,97 @@ function groupSessions(sessions: Session[]) {
 /* ── Time helper ───────────────────────────────────────────────────── */
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+/* ── Confirm dialog ────────────────────────────────────────────────── */
+function ConfirmDialog({
+  open, title, message, confirmLabel = "Delete", danger = true,
+  onConfirm, onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      background: "rgba(6,8,16,0.85)", backdropFilter: "blur(4px)",
+    }}
+      onClick={onCancel}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 12 }}
+        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: C.raised, border: `1px solid ${C.borderH}`,
+          borderRadius: 14, padding: "22px 24px", width: 320, maxWidth: "90vw",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+              background: danger ? "rgba(251,113,133,0.12)" : "rgba(167,139,250,0.12)",
+              border: `1px solid ${danger ? "rgba(251,113,133,0.25)" : "rgba(167,139,250,0.25)"}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Trash2 size={13} color={danger ? C.red : C.purple} />
+            </div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif" }}>
+              {title}
+            </span>
+          </div>
+          <button onClick={onCancel} style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: C.faint, padding: 2, display: "flex",
+          }}>
+            <X size={15} />
+          </button>
+        </div>
+        <p style={{
+          fontSize: 12.5, color: C.muted, lineHeight: 1.6,
+          fontFamily: "'DM Sans',sans-serif", marginBottom: 18,
+        }}>
+          {message}
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            style={{
+              background: "transparent", border: `1px solid ${C.border}`,
+              borderRadius: 8, padding: "7px 14px",
+              color: C.muted, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              background: danger ? "rgba(251,113,133,0.15)" : "rgba(167,139,250,0.15)",
+              border: `1px solid ${danger ? "rgba(251,113,133,0.35)" : "rgba(167,139,250,0.35)"}`,
+              borderRadius: 8, padding: "7px 14px",
+              color: danger ? C.red : C.purple, fontSize: 12, fontWeight: 700,
+              cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
 }
 
 /* ── Blueprint parser ──────────────────────────────────────────────── */
@@ -932,14 +1023,16 @@ function Thinking() {
 }
 
 /* ── History sidebar — real data ───────────────────────────────────── */
-function HistorySidebar({ sessions, activeId, onSelect, onNew, loading }: {
+function HistorySidebar({ sessions, activeId, onSelect, onNew, onDelete, loading }: {
   sessions: Session[];
   activeId: string;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onDelete: (id: string, title: string) => void;
   loading: boolean;
 }) {
   const groups = groupSessions(sessions);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   return (
     <div style={{
@@ -995,41 +1088,74 @@ function HistorySidebar({ sessions, activeId, onSelect, onNew, loading }: {
               </div>
               {group.sessions.map(s => {
                 const isActive = s.session_id === activeId;
+                const isHovered = s.session_id === hoveredId;
                 const title    = s.title || s.session_id;
                 const preview  = s.last_message ? s.last_message.slice(0, 60) : "";
                 return (
-                  <button
+                  <div
                     key={s.session_id}
-                    onClick={() => onSelect(s.session_id)}
-                    style={{
-                      width: "100%", padding: "8px 10px",
-                      background: isActive ? "rgba(167,139,250,0.1)" : "transparent",
-                      border: `1px solid ${isActive ? "rgba(167,139,250,0.2)" : "transparent"}`,
-                      borderRadius: 8, cursor: "pointer", textAlign: "left",
-                      transition: "all 0.14s", marginBottom: 2,
-                    }}
-                    onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
-                    onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                    style={{ position: "relative", marginBottom: 2 }}
+                    onMouseEnter={() => setHoveredId(s.session_id)}
+                    onMouseLeave={() => setHoveredId(null)}
                   >
-                    <div style={{
-                      fontSize: 12, fontWeight: isActive ? 600 : 400,
-                      color: isActive ? C.purple : C.muted,
-                      fontFamily: "'DM Sans',sans-serif",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      marginBottom: 2,
-                    }}>
-                      {title}
-                    </div>
-                    {preview && (
+                    <button
+                      onClick={() => onSelect(s.session_id)}
+                      style={{
+                        width: "100%", padding: "8px 10px",
+                        paddingRight: 32,
+                        background: isActive ? "rgba(167,139,250,0.1)" : isHovered ? "rgba(255,255,255,0.04)" : "transparent",
+                        border: `1px solid ${isActive ? "rgba(167,139,250,0.2)" : "transparent"}`,
+                        borderRadius: 8, cursor: "pointer", textAlign: "left",
+                        transition: "all 0.14s",
+                      }}
+                    >
                       <div style={{
-                        fontSize: 10, color: C.faint,
+                        fontSize: 12, fontWeight: isActive ? 600 : 400,
+                        color: isActive ? C.purple : C.muted,
                         fontFamily: "'DM Sans',sans-serif",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        marginBottom: 2,
                       }}>
-                        {preview}
+                        {title}
                       </div>
+                      {preview && (
+                        <div style={{
+                          fontSize: 10, color: C.faint,
+                          fontFamily: "'DM Sans',sans-serif",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {preview}
+                        </div>
+                      )}
+                    </button>
+                    {/* Delete button — appears on hover */}
+                    {isHovered && (
+                      <button
+                        onClick={e => { e.stopPropagation(); onDelete(s.session_id, title); }}
+                        title="Delete conversation"
+                        style={{
+                          position: "absolute", right: 6, top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "rgba(251,113,133,0.1)",
+                          border: "1px solid rgba(251,113,133,0.2)",
+                          borderRadius: 6, width: 22, height: 22,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", flexShrink: 0,
+                          transition: "all 0.14s",
+                        }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLElement).style.background = "rgba(251,113,133,0.2)";
+                          (e.currentTarget as HTMLElement).style.borderColor = "rgba(251,113,133,0.4)";
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLElement).style.background = "rgba(251,113,133,0.1)";
+                          (e.currentTarget as HTMLElement).style.borderColor = "rgba(251,113,133,0.2)";
+                        }}
+                      >
+                        <Trash2 size={10} color={C.red} />
+                      </button>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1309,6 +1435,64 @@ export default function AIChat() {
     setSession(id);
   };
 
+  /* ── Confirm dialog state ── */
+  const [confirm, setConfirm] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", message: "", confirmLabel: "Delete", onConfirm: () => {} });
+
+  const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
+
+  /* Clear current chat — clears UI + deletes history from backend */
+  const handleClear = () => {
+    setConfirm({
+      open: true,
+      title: "Clear chat history",
+      message: "This will permanently delete all messages in this conversation. This cannot be undone.",
+      confirmLabel: "Clear history",
+      onConfirm: async () => {
+        closeConfirm();
+        setMsgs([]);
+        try {
+          await aiAPI.sessions.delete(session);
+          refetchSessions();
+          const newId = `session_${Date.now()}`;
+          setSession(newId);
+        } catch {
+          toast({ title: "Could not clear history", description: "Messages cleared locally.", variant: "destructive" });
+        }
+      },
+    });
+  };
+
+  /* Delete a specific session from the sidebar */
+  const handleDeleteSession = (id: string, title: string) => {
+    setConfirm({
+      open: true,
+      title: "Delete conversation",
+      message: `Delete "${title.length > 40 ? title.slice(0, 40) + "…" : title}"? All messages will be permanently removed.`,
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await aiAPI.sessions.delete(id);
+          refetchSessions();
+          if (id === session) {
+            const newId = `session_${Date.now()}`;
+            setSession(newId);
+            setMsgs([]);
+          }
+          toast({ title: "Conversation deleted" });
+        } catch {
+          toast({ title: "Delete failed", description: "Could not delete conversation", variant: "destructive" });
+        }
+      },
+    });
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
@@ -1347,7 +1531,7 @@ export default function AIChat() {
           <div style={{ display: "flex", gap: 6 }}>
             <button
               data-testid="button-clear-chat"
-              onClick={clear}
+              onClick={handleClear}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 background: "transparent", border: `1px solid ${C.border}`,
@@ -1374,6 +1558,7 @@ export default function AIChat() {
               activeId={session}
               onSelect={switchSession}
               onNew={newChat}
+              onDelete={handleDeleteSession}
               loading={sessionsLoading}
             />
           </div>
@@ -1481,6 +1666,19 @@ export default function AIChat() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {confirm.open && (
+          <ConfirmDialog
+            open={confirm.open}
+            title={confirm.title}
+            message={confirm.message}
+            confirmLabel={confirm.confirmLabel}
+            onConfirm={confirm.onConfirm}
+            onCancel={closeConfirm}
+          />
+        )}
+      </AnimatePresence>
 
       <style>{`
         .af-chat-sidebar  { display: flex; }
