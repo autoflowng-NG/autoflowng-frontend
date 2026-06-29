@@ -31,6 +31,8 @@ import { PageTransition } from "../components/PageTransition";
 import { queryKeys } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { useOrg } from "../contexts/OrgContext";
+import { invalidateOrgWorkflows } from "../hooks/useOrgWorkflows";
 import {
   Bot, Send, Trash2, Plus, Sparkles, User, Loader2,
   Copy, Check, Zap, Clock, ChevronRight, MessageSquare,
@@ -192,6 +194,7 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { activeOrg } = useOrg();
 
   /* ── Connection-awareness state ── */
   const [missingPlatforms, setMissingPlatforms] = useState<string[]>([]);
@@ -348,6 +351,7 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
       const wfId = result?.workflow?.id || result?.id;
       setCreatedId(wfId || null);
       setState("created");
+      invalidateOrgWorkflows(activeOrg?.id ?? null);
       toast({ title: "Workflow created", description: blueprint.name });
     } catch (e: any) {
       setState("valid");
@@ -361,6 +365,7 @@ function WorkflowCard({ blueprint }: { blueprint: WorkflowBlueprint }) {
     try {
       await workflowsAPI.toggle(createdId);
       setIsActive(true);
+      invalidateOrgWorkflows(activeOrg?.id ?? null);
       toast({ title: "Workflow activated", description: `${blueprint.name} is now live.` });
     } catch (e: any) {
       toast({ title: "Activation failed", description: e?.message || "Could not activate workflow", variant: "destructive" });
