@@ -33,6 +33,13 @@ export const tokenStore = {
   exists: ()              => !!localStorage.getItem(TOKEN_KEY),
 };
 
+const orgStore = {
+  _id: null as number | null,
+  set(id: number | null) { this._id = id; },
+  get(): number | null { return this._id; },
+};
+export const setActiveOrgId = (id: number | null) => orgStore.set(id);
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -54,6 +61,8 @@ async function request(path: string, { method = "GET", body, params, headers = {
 
   const reqHeaders: Record<string, string> = { "Content-Type": "application/json", ...headers };
   if (token) reqHeaders["Authorization"] = `Bearer ${token}`;
+  const orgId = orgStore.get();
+  if (orgId) reqHeaders["X-Org-Id"] = String(orgId);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
