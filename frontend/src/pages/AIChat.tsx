@@ -1502,8 +1502,11 @@ export default function AIChat() {
     });
   };
 
+  // Only submit on Enter on desktop (pointer:fine). On mobile virtual keyboards,
+  // Enter/Return should insert a newline — the send button is the submit action.
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === "Enter" && !e.shiftKey && !isMobile) { e.preventDefault(); send(); }
   };
 
   return (
@@ -1657,7 +1660,7 @@ export default function AIChat() {
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <Sparkles size={9} color={C.faint} />
                   <span style={{ fontSize: 9, color: C.faint, fontFamily: "'DM Mono',monospace" }}>
-                    AUTOFLOWNG AI · Enter to send · Shift+Enter for new line
+                    AUTOFLOWNG AI · {isMobile ? "Tap ▶ to send" : "Enter to send · Shift+Enter for new line"}
                   </span>
                 </div>
                 {input.length > 0 && (
