@@ -23,7 +23,7 @@
  *   - Polling stops on terminal status (completed/failed/cancelled) or 60s timeout
  */
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { aiAPI, workflowsAPI, connectionsAPI } from "../lib/api";
@@ -1233,12 +1233,12 @@ export default function AIChat() {
   const endRef = useRef<HTMLDivElement>(null);
   const taRef  = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+  const { activeOrg } = useOrg();
 
   /* Load real sessions from backend */
   const { data: sessionsData, isLoading: sessionsLoading, refetch: refetchSessions } = useQuery({
-    queryKey: ["ai-sessions"],
+    queryKey: ["ai-sessions", activeOrg?.id ?? null],
     queryFn:  () => aiAPI.sessions.list().then((d: any) => d.sessions || [] as Session[]),
-    staleTime: 30_000,
   });
   const sessions: Session[] = sessionsData || [];
   const activeSession = sessions.find(s => s.session_id === session) || null;

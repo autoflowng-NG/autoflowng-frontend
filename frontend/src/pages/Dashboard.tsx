@@ -12,7 +12,7 @@
  *   - All existing Phase 4–8 components (intelligence, timeline, team feed) preserved below
  */
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -770,6 +770,18 @@ export default function Dashboard() {
   const { user } = useAuth();
   const nav = useNavigate();
   const { t } = useTranslation();
+  const { activeOrg } = useOrg();
+
+  useEffect(() => {
+    if (!activeOrg?.id) return;
+    // Backfill any pre-org-fix workflows so they appear in the org view
+    // and become deletable. This is a no-op if already done.
+    import("../lib/api").then(m => {
+      m.default.post("/workflows/cleanup-orphans").catch(() => {
+        // Non-critical — ignore errors, will retry next mount
+      });
+    });
+  }, [activeOrg?.id]);
 
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: queryKeys.analytics("7d"),
