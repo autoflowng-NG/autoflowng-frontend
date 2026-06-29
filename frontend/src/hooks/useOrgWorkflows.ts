@@ -54,7 +54,6 @@ export function useOrgWorkflows() {
         return d.workflows || [];
       }
     },
-    staleTime: 30_000,
   });
 }
 
