@@ -120,6 +120,9 @@ export function useActivateTemplate() {
         nav(`/workflow-builder/${id}`);
       }
     },
+    onError: (err: any) => {
+      console.error("[useActivateTemplate]", err);
+    },
   });
 }
 
