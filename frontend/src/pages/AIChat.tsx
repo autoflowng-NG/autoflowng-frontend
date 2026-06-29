@@ -1376,16 +1376,23 @@ export default function AIChat() {
     staleTime: 0,
   });
 
-  // Populate msgs whenever history data arrives for the current session
+  /* Track which session's history we've already loaded to prevent clobbering live msgs */
+  const historyLoadedForSession = useRef<string | null>(null);
+
+  // Populate msgs from history ONLY on initial session load (msgs is empty).
+  // Never overwrite msgs mid-conversation — that causes layout corruption on return.
   useEffect(() => {
     if (!history || (history as any[]).length === 0) return;
+    // Only load if we haven't already loaded for this session, or msgs is empty
+    if (historyLoadedForSession.current === session && msgs.length > 0) return;
+    historyLoadedForSession.current = session;
     setMsgs((history as any[]).map((m: any, i: number) => ({
       role: m.role,
       content: m.content || m.message,
-      id: m.id || String(i),
-      ts: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+      id: m.id || `h${session}${i}`,
+      ts: m.created_at ? new Date(m.created_at).getTime() : Date.now() - (((history as any[]).length - i) * 1000),
     })));
-  }, [history]);
+  }, [history, session]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -1425,12 +1432,14 @@ export default function AIChat() {
   const clear   = () => setMsgs([]);
   const newChat = () => {
     const newId = `session_${Date.now()}`;
+    historyLoadedForSession.current = null;
     setSession(newId);
     setMsgs([]);
     setInput("");
   };
 
   const switchSession = (id: string) => {
+    historyLoadedForSession.current = null;
     setMsgs([]);
     setSession(id);
   };
