@@ -446,8 +446,11 @@ function AutomationsSection() {
     setActivatingId(templateId);
     try {
       await activate.mutateAsync(templateId);
-    } catch {
+    } catch (err: any) {
       setActivatingId(null);
+      const message = err?.message || "Failed to activate automation";
+      toast({ title: "Couldn't activate automation", description: message, variant: "destructive" });
+      console.error("[Quick Automation activate]", err);
     }
   };
 
