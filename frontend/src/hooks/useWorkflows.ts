@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workflowsAPI, automationsAPI } from "../lib/api";
 import { queryKeys, invalidate } from "../lib/queryClient";
 import { useNavigate } from "react-router-dom";
+import { useOrg } from "../contexts/OrgContext";
+import { invalidateOrgWorkflows } from "./useOrgWorkflows";
 
 export function useWorkflows() {
   return useQuery({
@@ -40,9 +42,13 @@ export function useWorkflowRun(workflowId: string, runId: string) {
 }
 
 export function useCreateWorkflow() {
+  const { activeOrg } = useOrg();
   return useMutation({
     mutationFn: (data: any) => workflowsAPI.create(data),
-    onSuccess:  () => invalidate.workflows(),
+    onSuccess:  () => {
+      invalidate.workflows();
+      invalidateOrgWorkflows(activeOrg?.id ?? null);
+    },
   });
 }
 
@@ -55,6 +61,7 @@ export function useUpdateWorkflow(id: string) {
 
 export function useDeleteWorkflow() {
   const qc = useQueryClient();
+  const { activeOrg } = useOrg();
   return useMutation({
     mutationFn: (id: string) => workflowsAPI.delete(id),
     onMutate:   async (id) => {
@@ -64,12 +71,16 @@ export function useDeleteWorkflow() {
       return { prev };
     },
     onError:   (err, id, ctx: any) => qc.setQueryData(queryKeys.workflows, ctx.prev),
-    onSettled: () => invalidate.workflows(),
+    onSettled: () => {
+      invalidate.workflows();
+      invalidateOrgWorkflows(activeOrg?.id ?? null);
+    },
   });
 }
 
 export function useToggleWorkflow() {
   const qc = useQueryClient();
+  const { activeOrg } = useOrg();
   return useMutation({
     mutationFn: (id: string) => workflowsAPI.toggle(id),
     onMutate:   async (id) => {
@@ -81,7 +92,11 @@ export function useToggleWorkflow() {
       return { prev };
     },
     onError:   (err, id, ctx: any) => qc.setQueryData(queryKeys.workflows, ctx.prev),
-    onSuccess: (data: any, id) => { invalidate.workflow(id); invalidate.workflows(); },
+    onSuccess: (data: any, id) => {
+      invalidate.workflow(id);
+      invalidate.workflows();
+      invalidateOrgWorkflows(activeOrg?.id ?? null);
+    },
   });
 }
 
@@ -111,12 +126,14 @@ export function useWorkflowTemplates() {
 
 export function useActivateTemplate() {
   const nav = useNavigate();
+  const { activeOrg } = useOrg();
   return useMutation({
     mutationFn: (templateId: string) => workflowsAPI.activateTemplate(templateId),
     onSuccess:  (res: any) => {
       const id = res?.workflow?.id || res?.id;
       if (id) {
         invalidate.workflows();
+        invalidateOrgWorkflows(activeOrg?.id ?? null);
         nav(`/workflow-builder/${id}`);
       }
     },
