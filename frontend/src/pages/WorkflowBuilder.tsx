@@ -571,9 +571,9 @@ function NodeBox({
       onClick={() => onSelect(node.id)}
       style={{
         position: "absolute", left: node.x, top: node.y,
-        width: 160, background: "rgba(8,11,22,0.97)",
+        width: 150, background: "rgba(8,11,22,0.97)",
         border: `1.5px solid ${borderColor}`,
-        borderRadius: 14, padding: "12px 14px", cursor: "pointer", userSelect: "none",
+        borderRadius: 12, padding: "10px 12px", cursor: "pointer", userSelect: "none",
         boxShadow: boxShadow ?? "0 2px 16px rgba(0,0,0,0.35)",
         transition: "border-color 0.25s, box-shadow 0.25s",
         zIndex: selected ? 10 : 1,
@@ -587,9 +587,9 @@ function NodeBox({
         <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.06) 50%, transparent 100%)", animation: "trace-shimmer 1.4s ease-in-out infinite", pointerEvents: "none" }} />
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Icon size={13} color={entry.color} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={{ width: 26, height: 26, borderRadius: 7, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon size={12} color={entry.color} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: entry.color, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{entry.label.toUpperCase()}</div>
@@ -1037,7 +1037,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: n.id || `n${i}`,
       executorType: n.type || "ai_generate",
       label: n.label || n.name || "Node",
-      x: n.x ?? 60 + i * 220,
+      x: n.x ?? 60 + i * 196,
       y: n.y ?? 150,
       config: n.config || {},
     }));
@@ -1052,11 +1052,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: entry.executorType,
       label: entry.label,
-      // make.com-style horizontal flow — 220px pitch between 160px-wide cards
-      // leaves a clean ~60px gap for the curve to breathe (130px previously
-      // caused nodes to nearly butt up against each other / overlap at the
-      // connector dots, which is part of what made edges look broken).
-      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 220,
+      // make.com-style horizontal flow — tight 150px-wide cards sit on a
+      // 196px pitch, a clean ~46px gap, matching how make.com packs its
+      // modules close together with just enough room for the connector line.
+      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 196,
       y: 140,
       config: {},
     };
@@ -1452,16 +1451,18 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // exactly on the node's edge (see NodeBox: left dot at left:-6,
                     // right dot at right:-6, both top:50%). Matching those exact offsets
                     // here is what keeps the line glued to the dots instead of floating.
-                    const nodeW = 160;
-                    const nodeH = 62; // matches NodeBox's rendered header-row height
+                    const nodeW = 150;
+                    const nodeH = 58; // matches NodeBox's tightened header-row height
                     const x1 = fn.x + nodeW + 1; // right dot center (right: -6 + 7 radius ≈ +1 past edge)
                     const y1 = fn.y + nodeH / 2;
                     const x2 = tn.x - 1;         // left dot center (left: -6 + 7 radius ≈ -1 before edge)
                     const y2 = tn.y + nodeH / 2;
 
-                    // make.com-style: moderate horizontal control-point offset for a tight,
-                    // confident S-curve rather than an exaggerated wide bow
-                    const dx = Math.max(Math.abs(x2 - x1) * 0.45, 36);
+                    // make.com-style: a short, gentle curve that hugs a straight line when
+                    // nodes are vertically aligned — make.com's connectors are nearly flat,
+                    // not a wide exaggerated S-bow, and the control points stay close to
+                    // the straight path between the two dots.
+                    const dx = Math.max(Math.abs(x2 - x1) * 0.3, 18);
                     const cp1x = x1 + dx;
                     const cp1y = y1;
                     const cp2x = x2 - dx;
@@ -1488,18 +1489,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
                     return (
                       <g key={e.id}>
-                        {/* Glow layer for active/done edges */}
-                        {(bothDone || isRunningEdge) && (
-                          <path
-                            d={pathD}
-                            stroke={bothDone ? "rgba(0,200,150,0.2)" : "rgba(56,189,248,0.15)"}
-                            strokeWidth={8}
-                            fill="none"
-                            style={{ filter: "blur(3px)" }}
-                          />
-                        )}
-
-                        {/* Main edge — clean rounded line, no arrowhead marker */}
+                        {/* Main edge — clean rounded line, no arrowhead marker, no glow.
+                            make.com's connectors are plain thin lines; the glow/blur layer
+                            and extra animated dots were what produced the stray floating
+                            "dot" artifact reported on screen, so they're gone. */}
                         <path
                           d={pathD}
                           stroke={edgeColor}
@@ -1509,22 +1502,15 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                           style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
                         />
 
-                        {/* Source junction dot — make.com style filled circle exactly on the output port */}
-                        <circle cx={x1} cy={y1} r={3.5} fill={edgeColor} />
-                        {/* Target junction dot — filled circle exactly on the input port, replaces the triangle arrowhead */}
-                        <circle cx={x2} cy={y2} r={3.5} fill={edgeColor} />
+                        {/* Endpoint dots — small filled circles exactly on the output/input
+                            ports, matching make.com's junction markers. Only these two. */}
+                        <circle cx={x1} cy={y1} r={3} fill={edgeColor} />
+                        <circle cx={x2} cy={y2} r={3} fill={edgeColor} />
 
-                        {/* Animated flow dot — blue dot traveling along edge when running */}
+                        {/* Animated flow dot — only while this edge is actively running */}
                         {isRunningEdge && (
                           <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
                             <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
-                          </circle>
-                        )}
-
-                        {/* Done: small flow dot in green */}
-                        {bothDone && (
-                          <circle r="3" fill="#00C896" opacity="0.7">
-                            <animateMotion dur="2s" repeatCount="indefinite" path={pathD} />
                           </circle>
                         )}
 
