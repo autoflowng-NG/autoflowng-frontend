@@ -68,6 +68,7 @@ const FinancialIntegrityCenter = lazy(() => import('./pages/FinancialIntegrityCe
 const ExecutionPage       = lazy(() => import('./pages/ExecutionPage'));
 const Plans               = lazy(() => import('./pages/Plans'));
 const Settings            = lazy(() => import('./pages/Settings'));
+const AdAccounts          = lazy(() => import('./pages/AdAccounts'));
 const AIChat              = lazy(() => import('./pages/AIChat'));
 const SharedExecutionPage = lazy(() => import('./pages/SharedExecutionPage'));
 const Landing             = lazy(() => import('./pages/Landing'));
@@ -287,6 +288,7 @@ function AppProviders() {
           <Route path="/executions/:runId" element={<RequireAuth><ExecutionPageRoute /></RequireAuth>} />
           <Route path="/plans"             element={<RequireAuth><Plans /></RequireAuth>} />
           <Route path="/settings"          element={<RequireAuth><Settings /></RequireAuth>} />
+          <Route path="/settings/ad-accounts" element={<RequireAuth><AdAccounts /></RequireAuth>} />
           <Route path="/ai-chat"           element={<RequireAuth><AIChat /></RequireAuth>} />
 
           {/* ─────────────────────────────────────────────────────────────── */}
