@@ -86,13 +86,6 @@ interface Node {
 
 interface Edge { from: string; to: string; id: string; }
 
-interface AutoConnectPrompt {
-  fromId: string;
-  toId: string;
-  fromLabel: string;
-  toLabel: string;
-}
-
 // FIX #7: backend sets status "completed" not "success". Handle both.
 type StepStatus = "pending" | "running" | "success" | "completed" | "failed" | "skipped" | "filtered" | "cancelled";
 
@@ -522,32 +515,6 @@ function ContextVariables() {
   );
 }
 
-// ─── Auto-connect confirmation dialog ─────────────────────────────────────────
-function AutoConnectDialog({
-  prompt,
-  onConfirm,
-  onDismiss,
-}: {
-  prompt: AutoConnectPrompt;
-  onConfirm: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "0 0 32px", pointerEvents: "none" }}>
-      <div style={{ background: "rgba(8,11,22,0.98)", border: "1px solid rgba(0,200,150,0.25)", borderRadius: 16, padding: "18px 20px", maxWidth: 320, width: "calc(100% - 32px)", boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,200,150,0.08)", pointerEvents: "auto" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 10 }}>CONNECT NODES?</div>
-        <div style={{ fontSize: 13, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", marginBottom: 16, lineHeight: 1.5 }}>
-          Wire <span style={{ color: "#00C896", fontWeight: 700 }}>{prompt.fromLabel}</span>{" → "}<span style={{ color: "#00C896", fontWeight: 700 }}>{prompt.toLabel}</span> automatically?
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onConfirm} style={{ flex: 1, background: "#00C896", border: "none", borderRadius: 10, padding: "11px 0", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Yes, connect</button>
-          <button onClick={onDismiss} style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "11px 0", color: "rgba(232,238,255,0.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Skip</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Trace helpers ────────────────────────────────────────────────────────────
 // FIX #7: map all backend status variants to display colors
 const TRACE_COLORS: Record<string, string> = {
@@ -877,7 +844,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [dragOff, setDragOff]   = useState({ x: 0, y: 0 });
   const [search, setSearch]     = useState("");
   const [connecting, setConnecting]               = useState<{ fromId: string } | null>(null);
-  const [autoConnectPrompt, setAutoConnectPrompt] = useState<AutoConnectPrompt | null>(null);
+  // (autoConnectPrompt removed — connecting nodes now happens instantly on add, no dialog needed)
   const [retrying, setRetrying] = useState(false);
   const [warnDismissed, setWarnDismissed] = useState(false);
 
@@ -942,7 +909,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: n.id || `n${i}`,
       executorType: n.type || "ai_generate",
       label: n.label || n.name || "Node",
-      x: n.x ?? 60 + i * 200,
+      x: n.x ?? 60 + i * 130,
       y: n.y ?? 150,
       config: n.config || {},
     }));
@@ -957,19 +924,22 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: entry.executorType,
       label: entry.label,
-      // Space nodes in a nice horizontal flow — 200px gap keeps bezier curves readable
-      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 200,
+      // make.com-style horizontal flow — tight 130px gap between 160px-wide cards
+      // keeps connector dots close enough for a clean, visible curve with no dead space
+      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 130,
       y: 140,
       config: {},
     };
     setNodes(ns => [...ns, newNode]);
-    // Auto-connect: always prompt to wire to the most recent node
+    // Auto-connect: wire to the most recent node immediately, no confirmation needed.
+    // (Previously this only opened a dialog the user could dismiss, leaving nodes
+    // visibly disconnected on the canvas — not how make.com behaves.)
     if (nodes.length >= 1) {
       const lastNode = nodes[nodes.length - 1];
-      // Skip prompt if already connected
       const alreadyLinked = edges.some(e => e.from === lastNode.id && e.to === newNode.id);
       if (!alreadyLinked) {
-        setAutoConnectPrompt({ fromId: lastNode.id, toId: newNode.id, fromLabel: lastNode.label, toLabel: newNode.label });
+        setEdges(es => [...es, { id: `e${Date.now()}`, from: lastNode.id, to: newNode.id }]);
+        toast({ title: "Connected", description: `${lastNode.label} → ${newNode.label}` });
       }
     }
   };
@@ -1164,19 +1134,6 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         }
       `}</style>
 
-      {autoConnectPrompt && (
-        <AutoConnectDialog
-          prompt={autoConnectPrompt}
-          onConfirm={() => {
-            // Add edge immediately — user sees the line appear right away
-            setEdges(es => [...es, { id: `e${Date.now()}`, from: autoConnectPrompt.fromId, to: autoConnectPrompt.toId }]);
-            setAutoConnectPrompt(null);
-            toast({ title: "✅ Nodes connected!", description: `${autoConnectPrompt.fromLabel} → ${autoConnectPrompt.toLabel}` });
-          }}
-          onDismiss={() => setAutoConnectPrompt(null)}
-        />
-      )}
-
       <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#04060F", overflow: "hidden" }}>
 
         {/* ── Top bar ── */}
@@ -1310,18 +1267,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 </div>
               )}
 
-              {/* SVG edges — make.com-style smooth bezier curves with animated flow */}
+              {/* SVG edges — make.com-style smooth curves with circular junction dots */}
               <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0, overflow: "visible" }}>
                 <defs>
-                  <marker id="arrow-default" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L9,3 z" fill="rgba(0,200,150,0.7)" />
-                  </marker>
-                  <marker id="arrow-done" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L9,3 z" fill="#00C896" />
-                  </marker>
-                  <marker id="arrow-trace" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L9,3 z" fill="rgba(255,255,255,0.18)" />
-                  </marker>
                   <filter id="edge-glow">
                     <feGaussianBlur stdDeviation="2" result="blur" />
                     <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -1339,8 +1287,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                   const x2 = tn.x;            // left edge of target
                   const y2 = tn.y + nodeH / 2; // vertical center of target
 
-                  // Make.com-style: control points extend horizontally for smooth S-curve
-                  const dx = Math.max(Math.abs(x2 - x1) * 0.5, 60);
+                  // make.com-style: moderate horizontal control-point offset for a tight,
+                  // confident S-curve rather than an exaggerated wide bow
+                  const dx = Math.max(Math.abs(x2 - x1) * 0.45, 36);
                   const cp1x = x1 + dx;
                   const cp1y = y1;
                   const cp2x = x2 - dx;
@@ -1357,10 +1306,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                   const edgeColor = bothDone
                     ? "#00C896"
                     : isTracing
-                    ? "rgba(255,255,255,0.14)"
-                    : "rgba(0,200,150,0.6)";
+                    ? "rgba(255,255,255,0.16)"
+                    : "rgba(0,200,150,0.55)";
                   const edgeWidth = bothDone ? 2.5 : isRunningEdge ? 2.5 : 2;
-                  const marker = bothDone ? "url(#arrow-done)" : isTracing ? "url(#arrow-trace)" : "url(#arrow-default)";
 
                   // Midpoint for delete button
                   const midX = (x1 + x2) / 2;
@@ -1379,16 +1327,20 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         />
                       )}
 
-                      {/* Main bezier edge */}
+                      {/* Main edge — clean rounded line, no arrowhead marker */}
                       <path
                         d={pathD}
                         stroke={edgeColor}
                         strokeWidth={edgeWidth}
+                        strokeLinecap="round"
                         fill="none"
-                        markerEnd={marker}
-                        strokeDasharray={isRunningEdge ? "none" : undefined}
                         style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
                       />
+
+                      {/* Source junction dot — make.com style filled circle at the start */}
+                      <circle cx={x1} cy={y1} r={3.5} fill={edgeColor} />
+                      {/* Target junction dot — filled circle at the end, replaces the triangle arrowhead */}
+                      <circle cx={x2} cy={y2} r={3.5} fill={edgeColor} />
 
                       {/* Animated flow dot — blue dot traveling along edge when running */}
                       {isRunningEdge && (
