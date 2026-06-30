@@ -33,7 +33,7 @@ import { queryKeys, invalidate } from "../lib/queryClient";
 type FilterKey =
   | "all" | "connected" | "not_connected" | "popular"
   | "ai" | "communication" | "social" | "crm"
-  | "storage" | "productivity" | "finance" | "development";
+  | "storage" | "productivity" | "finance" | "development" | "advertising";
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all",           label: "All" },
@@ -48,6 +48,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "productivity",  label: "Productivity" },
   { key: "finance",       label: "Finance" },
   { key: "development",   label: "Development" },
+  { key: "advertising",   label: "Advertising" },
 ];
 
 const FILTER_CATEGORY: Partial<Record<FilterKey, string[]>> = {
@@ -59,6 +60,7 @@ const FILTER_CATEGORY: Partial<Record<FilterKey, string[]>> = {
   productivity:  ["productivity", "utility"],
   finance:       ["finance", "payments", "billing"],
   development:   ["developer", "devtools", "developer_tools"],
+  advertising:   ["advertising"],
 };
 
 // ── Health status helpers ───────────────────────────────────────────────────
