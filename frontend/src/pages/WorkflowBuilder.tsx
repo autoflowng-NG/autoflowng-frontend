@@ -855,6 +855,134 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const nextId    = useRef(1);
 
+  // ── Camera (pan + zoom) ──────────────────────────────────────────────────
+  // make.com-style infinite canvas: nodes live in a fixed "world" coordinate
+  // space (node.x / node.y never change due to panning or zooming). The
+  // camera just transforms how that world is projected onto the screen via
+  // a single CSS transform on the world layer. This is what was missing
+  // before — node positions were being read/written directly in *screen*
+  // pixels, which is what produced the disconnected floating line bug.
+  const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 1 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, camX: 0, camY: 0 });
+  const pinchStart = useRef<{ dist: number; zoom: number } | null>(null);
+
+  // Convert a screen-space (clientX/clientY) point to world-space coordinates,
+  // accounting for the canvas element's own offset on the page plus the
+  // current camera pan/zoom. Every place that used to do `e.clientX - dragOff.x`
+  // now goes through this so node.x/node.y stay in one consistent space.
+  const screenToWorld = useCallback((clientX: number, clientY: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const offX = rect?.left ?? 0;
+    const offY = rect?.top ?? 0;
+    return {
+      x: (clientX - offX - camera.x) / camera.zoom,
+      y: (clientY - offY - camera.y) / camera.zoom,
+    };
+  }, [camera]);
+
+  const clampZoom = (z: number) => Math.min(1.6, Math.max(0.3, z));
+
+  const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
+    setCamera(cam => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const offX = rect?.left ?? 0;
+      const offY = rect?.top ?? 0;
+      const px = clientX - offX;
+      const py = clientY - offY;
+      const newZoom = clampZoom(cam.zoom * factor);
+      // Keep the point under the cursor/finger stationary while zooming
+      const worldX = (px - cam.x) / cam.zoom;
+      const worldY = (py - cam.y) / cam.zoom;
+      return {
+        zoom: newZoom,
+        x: px - worldX * newZoom,
+        y: py - worldY * newZoom,
+      };
+    });
+  }, []);
+
+  const zoomIn  = () => zoomAt((canvasRef.current?.clientWidth ?? 0) / 2, (canvasRef.current?.clientHeight ?? 0) / 2, 1.2);
+  const zoomOut = () => zoomAt((canvasRef.current?.clientWidth ?? 0) / 2, (canvasRef.current?.clientHeight ?? 0) / 2, 1 / 1.2);
+  const zoomReset = () => setCamera({ x: 0, y: 0, zoom: 1 });
+
+  // Wheel = pan (trackpad/mouse drag scroll); Ctrl/Cmd+wheel or pinch = zoom
+  const onCanvasWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      const factor = Math.exp(-e.deltaY * 0.01);
+      zoomAt(e.clientX, e.clientY, factor);
+    } else {
+      setCamera(cam => ({ ...cam, x: cam.x - e.deltaX, y: cam.y - e.deltaY }));
+    }
+  }, [zoomAt]);
+
+  // Touch pinch-to-zoom + two-finger / drag pan for mobile
+  const touchDist = (t: TouchList) => {
+    const dx = t[0].clientX - t[1].clientX;
+    const dy = t[0].clientY - t[1].clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const onCanvasTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      pinchStart.current = { dist: touchDist(e.touches), zoom: camera.zoom };
+      panStart.current = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        camX: camera.x, camY: camera.y,
+      };
+    } else if (e.touches.length === 1 && !dragging && !connecting) {
+      setIsPanning(true);
+      panStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, camX: camera.x, camY: camera.y };
+    }
+  };
+
+  const onCanvasTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStart.current) {
+      e.preventDefault();
+      const newDist = touchDist(e.touches);
+      const factor = newDist / pinchStart.current.dist;
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const targetZoom = clampZoom(pinchStart.current.zoom * factor);
+      zoomAt(midX, midY, targetZoom / camera.zoom);
+    } else if (e.touches.length === 1 && isPanning) {
+      const dx = e.touches[0].clientX - panStart.current.x;
+      const dy = e.touches[0].clientY - panStart.current.y;
+      setCamera(cam => ({ ...cam, x: panStart.current.camX + dx, y: panStart.current.camY + dy }));
+    }
+  };
+
+  const onCanvasTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      setIsPanning(false);
+      pinchStart.current = null;
+    }
+  };
+
+  // Mouse-drag panning on empty canvas (middle-click or click-drag on background)
+  const onCanvasMouseDown = (e: React.MouseEvent) => {
+    if (dragging || connecting) return;
+    // Only start a background pan if the click started on the canvas itself,
+    // not on a node (nodes call stopPropagation in their own onMouseDown).
+    setIsPanning(true);
+    panStart.current = { x: e.clientX, y: e.clientY, camX: camera.x, camY: camera.y };
+  };
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - panStart.current.x;
+      const dy = e.clientY - panStart.current.y;
+      setCamera(cam => ({ ...cam, x: panStart.current.camX + dx, y: panStart.current.camY + dy }));
+    };
+    const onUp = () => setIsPanning(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [isPanning]);
+
   const [triggerType, setTriggerType]     = useState("manual");
   const [triggerConfig, setTriggerConfig] = useState<Record<string, any>>({});
 
@@ -909,7 +1037,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: n.id || `n${i}`,
       executorType: n.type || "ai_generate",
       label: n.label || n.name || "Node",
-      x: n.x ?? 60 + i * 130,
+      x: n.x ?? 60 + i * 220,
       y: n.y ?? 150,
       config: n.config || {},
     }));
@@ -924,9 +1052,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: entry.executorType,
       label: entry.label,
-      // make.com-style horizontal flow — tight 130px gap between 160px-wide cards
-      // keeps connector dots close enough for a clean, visible curve with no dead space
-      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 130,
+      // make.com-style horizontal flow — 220px pitch between 160px-wide cards
+      // leaves a clean ~60px gap for the curve to breathe (130px previously
+      // caused nodes to nearly butt up against each other / overlap at the
+      // connector dots, which is part of what made edges look broken).
+      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 220,
       y: 140,
       config: {},
     };
@@ -1037,6 +1167,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   };
 
   // ── Drag ───────────────────────────────────────────────────────────────────
+  // Node positions (node.x / node.y) live in WORLD space, not screen space.
+  // dragOff is captured in world units too, so panning/zooming mid-drag can't
+  // desync the node from the cursor (this is what previously caused nodes —
+  // and therefore their edges — to drift away from where they visually sit).
   const onMouseDown = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
     if (connecting) {
@@ -1049,14 +1183,16 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     }
     setSelected(nodeId);
     const node = nodes.find(n => n.id === nodeId)!;
+    const world = screenToWorld(e.clientX, e.clientY);
     setDragging(nodeId);
-    setDragOff({ x: e.clientX - node.x, y: e.clientY - node.y });
+    setDragOff({ x: world.x - node.x, y: world.y - node.y });
   };
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragging) return;
-    setNodes(ns => ns.map(n => n.id === dragging ? { ...n, x: e.clientX - dragOff.x, y: e.clientY - dragOff.y } : n));
-  }, [dragging, dragOff]);
+    const world = screenToWorld(e.clientX, e.clientY);
+    setNodes(ns => ns.map(n => n.id === dragging ? { ...n, x: world.x - dragOff.x, y: world.y - dragOff.y } : n));
+  }, [dragging, dragOff, screenToWorld]);
 
   const onMouseUp = useCallback(() => setDragging(null), []);
 
@@ -1251,8 +1387,28 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
             <div
               ref={canvasRef}
               onClick={() => { setSelected(null); if (connecting) setConnecting(null); }}
-              style={{ flex: 1, position: "relative", overflow: "hidden", background: "#04060F", backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)", backgroundSize: "28px 28px" }}
+              onMouseDown={onCanvasMouseDown}
+              onWheel={onCanvasWheel}
+              onTouchStart={onCanvasTouchStart}
+              onTouchMove={onCanvasTouchMove}
+              onTouchEnd={onCanvasTouchEnd}
+              style={{
+                flex: 1, position: "relative", overflow: "hidden",
+                background: "#04060F",
+                backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)",
+                backgroundSize: `${28 * camera.zoom}px ${28 * camera.zoom}px`,
+                backgroundPosition: `${camera.x}px ${camera.y}px`,
+                cursor: isPanning ? "grabbing" : connecting ? "crosshair" : "grab",
+                touchAction: "none",
+              }}
             >
+              {/* Zoom controls — make.com style, bottom-right */}
+              <div style={{ position: "absolute", bottom: 14, right: 14, zIndex: 40, display: "flex", flexDirection: "column", gap: 4, background: "rgba(8,11,22,0.9)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 4 }}>
+                <button onClick={e => { e.stopPropagation(); zoomIn(); }} style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", color: "rgba(232,238,255,0.6)", cursor: "pointer", fontSize: 16, borderRadius: 6 }}>+</button>
+                <button onClick={e => { e.stopPropagation(); zoomReset(); }} style={{ height: 22, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", color: "rgba(232,238,255,0.35)", cursor: "pointer", fontSize: 9, fontFamily: "'DM Mono',monospace" }}>{Math.round(camera.zoom * 100)}%</button>
+                <button onClick={e => { e.stopPropagation(); zoomOut(); }} style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", color: "rgba(232,238,255,0.6)", cursor: "pointer", fontSize: 16, borderRadius: 6 }}>−</button>
+              </div>
+
               {connecting && (
                 <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(0,200,150,0.15)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 20, padding: "8px 18px", fontSize: 12, color: "#00C896", fontFamily: "'DM Mono',monospace", zIndex: 100, pointerEvents: "none", whiteSpace: "nowrap" }}>
                   Tap a node to connect — or tap canvas to cancel
@@ -1263,153 +1419,170 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
                   <GitBranch size={48} color="rgba(0,200,150,0.15)" style={{ marginBottom: 16 }} />
                   <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(232,238,255,0.2)", fontFamily: "'Syne',sans-serif" }}>Select a template or add nodes from the left</div>
-                  <div style={{ fontSize: 13, color: "rgba(232,238,255,0.1)", marginTop: 6 }}>Drag to reposition · Tap connector dot to wire</div>
+                  <div style={{ fontSize: 13, color: "rgba(232,238,255,0.1)", marginTop: 6 }}>Drag to reposition · Tap connector dot to wire · Pinch or scroll to zoom</div>
                 </div>
               )}
 
-              {/* SVG edges — make.com-style smooth curves with circular junction dots */}
-              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0, overflow: "visible" }}>
-                <defs>
-                  <filter id="edge-glow">
-                    <feGaussianBlur stdDeviation="2" result="blur" />
-                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                  </filter>
-                </defs>
-                {edges.map(e => {
-                  const fn = nodes.find(n => n.id === e.from);
-                  const tn = nodes.find(n => n.id === e.to);
-                  if (!fn || !tn) return null;
-                  // Connect from right-center of source node to left-center of target node
-                  const nodeW = 160;
-                  const nodeH = 62; // approximate rendered height
-                  const x1 = fn.x + nodeW; // right edge of source
-                  const y1 = fn.y + nodeH / 2; // vertical center of source
-                  const x2 = tn.x;            // left edge of target
-                  const y2 = tn.y + nodeH / 2; // vertical center of target
+              {/* World layer — every node and edge lives inside this single transformed
+                  layer, so panning/zooming the camera moves them together as one rigid
+                  scene. This is the piece that was missing before: nodes and edges were
+                  drawn directly in screen space with no shared transform, which is why
+                  the connector line in the bug report floated independently of the nodes. */}
+              <div
+                style={{
+                  position: "absolute", top: 0, left: 0,
+                  transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
+                  transformOrigin: "0 0",
+                }}
+              >
+                {/* SVG edges — make.com-style smooth curves with circular junction dots */}
+                <svg style={{ position: "absolute", overflow: "visible", pointerEvents: "none" }}>
+                  <defs>
+                    <filter id="edge-glow">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                    </filter>
+                  </defs>
+                  {edges.map(e => {
+                    const fn = nodes.find(n => n.id === e.from);
+                    const tn = nodes.find(n => n.id === e.to);
+                    if (!fn || !tn) return null;
+                    // Connect from the right output dot of the source node to the left
+                    // input dot of the target node — both dots sit at vertical-center,
+                    // exactly on the node's edge (see NodeBox: left dot at left:-6,
+                    // right dot at right:-6, both top:50%). Matching those exact offsets
+                    // here is what keeps the line glued to the dots instead of floating.
+                    const nodeW = 160;
+                    const nodeH = 62; // matches NodeBox's rendered header-row height
+                    const x1 = fn.x + nodeW + 1; // right dot center (right: -6 + 7 radius ≈ +1 past edge)
+                    const y1 = fn.y + nodeH / 2;
+                    const x2 = tn.x - 1;         // left dot center (left: -6 + 7 radius ≈ -1 before edge)
+                    const y2 = tn.y + nodeH / 2;
 
-                  // make.com-style: moderate horizontal control-point offset for a tight,
-                  // confident S-curve rather than an exaggerated wide bow
-                  const dx = Math.max(Math.abs(x2 - x1) * 0.45, 36);
-                  const cp1x = x1 + dx;
-                  const cp1y = y1;
-                  const cp2x = x2 - dx;
-                  const cp2y = y2;
-                  const pathD = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+                    // make.com-style: moderate horizontal control-point offset for a tight,
+                    // confident S-curve rather than an exaggerated wide bow
+                    const dx = Math.max(Math.abs(x2 - x1) * 0.45, 36);
+                    const cp1x = x1 + dx;
+                    const cp1y = y1;
+                    const cp2x = x2 - dx;
+                    const cp2y = y2;
+                    const pathD = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
 
-                  const fi = nodes.findIndex(n => n.id === e.from);
-                  const ti = nodes.findIndex(n => n.id === e.to);
-                  const fromDone = fi >= 0 && (stepStatuses[fi] === "success" || stepStatuses[fi] === "completed");
-                  const toDone   = ti >= 0 && (stepStatuses[ti] === "success" || stepStatuses[ti] === "completed");
-                  const bothDone = fromDone && toDone;
-                  const isRunningEdge = isTracing && stepStatuses[fi] === "running";
+                    const fi = nodes.findIndex(n => n.id === e.from);
+                    const ti = nodes.findIndex(n => n.id === e.to);
+                    const fromDone = fi >= 0 && (stepStatuses[fi] === "success" || stepStatuses[fi] === "completed");
+                    const toDone   = ti >= 0 && (stepStatuses[ti] === "success" || stepStatuses[ti] === "completed");
+                    const bothDone = fromDone && toDone;
+                    const isRunningEdge = isTracing && stepStatuses[fi] === "running";
 
-                  const edgeColor = bothDone
-                    ? "#00C896"
-                    : isTracing
-                    ? "rgba(255,255,255,0.16)"
-                    : "rgba(0,200,150,0.55)";
-                  const edgeWidth = bothDone ? 2.5 : isRunningEdge ? 2.5 : 2;
+                    const edgeColor = bothDone
+                      ? "#00C896"
+                      : isTracing
+                      ? "rgba(255,255,255,0.16)"
+                      : "rgba(0,200,150,0.55)";
+                    const edgeWidth = bothDone ? 2.5 : isRunningEdge ? 2.5 : 2;
 
-                  // Midpoint for delete button
-                  const midX = (x1 + x2) / 2;
-                  const midY = (y1 + y2) / 2;
+                    // Midpoint for delete button
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
 
-                  return (
-                    <g key={e.id}>
-                      {/* Glow layer for active/done edges */}
-                      {(bothDone || isRunningEdge) && (
+                    return (
+                      <g key={e.id}>
+                        {/* Glow layer for active/done edges */}
+                        {(bothDone || isRunningEdge) && (
+                          <path
+                            d={pathD}
+                            stroke={bothDone ? "rgba(0,200,150,0.2)" : "rgba(56,189,248,0.15)"}
+                            strokeWidth={8}
+                            fill="none"
+                            style={{ filter: "blur(3px)" }}
+                          />
+                        )}
+
+                        {/* Main edge — clean rounded line, no arrowhead marker */}
                         <path
                           d={pathD}
-                          stroke={bothDone ? "rgba(0,200,150,0.2)" : "rgba(56,189,248,0.15)"}
-                          strokeWidth={8}
+                          stroke={edgeColor}
+                          strokeWidth={edgeWidth}
+                          strokeLinecap="round"
                           fill="none"
-                          style={{ filter: "blur(3px)" }}
+                          style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
                         />
-                      )}
 
-                      {/* Main edge — clean rounded line, no arrowhead marker */}
-                      <path
-                        d={pathD}
-                        stroke={edgeColor}
-                        strokeWidth={edgeWidth}
-                        strokeLinecap="round"
-                        fill="none"
-                        style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
-                      />
+                        {/* Source junction dot — make.com style filled circle exactly on the output port */}
+                        <circle cx={x1} cy={y1} r={3.5} fill={edgeColor} />
+                        {/* Target junction dot — filled circle exactly on the input port, replaces the triangle arrowhead */}
+                        <circle cx={x2} cy={y2} r={3.5} fill={edgeColor} />
 
-                      {/* Source junction dot — make.com style filled circle at the start */}
-                      <circle cx={x1} cy={y1} r={3.5} fill={edgeColor} />
-                      {/* Target junction dot — filled circle at the end, replaces the triangle arrowhead */}
-                      <circle cx={x2} cy={y2} r={3.5} fill={edgeColor} />
+                        {/* Animated flow dot — blue dot traveling along edge when running */}
+                        {isRunningEdge && (
+                          <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
+                            <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
+                          </circle>
+                        )}
 
-                      {/* Animated flow dot — blue dot traveling along edge when running */}
-                      {isRunningEdge && (
-                        <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
-                          <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
-                        </circle>
-                      )}
+                        {/* Done: small flow dot in green */}
+                        {bothDone && (
+                          <circle r="3" fill="#00C896" opacity="0.7">
+                            <animateMotion dur="2s" repeatCount="indefinite" path={pathD} />
+                          </circle>
+                        )}
 
-                      {/* Done: small flow dot in green */}
-                      {bothDone && (
-                        <circle r="3" fill="#00C896" opacity="0.7">
-                          <animateMotion dur="2s" repeatCount="indefinite" path={pathD} />
-                        </circle>
-                      )}
+                        {/* Invisible fat hit-area for tap-to-delete */}
+                        <path
+                          d={pathD}
+                          stroke="transparent"
+                          strokeWidth={20}
+                          fill="none"
+                          style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                          onClick={ev => {
+                            ev.stopPropagation();
+                            if (window.confirm(`Remove this connection?`)) {
+                              setEdges(es => es.filter(ed => ed.id !== e.id));
+                            }
+                          }}
+                          onMouseEnter={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "rgba(251,113,133,0.2)"); }}
+                          onMouseLeave={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "transparent"); }}
+                        />
 
-                      {/* Invisible fat hit-area for tap-to-delete */}
-                      <path
-                        d={pathD}
-                        stroke="transparent"
-                        strokeWidth={20}
-                        fill="none"
-                        style={{ cursor: "pointer", pointerEvents: "stroke" }}
-                        onClick={ev => {
-                          ev.stopPropagation();
-                          if (window.confirm(`Remove this connection?`)) {
+                        {/* Mid-point delete badge */}
+                        <g
+                          style={{ cursor: "pointer", pointerEvents: "all" }}
+                          onClick={ev => {
+                            ev.stopPropagation();
                             setEdges(es => es.filter(ed => ed.id !== e.id));
-                          }
-                        }}
-                        onMouseEnter={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "rgba(251,113,133,0.2)"); }}
-                        onMouseLeave={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "transparent"); }}
-                      />
-
-                      {/* Mid-point delete badge */}
-                      <g
-                        style={{ cursor: "pointer", pointerEvents: "all" }}
-                        onClick={ev => {
-                          ev.stopPropagation();
-                          setEdges(es => es.filter(ed => ed.id !== e.id));
-                        }}
-                      >
-                        <circle cx={midX} cy={midY} r={10} fill="rgba(8,11,22,0.97)" stroke="rgba(251,113,133,0.45)" strokeWidth={1.5} opacity={0} className="edge-delete-btn">
-                          <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                          <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
-                        </circle>
-                        <text x={midX} y={midY + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0}>
-                          ×
-                          <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                          <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
-                        </text>
+                          }}
+                        >
+                          <circle cx={midX} cy={midY} r={10} fill="rgba(8,11,22,0.97)" stroke="rgba(251,113,133,0.45)" strokeWidth={1.5} opacity={0} className="edge-delete-btn">
+                            <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                            <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                          </circle>
+                          <text x={midX} y={midY + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0}>
+                            ×
+                            <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                            <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                          </text>
+                        </g>
                       </g>
-                    </g>
-                  );
-                })}
-              </svg>
+                    );
+                  })}
+                </svg>
 
-              {nodes.map((n, idx) => (
-                <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
-                  <NodeBox
-                    node={n}
-                    selected={selected === n.id}
-                    connecting={connecting?.fromId === n.id}
-                    // FIX #2: pass status by node index
-                    traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
-                    onSelect={setSelected}
-                    onDelete={deleteNode}
-                    onConnectorClick={onConnectorClick}
-                  />
-                </div>
-              ))}
+                {nodes.map((n, idx) => (
+                  <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
+                    <NodeBox
+                      node={n}
+                      selected={selected === n.id}
+                      connecting={connecting?.fromId === n.id}
+                      // FIX #2: pass status by node index
+                      traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
+                      onSelect={setSelected}
+                      onDelete={deleteNode}
+                      onConnectorClick={onConnectorClick}
+                    />
+                  </div>
+                ))}
+              </div>
 
               {nodes.length > 0 && !isTracing && (
                 <div style={{ position: "absolute", bottom: 14, left: 14, zIndex: 10, pointerEvents: "none" }}>
