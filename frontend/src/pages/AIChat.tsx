@@ -1379,11 +1379,17 @@ export default function AIChat() {
   /* Track which session's history we've already loaded to prevent clobbering live msgs */
   const historyLoadedForSession = useRef<string | null>(null);
 
-  // Populate msgs from history ONLY on initial session load (msgs is empty).
-  // Never overwrite msgs mid-conversation — that causes layout corruption on return.
+  // Clear messages immediately when switching sessions so stale msgs never show
+  useEffect(() => {
+    if (historyLoadedForSession.current !== session) {
+      setMsgs([]);
+    }
+  }, [session]);
+
+  // Populate msgs from history once per session switch.
+  // Guard: skip if we already loaded this session's history AND msgs exist (mid-convo).
   useEffect(() => {
     if (!history || (history as any[]).length === 0) return;
-    // Only load if we haven't already loaded for this session, or msgs is empty
     if (historyLoadedForSession.current === session && msgs.length > 0) return;
     historyLoadedForSession.current = session;
     setMsgs((history as any[]).map((m: any, i: number) => ({

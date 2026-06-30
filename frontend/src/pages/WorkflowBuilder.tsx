@@ -604,10 +604,10 @@ function NodeBox({
       onClick={() => onSelect(node.id)}
       style={{
         position: "absolute", left: node.x, top: node.y,
-        width: 148, background: "rgba(8,11,22,0.95)",
+        width: 160, background: "rgba(8,11,22,0.97)",
         border: `1.5px solid ${borderColor}`,
-        borderRadius: 12, padding: "12px 14px", cursor: "pointer", userSelect: "none",
-        boxShadow,
+        borderRadius: 14, padding: "12px 14px", cursor: "pointer", userSelect: "none",
+        boxShadow: boxShadow ?? "0 2px 16px rgba(0,0,0,0.35)",
         transition: "border-color 0.25s, box-shadow 0.25s",
         zIndex: selected ? 10 : 1,
       }}
@@ -630,21 +630,22 @@ function NodeBox({
         </div>
       </div>
 
-      {/* Left connector */}
-      <div style={{ position: "absolute", top: "50%", left: -5, width: 10, height: 10, borderRadius: "50%", background: "#04060F", border: `2px solid ${entry.color}60`, transform: "translateY(-50%)" }} />
+      {/* Left connector — input port */}
+      <div style={{ position: "absolute", top: "50%", left: -6, width: 12, height: 12, borderRadius: "50%", background: "#04060F", border: `2px solid ${entry.color}70`, transform: "translateY(-50%)", zIndex: 5 }} />
 
-      {/* Right connector — tap-to-connect */}
+      {/* Right connector — tap-to-connect output port */}
       <div
         onClick={e => { e.stopPropagation(); onConnectorClick(node.id, e); }}
         style={{
-          position: "absolute", top: "50%", right: -5, width: 14, height: 14, borderRadius: "50%",
+          position: "absolute", top: "50%", right: -6, width: 14, height: 14, borderRadius: "50%",
           background: connecting ? "#00C896" : entry.color,
-          border: `2px solid ${connecting ? "#00C896" : entry.color}`,
+          border: `2px solid ${connecting ? "#00C896" : "rgba(8,11,22,0.8)"}`,
           transform: "translateY(-50%)",
           cursor: "pointer",
-          boxShadow: connecting ? "0 0 8px #00C896" : undefined,
+          boxShadow: connecting ? "0 0 10px #00C896, 0 0 0 3px rgba(0,200,150,0.2)" : `0 0 6px ${entry.color}60`,
           animation: connecting ? "pulse-dot 1s ease-in-out infinite" : undefined,
           zIndex: 30,
+          transition: "background 0.15s, box-shadow 0.15s",
         }}
       />
 
@@ -941,7 +942,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: n.id || `n${i}`,
       executorType: n.type || "ai_generate",
       label: n.label || n.name || "Node",
-      x: n.x ?? 80 + i * 180,
+      x: n.x ?? 60 + i * 200,
       y: n.y ?? 150,
       config: n.config || {},
     }));
@@ -956,8 +957,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: entry.executorType,
       label: entry.label,
-      // Space nodes in a nice horizontal flow
-      x: nodes.length === 0 ? 40 : Math.max(...nodes.map(n => n.x)) + 180,
+      // Space nodes in a nice horizontal flow — 200px gap keeps bezier curves readable
+      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 200,
       y: 140,
       config: {},
     };
@@ -1293,7 +1294,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
             <div
               ref={canvasRef}
               onClick={() => { setSelected(null); if (connecting) setConnecting(null); }}
-              style={{ flex: 1, position: "relative", overflow: "hidden", background: `radial-gradient(ellipse at 50% 50%, rgba(0,200,150,0.03) 0%, transparent 70%), repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 40px)` }}
+              style={{ flex: 1, position: "relative", overflow: "hidden", background: "#04060F", backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)", backgroundSize: "28px 28px" }}
             >
               {connecting && (
                 <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(0,200,150,0.15)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 20, padding: "8px 18px", fontSize: 12, color: "#00C896", fontFamily: "'DM Mono',monospace", zIndex: 100, pointerEvents: "none", whiteSpace: "nowrap" }}>
@@ -1309,73 +1310,118 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 </div>
               )}
 
-              {/* SVG edges — solid lines with arrows + tap-to-delete, like make.com */}
-              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}>
+              {/* SVG edges — make.com-style smooth bezier curves with animated flow */}
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0, overflow: "visible" }}>
                 <defs>
-                  {/* Arrow markers for each colour state */}
-                  <marker id="arrow-default" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L8,3 z" fill="rgba(0,200,150,0.55)" />
+                  <marker id="arrow-default" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="rgba(0,200,150,0.7)" />
                   </marker>
-                  <marker id="arrow-done" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L8,3 z" fill="#00C896" />
+                  <marker id="arrow-done" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#00C896" />
                   </marker>
-                  <marker id="arrow-trace" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L8,3 z" fill="rgba(255,255,255,0.12)" />
+                  <marker id="arrow-trace" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="rgba(255,255,255,0.18)" />
                   </marker>
-                  <marker id="arrow-hover" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L8,3 z" fill="#FB7185" />
-                  </marker>
+                  <filter id="edge-glow">
+                    <feGaussianBlur stdDeviation="2" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
                 </defs>
                 {edges.map(e => {
                   const fn = nodes.find(n => n.id === e.from);
                   const tn = nodes.find(n => n.id === e.to);
                   if (!fn || !tn) return null;
-                  const x1 = fn.x + 148, y1 = fn.y + 36;
-                  const x2 = tn.x - 2,   y2 = tn.y + 36;
-                  const mx = (x1 + x2) / 2;
+                  // Connect from right-center of source node to left-center of target node
+                  const nodeW = 160;
+                  const nodeH = 62; // approximate rendered height
+                  const x1 = fn.x + nodeW; // right edge of source
+                  const y1 = fn.y + nodeH / 2; // vertical center of source
+                  const x2 = tn.x;            // left edge of target
+                  const y2 = tn.y + nodeH / 2; // vertical center of target
+
+                  // Make.com-style: control points extend horizontally for smooth S-curve
+                  const dx = Math.max(Math.abs(x2 - x1) * 0.5, 60);
+                  const cp1x = x1 + dx;
+                  const cp1y = y1;
+                  const cp2x = x2 - dx;
+                  const cp2y = y2;
+                  const pathD = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+
                   const fi = nodes.findIndex(n => n.id === e.from);
                   const ti = nodes.findIndex(n => n.id === e.to);
                   const fromDone = fi >= 0 && (stepStatuses[fi] === "success" || stepStatuses[fi] === "completed");
                   const toDone   = ti >= 0 && (stepStatuses[ti] === "success" || stepStatuses[ti] === "completed");
                   const bothDone = fromDone && toDone;
-                  const edgeColor = bothDone ? "#00C896" : isTracing ? "rgba(255,255,255,0.12)" : "rgba(0,200,150,0.55)";
-                  const marker    = bothDone ? "url(#arrow-done)" : isTracing ? "url(#arrow-trace)" : "url(#arrow-default)";
-                  const midX = mx, midY = (y1 + y2) / 2;
+                  const isRunningEdge = isTracing && stepStatuses[fi] === "running";
+
+                  const edgeColor = bothDone
+                    ? "#00C896"
+                    : isTracing
+                    ? "rgba(255,255,255,0.14)"
+                    : "rgba(0,200,150,0.6)";
+                  const edgeWidth = bothDone ? 2.5 : isRunningEdge ? 2.5 : 2;
+                  const marker = bothDone ? "url(#arrow-done)" : isTracing ? "url(#arrow-trace)" : "url(#arrow-default)";
+
+                  // Midpoint for delete button
+                  const midX = (x1 + x2) / 2;
+                  const midY = (y1 + y2) / 2;
+
                   return (
                     <g key={e.id}>
-                      {/* Solid bezier line */}
+                      {/* Glow layer for active/done edges */}
+                      {(bothDone || isRunningEdge) && (
+                        <path
+                          d={pathD}
+                          stroke={bothDone ? "rgba(0,200,150,0.2)" : "rgba(56,189,248,0.15)"}
+                          strokeWidth={8}
+                          fill="none"
+                          style={{ filter: "blur(3px)" }}
+                        />
+                      )}
+
+                      {/* Main bezier edge */}
                       <path
-                        d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                        d={pathD}
                         stroke={edgeColor}
-                        strokeWidth={bothDone ? 2.5 : 2}
+                        strokeWidth={edgeWidth}
                         fill="none"
                         markerEnd={marker}
+                        strokeDasharray={isRunningEdge ? "none" : undefined}
                         style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
                       />
-                      {/* Animated flow dot when running */}
-                      {isTracing && stepStatuses[fi] === "running" && (
-                        <circle r="3" fill="#38BDF8" opacity="0.9">
-                          <animateMotion dur="1.2s" repeatCount="indefinite"
-                            path={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} />
+
+                      {/* Animated flow dot — blue dot traveling along edge when running */}
+                      {isRunningEdge && (
+                        <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
+                          <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
                         </circle>
                       )}
+
+                      {/* Done: small flow dot in green */}
+                      {bothDone && (
+                        <circle r="3" fill="#00C896" opacity="0.7">
+                          <animateMotion dur="2s" repeatCount="indefinite" path={pathD} />
+                        </circle>
+                      )}
+
                       {/* Invisible fat hit-area for tap-to-delete */}
                       <path
-                        d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                        d={pathD}
                         stroke="transparent"
-                        strokeWidth={18}
+                        strokeWidth={20}
                         fill="none"
                         style={{ cursor: "pointer", pointerEvents: "stroke" }}
                         onClick={ev => {
                           ev.stopPropagation();
-                          if (window.confirm(`Remove connection between these nodes?`)) {
+                          if (window.confirm(`Remove this connection?`)) {
                             setEdges(es => es.filter(ed => ed.id !== e.id));
                           }
                         }}
-                        onMouseEnter={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "rgba(251,113,133,0.25)"); }}
+                        onMouseEnter={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "rgba(251,113,133,0.2)"); }}
                         onMouseLeave={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "transparent"); }}
                       />
-                      {/* Mid-point delete badge — shows on hover via CSS trick */}
+
+                      {/* Mid-point delete badge */}
                       <g
                         style={{ cursor: "pointer", pointerEvents: "all" }}
                         onClick={ev => {
@@ -1383,11 +1429,15 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                           setEdges(es => es.filter(ed => ed.id !== e.id));
                         }}
                       >
-                        <circle cx={midX} cy={midY} r={9} fill="rgba(8,11,22,0.95)" stroke="rgba(251,113,133,0.4)" strokeWidth={1.5} opacity={0} className="edge-delete-btn">
+                        <circle cx={midX} cy={midY} r={10} fill="rgba(8,11,22,0.97)" stroke="rgba(251,113,133,0.45)" strokeWidth={1.5} opacity={0} className="edge-delete-btn">
                           <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
                           <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
                         </circle>
-                        <text x={midX} y={midY + 4} textAnchor="middle" fontSize="11" fill="#FB7185" fontWeight="bold" pointerEvents="none">×</text>
+                        <text x={midX} y={midY + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0}>
+                          ×
+                          <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                          <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                        </text>
                       </g>
                     </g>
                   );

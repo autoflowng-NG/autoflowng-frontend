@@ -623,8 +623,20 @@ export default function Workflows() {
   const [creating, setCreating] = useState(false);
 
   const wfs = workflows as any[];
-  const activeCount = wfs.filter(w => w.is_active).length;
-  const pausedCount = wfs.filter(w => !w.is_active).length;
+
+  // Debounce the stat counts so a Run-triggered re-render cycle doesn't flash wrong values
+  const [stableActiveCount, setStableActiveCount] = useState(0);
+  const [stablePausedCount, setStablePausedCount] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setStableActiveCount(wfs.filter(w => w.is_active).length);
+      setStablePausedCount(wfs.filter(w => !w.is_active).length);
+    }, 80);
+    return () => clearTimeout(t);
+  }, [wfs]);
+
+  const activeCount = stableActiveCount;
+  const pausedCount = stablePausedCount;
 
   const filtered = wfs.filter(w => {
     const matchSearch = !search ||
