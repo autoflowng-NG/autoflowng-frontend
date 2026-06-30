@@ -485,3 +485,83 @@ export const quickVideoAPI = {
 
   library: () => api.get("/ai/quick-video/library"),
 };
+
+
+// ── Ad Platform Accounts (Phase 42C) ─────────────────────────────────────────
+// Endpoints served by routes/ad-platforms.js
+export const adPlatformAPI = {
+  /** List ad accounts available under the freshly-authed token */
+  listAccounts: (platform: string) =>
+    api.get(`/ad-platforms/${platform}/accounts`) as Promise<{ accounts: { id: string; name: string; currency?: string; status?: string }[] }>,
+
+  /** Save the chosen account_id for a platform (replaces 'pending' row) */
+  selectAccount: (platform: string, account_id: string, account_name: string) =>
+    api.post(`/ad-platforms/${platform}/select-account`, { account_id, account_name }) as Promise<{ success: boolean; platform: string; account_id: string }>,
+
+  /** List all connected ad platform accounts for the current user */
+  listConnected: () =>
+    api.get('/ad-platforms/connections') as Promise<{ connections: { id: number; platform: string; account_id: string; account_name?: string; status: string; connected_at: string }[] }>,
+
+  /** Revoke (delete) a specific ad account connection */
+  revoke: (platform: string, accountId: string) =>
+    api.delete(`/ad-platforms/${platform}/${accountId}`) as Promise<{ success: boolean }>,
+
+  /**
+   * Fetch account-level aggregated metrics (spend, impressions, clicks, CTR, CPM, CPC, conversions).
+   * dateRange: 'last_7d' | 'last_30d'  (default: 'last_7d')
+   */
+  accountInsights: (platform: string, accountId: string, dateRange: 'last_7d' | 'last_30d' = 'last_7d') =>
+    api.get(`/ad-platforms/${platform}/${accountId}/account-insights`, { params: { date_range: dateRange } }) as Promise<{
+      platform: string;
+      account_id: string;
+      date_range: string;
+      metrics: {
+        views: number; clicks: number; spend_usd: number;
+        ctr: number; cpm: number; cpc: number; conversions: number;
+      };
+    }>,
+
+  /**
+   * List active/paused campaigns for a connected ad account.
+   * Returns id, name, status, objective, budget, budget_type per campaign.
+   */
+  listCampaigns: (platform: string, accountId: string, limit = 50) =>
+    api.get(`/ad-platforms/${platform}/${accountId}/campaigns`, { params: { limit } }) as Promise<{
+      platform: string;
+      account_id: string;
+      campaigns: {
+        id: string; name: string; status: string;
+        objective: string | null; budget: number | null; budget_type: string | null;
+      }[];
+    }>,
+
+  /**
+   * Pause or resume a single campaign.
+   * action: 'pause' | 'resume'
+   * Returns { success, platform, account_id, campaign_id, status }
+   */
+  setCampaignStatus: (platform: string, accountId: string, campaignId: string, action: 'pause' | 'resume') =>
+    api.patch(`/ad-platforms/${platform}/${accountId}/campaigns/${campaignId}/status`, { action }) as Promise<{
+      success: boolean; platform: string; account_id: string; campaign_id: string; status: string;
+    }>,
+
+  /**
+   * Update the budget for a single campaign.
+   * new_budget_usd: positive dollar amount (Google: daily budget; Meta/LinkedIn: lifetime; TikTok: total)
+   * Returns { success, platform, account_id, campaign_id, new_budget_usd }
+   */
+  updateCampaignBudget: (platform: string, accountId: string, campaignId: string, newBudgetUsd: number) =>
+    api.patch(`/ad-platforms/${platform}/${accountId}/campaigns/${campaignId}/budget`, { new_budget_usd: newBudgetUsd }) as Promise<{
+      success: boolean; platform: string; account_id: string; campaign_id: string; new_budget_usd: number;
+    }>,
+
+  /**
+   * Daily spend sparkline data for a campaign (always last 7 days).
+   * Returns { platform, account_id, campaign_id, days: Array<{ date: string, spend_usd: number }> }
+   */
+  campaignDailySpend: (platform: string, accountId: string, campaignId: string) =>
+    api.get(`/ad-platforms/${platform}/${accountId}/campaigns/${campaignId}/daily-spend`) as Promise<{
+      platform: string; account_id: string; campaign_id: string;
+      days: { date: string; spend_usd: number }[];
+    }>,
+};
