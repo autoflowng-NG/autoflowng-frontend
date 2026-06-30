@@ -25,6 +25,7 @@ import { adPlatformAPI, API_BASE_URL, tokenStore } from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
+import { PlatformSVGIcon } from "../components/PlatformIcons";
 
 /* ── Design tokens ──────────────────────────────────────────────────── */
 const C = {
@@ -83,9 +84,12 @@ function padSparkline(days: DayPoint[]): DayPoint[] {
 /* ── Primitives ─────────────────────────────────────────────────────── */
 function PlatformBadge({ pid, size = 36 }: { pid: string; size?: number }) {
   const m = PLATFORM_META[pid]; if (!m) return null;
+  // Use the brand SVG icon from PlatformIcons instead of a letter monogram.
+  // The background is kept so the icon has a branded coloured backdrop,
+  // matching the visual language of the rest of the UI.
   return (
-    <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.25), background: m.color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: Math.round(size * 0.38), color: "#fff", flexShrink: 0, fontFamily: "'DM Sans',sans-serif" }}>
-      {m.icon}
+    <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.25), background: m.color + "22", border: `1.5px solid ${m.color}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <PlatformSVGIcon id={pid} size={Math.round(size * 0.58)} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import api, { API_BASE_URL } from "../lib/api";
 import { PageTransition } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
+import { PlatformSVGIcon } from "../components/PlatformIcons";
 
 export default function IntegrationDetail() {
   const { id }       = useParams<{ id: string }>();
@@ -17,9 +18,16 @@ export default function IntegrationDetail() {
   const [testing, setTesting]         = useState(false);
   const [testResult, setTestResult]   = useState<any>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["integrations", id],
     queryFn:  () => (api as any).get(`/integrations/${id}`),
+    // Do NOT retry 404s — the integration genuinely doesn't exist.
+    // Retry once on transient errors (network, 5xx) before showing the error state.
+    retry: (failureCount, err: any) => {
+      const status = err?.status ?? err?.response?.status;
+      if (status === 404) return false;
+      return failureCount < 1;
+    },
   });
 
   const integ = data?.integration;
@@ -104,6 +112,39 @@ export default function IntegrationDetail() {
     </div>
   );
 
+  // Distinguish a genuine "not found" (404) from a transient network or server error.
+  // Previously this fell through to a blank/redirect state that sent users to /dashboard
+  // because the registry.js crash returned errors for every integration lookup.
+  if (isError) {
+    const status = (error as any)?.status ?? (error as any)?.response?.status;
+    const isNotFound = status === 404;
+    return (
+      <PageTransition variant="slide">
+        <div style={{ padding: "32px", maxWidth: 600, margin: "0 auto" }}>
+          <button onClick={() => navigate("/marketplace")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "rgba(232,238,255,0.4)", cursor: "pointer", fontSize: 13, fontFamily: "'DM Sans',sans-serif", marginBottom: 24, padding: 0 }}>
+            <ArrowLeft size={14} /> Back to Marketplace
+          </button>
+          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 32, textAlign: "center" }}>
+            <XCircle size={32} color={isNotFound ? "rgba(226,232,255,0.22)" : "#FB7185"} style={{ margin: "0 auto 16px" }} />
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 8 }}>
+              {isNotFound ? "Integration not found" : "Could not load integration"}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Sans',sans-serif", lineHeight: 1.6 }}>
+              {isNotFound
+                ? `No integration with ID "${id}" exists. It may have been removed or the link is incorrect.`
+                : "A temporary error occurred while loading this integration. Please try again."}
+            </div>
+            {!isNotFound && (
+              <button onClick={() => navigate(0)} style={{ marginTop: 20, display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.2)", borderRadius: 8, color: "#38BDF8", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                <RefreshCw size={13} /> Retry
+              </button>
+            )}
+          </div>
+        </div>
+      </PageTransition>
+    );
+  }
+
   if (!integ) return <div style={{ padding: 32, color: "#E8EEFF" }}>Integration not found</div>;
 
   const fields = INTEGRATION_FIELDS[integ.id] || AUTH_FIELDS[integ.authType] || [];
@@ -142,7 +183,7 @@ export default function IntegrationDetail() {
             <Reveal>
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
                 <div style={{ width: 56, height: 56, borderRadius: 14, background: integ.iconColor + "22", border: `1px solid ${integ.iconColor}44`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 14, fontWeight: 900, color: integ.iconColor, fontFamily: "'DM Mono',monospace" }}>{integ.id?.slice(0, 2).toUpperCase()}</span>
+                  <PlatformSVGIcon id={integ.id} size={30} />
                 </div>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
