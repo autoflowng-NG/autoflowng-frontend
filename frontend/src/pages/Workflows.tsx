@@ -11,7 +11,7 @@
  *   - All existing LiveBadge, WorkflowHealthBadge, WorkflowPredictionBadge preserved
  */
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LayoutGroup, AnimatePresence, motion } from "framer-motion";
 import { useWorkflows, useDeleteWorkflow, useToggleWorkflow, useWorkflowTemplates, useActivateTemplate } from "../hooks/useWorkflows";
