@@ -1376,28 +1376,27 @@ export default function AIChat() {
     staleTime: 0,
   });
 
-  /* Track which session's history we've already loaded to prevent clobbering live msgs */
-  const historyLoadedForSession = useRef<string | null>(null);
-
-  // Clear messages immediately when switching sessions so stale msgs never show
-  useEffect(() => {
-    if (historyLoadedForSession.current !== session) {
-      setMsgs([]);
-    }
-  }, [session]);
-
-  // Populate msgs from history once per session switch.
-  // Guard: skip if we already loaded this session's history AND msgs exist (mid-convo).
+  // Merge history into msgs without clobbering live messages sent this session.
+  // Uses id-deduplication so navigating away and back never reorders or duplicates msgs.
   useEffect(() => {
     if (!history || (history as any[]).length === 0) return;
-    if (historyLoadedForSession.current === session && msgs.length > 0) return;
-    historyLoadedForSession.current = session;
-    setMsgs((history as any[]).map((m: any, i: number) => ({
-      role: m.role,
-      content: m.content || m.message,
-      id: m.id || `h${session}${i}`,
-      ts: m.created_at ? new Date(m.created_at).getTime() : Date.now() - (((history as any[]).length - i) * 1000),
-    })));
+    const histMsgs: Msg[] = (history as any[]).map((m: any, i: number) => ({
+      role:    m.role as "user" | "assistant",
+      content: m.content || m.message || "",
+      id:      m.id || `h${session}${i}`,
+      ts:      m.created_at
+        ? new Date(m.created_at).getTime()
+        : Date.now() - (((history as any[]).length - i) * 1000),
+    }));
+    setMsgs(current => {
+      const existingIds = new Set(current.map(m => m.id));
+      const newFromHistory = histMsgs.filter(m => !existingIds.has(m.id));
+      if (newFromHistory.length === 0) return current; // nothing new — no re-render
+      // Merge: history first (oldest), then any live-only msgs not in history
+      const histIds = new Set(histMsgs.map(m => m.id));
+      const liveOnly = current.filter(m => !histIds.has(m.id));
+      return [...histMsgs, ...liveOnly];
+    });
   }, [history, session]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
@@ -1438,14 +1437,12 @@ export default function AIChat() {
   const clear   = () => setMsgs([]);
   const newChat = () => {
     const newId = `session_${Date.now()}`;
-    historyLoadedForSession.current = null;
     setSession(newId);
     setMsgs([]);
     setInput("");
   };
 
   const switchSession = (id: string) => {
-    historyLoadedForSession.current = null;
     setMsgs([]);
     setSession(id);
   };
