@@ -256,38 +256,57 @@ function SidebarContent({
       }}>
         {!isCollapsed && <Logo size="sm" />}
         {isCollapsed && (
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: "linear-gradient(135deg, rgba(0,200,150,0.15), rgba(124,58,237,0.15))",
-            border: "1px solid rgba(255,255,255,0.08)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 11, fontWeight: 900, color: "#00C896",
-            fontFamily: "'Syne', sans-serif",
-          }}>AF</div>
-        )}
-        {!isMobile && onCollapse && (
           <button
             onClick={onCollapse}
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
             style={{
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${T.border}`,
-              borderRadius: 6,
-              color: T.muted,
-              cursor: "pointer",
+              width: 36, height: 36, borderRadius: 8,
+              background: "linear-gradient(135deg, rgba(0,200,150,0.18), rgba(124,58,237,0.18))",
+              border: "1px solid rgba(0,200,150,0.4)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 24, height: 24, flexShrink: 0,
+              cursor: onCollapse ? "pointer" : "default",
               transition: "all 0.14s",
             }}
             onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.07)";
-              (e.currentTarget as HTMLElement).style.color = "#E2E8FF";
+              if (!onCollapse) return;
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(0,200,150,0.18)";
             }}
             onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)";
-              (e.currentTarget as HTMLElement).style.color = T.muted;
+              (e.currentTarget as HTMLElement).style.boxShadow = "none";
             }}
           >
-            {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            <ChevronRight size={16} strokeWidth={2.5} color="#00C896" />
+          </button>
+        )}
+        {!isMobile && onCollapse && !isCollapsed && (
+          <button
+            onClick={onCollapse}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            style={{
+              background: "rgba(0,200,150,0.10)",
+              border: "1px solid rgba(0,200,150,0.35)",
+              borderRadius: 8,
+              color: "#00C896",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 32, height: 32, flexShrink: 0,
+              transition: "all 0.14s",
+              boxShadow: "0 0 0 0 rgba(0,200,150,0)",
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.background = "rgba(0,200,150,0.18)";
+              (e.currentTarget as HTMLElement).style.color = "#E2E8FF";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(0,200,150,0.15)";
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.background = "rgba(0,200,150,0.10)";
+              (e.currentTarget as HTMLElement).style.color = "#00C896";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 0 rgba(0,200,150,0)";
+            }}
+          >
+            <ChevronLeft size={18} strokeWidth={2.5} />
           </button>
         )}
         {isMobile && (
