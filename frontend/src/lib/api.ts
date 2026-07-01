@@ -465,6 +465,12 @@ export const mediaCloudAPI = {
     api.get("/ai/media-cloud/library", { params: params as any }),
   getAsset:   (assetId: string) =>
     api.get(`/ai/media-cloud/assets/${assetId}`),
+  // Links a Media Cloud library asset into the Creative Agents pipeline
+  // (Style/Animate/Edit), returning the pipeline_project_id/pipeline_asset_id
+  // those tabs need. Safe to call repeatedly — reuses the existing link
+  // after the first call.
+  linkToPipeline: (assetId: string) =>
+    api.post(`/ai/media-cloud/library/${assetId}/link-pipeline`),
 };
 
 // ── Quick Generate: auto-create pipeline + media_library_assets in one call ───
