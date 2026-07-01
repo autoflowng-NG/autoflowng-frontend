@@ -141,6 +141,14 @@ export function HeroSection() {
 
   return (
     <section className="relative min-h-screen flex flex-col justify-center items-start overflow-hidden bg-black">
+      {/* Fallback gradient — visible while video buffers or if it fails to load */}
+      <div
+        className="absolute inset-0 z-0"
+        style={{
+          background: "linear-gradient(135deg, #00C896 0%, #38BDF8 30%, #A78BFA 65%, #EC4899 100%)",
+          opacity: 0.18,
+        }}
+      />
       {/* Background video */}
       <div className="absolute inset-0 z-0">
         {!videoFailed && (
@@ -149,6 +157,7 @@ export function HeroSection() {
             muted
             loop
             playsInline
+            preload="auto"
             aria-hidden="true"
             className="w-full h-full object-cover object-center opacity-80"
             onError={() => setVideoFailed(true)}
