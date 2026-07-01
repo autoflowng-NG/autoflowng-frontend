@@ -576,6 +576,19 @@ function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
         transition: "all 0.16s", transform: hover ? "translateY(-2px)" : "none",
       }}
     >
+      {asset.presigned_url && asset.asset_type === 'image' && (
+        <div style={{ width: "100%", height: 100, borderRadius: 8, overflow: "hidden", marginBottom: 10, background: C.border }}>
+          <img src={asset.presigned_url} alt={asset.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+      )}
+      {asset.presigned_url && asset.asset_type === 'video' && (
+        <div style={{ position: "relative", width: "100%", height: 100, borderRadius: 8, overflow: "hidden", marginBottom: 10, background: "#000" }}>
+          <video src={asset.presigned_url} muted preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}>
+            <span style={{ fontSize: 22, color: "#fff" }}>▶</span>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <AssetIcon type={asset.asset_type} />
         <AssetStatusBadge status={asset.status} />
@@ -810,6 +823,24 @@ function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
                   )}
                   {asset.presigned_url && asset.asset_type === 'audio' && (
                     <audio src={asset.presigned_url} controls style={{ width: "100%", marginBottom: 16 }} />
+                  )}
+                  {(asset.presigned_url || asset.public_url) && (
+                    <div style={{ marginBottom: 14 }}>
+                      <a
+                        href={asset.presigned_url || asset.public_url}
+                        download={asset.name}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          background: C.surface, border: `1px solid ${C.border}`,
+                          color: C.text, padding: "8px 14px", borderRadius: 8,
+                          fontSize: 12.5, fontWeight: 600, fontFamily: FONT_BODY,
+                          textDecoration: "none", cursor: "pointer",
+                        }}
+                      >
+                        ↓ Download {asset.name}
+                      </a>
+                    </div>
                   )}
                   {asset.tags.length > 0 && (
                     <div style={{ marginBottom: 14 }}>
