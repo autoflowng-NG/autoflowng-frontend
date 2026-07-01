@@ -32,14 +32,14 @@ function WatchDemoButton() {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setOpen(false)}>
           <div className="relative w-full max-w-3xl mx-4 bg-background rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setOpen(false)} className="absolute top-3 right-3 z-10 text-muted-foreground hover:text-foreground">
+            <button onClick={() => setOpen(false)} className="absolute top-3 right-3 z-10 text-white/70 hover:text-foreground">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
             <div className="aspect-video w-full bg-black flex items-center justify-center">
               {videoUrl ? (
                 <video src={videoUrl} controls autoPlay className="w-full h-full" />
               ) : (
-                <div className="text-center text-muted-foreground">
+                <div className="text-center text-white/70">
                   <svg className="w-16 h-16 mx-auto mb-3 opacity-30" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.34-5.89a1.5 1.5 0 000-2.54L6.3 2.84z"/></svg>
                   <p className="font-mono text-sm">Demo video coming soon</p>
                 </div>
@@ -111,7 +111,7 @@ export function CtaSection() {
                   your workflows?
                 </h2>
 
-                <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
+                <p className="text-xl text-white/70 mb-12 leading-relaxed max-w-xl">
                   Join teams automating complex workflows with AutoFlowNG. 
                   Build and deploy your first automation in minutes.
                 </p>
@@ -128,7 +128,7 @@ export function CtaSection() {
                   <WatchDemoButton />
                 </div>
 
-                <p className="text-sm text-muted-foreground mt-8 font-mono">
+                <p className="text-sm text-white/70 mt-8 font-mono">
                   3-day free trial, no credit card required
                 </p>
               </div>

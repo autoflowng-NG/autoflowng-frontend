@@ -207,9 +207,9 @@ export function PricingSection() {
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
 
         {/* Header */}
-        <div className="grid lg:grid-cols-12 gap-8 mb-20">
-          <div className="lg:col-span-7">
-            <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-8">
+        <div className="grid lg:grid-cols-12 gap-8 mb-20 items-center">
+          <div className="lg:col-span-7 flex flex-col justify-center">
+            <span className="inline-flex items-center gap-3 text-sm font-mono text-white/60 mb-8">
               <span className="w-12 h-px bg-primary/30" />
               Pricing
             </span>
@@ -229,9 +229,9 @@ export function PricingSection() {
             )}
           </div>
 
-          <div className="lg:col-span-5 relative p-0 h-96 lg:h-auto">
+          <div className="lg:col-span-5 relative p-0 h-64 sm:h-80 lg:h-auto flex items-center justify-center">
             <div
-              className={`absolute inset-0 pointer-events-none transition-all duration-1000 delay-100 ${
+              className={`relative w-full h-full pointer-events-none transition-all duration-1000 delay-100 ${
                 isVisible ? "opacity-100" : "opacity-0"
               }`}
             >
@@ -307,7 +307,7 @@ export function PricingSection() {
                     {plan.name}
                   </span>
                 </div>
-                <p className="hidden md:block text-sm text-muted-foreground mb-4">
+                <p className="hidden md:block text-sm text-white/70 mb-4">
                   {plan.description}
                 </p>
 
@@ -323,14 +323,14 @@ export function PricingSection() {
                         <span className="text-lg md:text-4xl lg:text-5xl font-display font-bold text-foreground">
                           {getPrice(plan.id as "basic" | "pro" | "business")}
                         </span>
-                        <span className="text-muted-foreground text-[10px] md:text-sm">/mo</span>
+                        <span className="text-white/60 text-[10px] md:text-sm">/mo</span>
                       </div>
                       {isAnnual ? (
                         <p className="text-[10px] md:text-xs text-primary font-mono mt-1">
                           billed annually · save 20%
                         </p>
                       ) : (
-                        <p className="text-[10px] md:text-xs text-muted-foreground font-mono mt-1">
+                        <p className="text-[10px] md:text-xs text-white/60 font-mono mt-1">
                           billed monthly
                         </p>
                       )}
@@ -346,7 +346,7 @@ export function PricingSection() {
                         className="w-3 h-3 md:w-4 md:h-4 mt-0.5 shrink-0"
                         style={{ color: plan.color }}
                       />
-                      <span className="text-[10px] md:text-sm text-muted-foreground">
+                      <span className="text-[10px] md:text-sm text-white/80">
                         {feature}
                       </span>
                     </li>
@@ -380,7 +380,7 @@ export function PricingSection() {
             isVisible ? "opacity-100" : "opacity-0"
           }`}
         >
-          <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap gap-6 text-sm text-white/70">
             <span className="flex items-center gap-2">
               <Check className="w-4 h-4 text-primary" /> Secure execution
             </span>
@@ -391,7 +391,7 @@ export function PricingSection() {
               <Check className="w-4 h-4 text-primary" /> Instant deployment
             </span>
           </div>
-          <p className="text-xs text-muted-foreground font-mono">
+          <p className="text-xs text-white/60 font-mono">
             All plans include a 3-day free trial · No credit card required
           </p>
         </div>

@@ -2,21 +2,21 @@
 import { useState, useEffect, useRef } from "react";
 
 const features = [
-  { 
-    title: "TypeScript native", 
-    description: "Full type safety for agent configs and responses."
+  {
+    title: "15+ integrations",
+    description: "YouTube, Google Drive, Gmail, Slack, Notion, WhatsApp, Telegram, and more — connected via OAuth."
   },
-  { 
-    title: "Streaming results", 
-    description: "Watch your agents think and act in real-time."
+  {
+    title: "Inbound webhooks",
+    description: "Trigger workflows from any external event with a simple webhook URL."
   },
-  { 
-    title: "Multi-model support", 
-    description: "OpenAI, Anthropic, Mistral, or bring your own."
+  {
+    title: "Node Library",
+    description: "Build workflows visually from a library of ready-made automation steps."
   },
-  { 
-    title: "Local debugging", 
-    description: "Test agents locally before deploying to cloud."
+  {
+    title: "Credential vault",
+    description: "Store and manage API keys and connection credentials securely, per workspace."
   },
 ];
 
@@ -65,14 +65,14 @@ export function DevelopersSection() {
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
+          <span className="inline-flex items-center gap-3 text-sm font-mono text-white/60 mb-6">
             <span className="w-8 h-px bg-foreground/30" />
-            Developer SDK
+            Integration Hub
           </span>
-          <h2 className="text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.9]">
-            Code your agents.
+          <h2 className="text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.9] text-white">
+            Connect your tools.
             <br />
-            <span className="text-muted-foreground">Or let them code.</span>
+            <span className="text-white/70">Automate the rest.</span>
           </h2>
         </div>
 
@@ -82,9 +82,9 @@ export function DevelopersSection() {
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-md">
-            A powerful SDK for building, deploying, and orchestrating AI agents. 
-            Define behaviors in code or natural language.
+          <p className="text-xl text-white/80 mb-12 leading-relaxed max-w-md">
+            Connect the accounts and tools you already use through the Integration
+            Hub, then build workflows that move content and data between them automatically.
           </p>
           <div className="grid grid-cols-2 gap-6">
             {features.map((feature, index) => (
@@ -95,8 +95,8 @@ export function DevelopersSection() {
                 }`}
                 style={{ transitionDelay: `${index * 50 + 200}ms` }}
               >
-                <h3 className="font-medium mb-1">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <h3 className="font-medium mb-1 text-white">{feature.title}</h3>
+                <p className="text-sm text-white/70">{feature.description}</p>
               </div>
             ))}
           </div>

@@ -42,7 +42,7 @@ export function IntegrationsSection() {
 
       {/* Header — centré verticalement sur l'image */}
       <div className="relative z-10 pt-32 lg:pt-40 text-center">
-        <span className={`inline-flex items-center gap-4 text-sm font-mono text-muted-foreground mb-8 transition-all duration-700 justify-center ${
+        <span className={`inline-flex items-center gap-4 text-sm font-mono text-white/60 mb-8 transition-all duration-700 justify-center ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
           <span className="w-12 h-px bg-foreground/20" />
@@ -55,10 +55,10 @@ export function IntegrationsSection() {
         }`}>
           Connect
           <br />
-          <span className="text-muted-foreground">everything.</span>
+          <span className="text-white/70">everything.</span>
         </h2>
 
-        <p className={`mt-8 text-xl text-muted-foreground leading-relaxed max-w-lg mx-auto transition-all duration-1000 delay-100 ${
+        <p className={`mt-8 text-xl text-white/70 leading-relaxed max-w-lg mx-auto transition-all duration-1000 delay-100 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
           Automate posting, messaging, and data sync across social media, payments, and productivity tools — built for the platforms global businesses actually use.
@@ -119,7 +119,7 @@ export function IntegrationsSection() {
               <span className={`absolute top-3 right-3 text-[10px] font-mono px-2 py-0.5 transition-colors ${
                 hoveredIndex === index
                   ? "bg-foreground text-background"
-                  : "bg-foreground/10 text-muted-foreground"
+                  : "bg-foreground/10 text-white/70"
               }`}>
                 {integration.category}
               </span>
@@ -162,12 +162,12 @@ export function IntegrationsSection() {
             ].map((stat) => (
               <div key={stat.label} className="flex items-baseline gap-3">
                 <span className="text-3xl font-display">{stat.value}</span>
-                <span className="text-sm text-muted-foreground">{stat.label}</span>
+                <span className="text-sm text-white/70">{stat.label}</span>
               </div>
             ))}
           </div>
 
-          <a href="#" className="group inline-flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-foreground transition-colors">
+          <a href="#" className="group inline-flex items-center gap-2 text-sm font-mono text-white/60 hover:text-foreground transition-colors">
             View all integrations
             <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
           </a>

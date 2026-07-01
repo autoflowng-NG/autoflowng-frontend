@@ -5,16 +5,16 @@ import { useEffect, useRef } from "react";
 
 const footerLinks = {
   Product: [
-    { name: "Agent capabilities", href: "#features" },
+    { name: "Features", href: "#features" },
     { name: "How it works", href: "#how-it-works" },
     { name: "Pricing", href: "#pricing" },
     { name: "Integrations", href: "#integrations" },
   ],
   Developers: [
-    { name: "Documentation", href: "#developers" },
-    { name: "Agent SDK", href: "#" },
-    { name: "API Reference", href: "#developers" },
-    { name: "Status", href: "#" },
+    { name: "Integration Hub", href: "#developers" },
+    { name: "Integrations", href: "#integrations" },
+    { name: "Webhooks", href: "#developers" },
+    { name: "Node Library", href: "#developers" },
   ],
   Company: [
     { name: "About", href: "#" },
@@ -120,7 +120,7 @@ export function FooterSection() {
               </a>
 
               <p className="text-white/50 leading-relaxed mb-8 max-w-xs text-sm">
-                Autonomous AI agents for distributed computing. Delegate complex tasks to intelligent workers.
+                Workflow and campaign automation for WhatsApp, Telegram, YouTube, Google Drive, and the tools you already use — with AI-generated content and governance built in.
               </p>
 
               {/* Social Links */}

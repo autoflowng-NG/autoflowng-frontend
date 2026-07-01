@@ -4,39 +4,21 @@ import { useEffect, useRef, useState } from "react";
 const steps = [
   {
     number: "01",
-    title: "Define",
-    subtitle: "your agent",
-    description: "Describe what your agent should do. Set its capabilities, constraints, and goals in natural language or code.",
-    code: `const researcher = new Agent({
-  role: 'Research Analyst',
-  capabilities: ['web', 'docs', 'api'],
-  memory: true,
-  autonomy: 'full'
-})`,
+    title: "Connect",
+    subtitle: "your tools",
+    description: "Link your accounts through the Integration Hub — WhatsApp, Telegram, YouTube, Google Drive, Slack, and more — or set up an inbound webhook.",
   },
   {
     number: "02",
-    title: "Assign",
-    subtitle: "the task",
-    description: "Give your agent a mission. It breaks down complex tasks into steps and executes them autonomously.",
-    code: `await researcher.execute({
-  task: 'Analyze competitor pricing',
-  sources: ['public-data', 'news'],
-  output: 'structured-report',
-  deadline: '2h'
-})`,
+    title: "Build",
+    subtitle: "& automate",
+    description: "Create a workflow using the Node Library, or let Creative Agents generate content — thumbnails, SEO, video, animation, image edits — and publish it through Media Cloud's governance and approval pipeline.",
   },
   {
     number: "03",
-    title: "Monitor",
-    subtitle: "& scale",
-    description: "Track progress in real-time. Spin up more agents as needed. Pay only for compute used.",
-    code: `optimus.dashboard({
-  agents: [researcher],
-  metrics: ['tasks', 'latency', 'cost'],
-  alerts: true
-})
-// 847 tasks completed today`,
+    title: "Launch",
+    subtitle: "& optimize",
+    description: "Activate a campaign and let the platform monitor performance, detect anomalies, and test and roll out improvements automatically.",
   },
 ];
 
@@ -87,9 +69,9 @@ export function HowItWorksSection() {
             <h2 className={`text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.85] transition-all duration-1000 delay-100 ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"
             }`}>
-              <span className="block">Define.</span>
-              <span className="block text-white/30">Deploy.</span>
-              <span className="block text-white/10">Scale.</span>
+              <span className="block">Connect.</span>
+              <span className="block text-white/30">Build.</span>
+              <span className="block text-white/10">Launch.</span>
             </h2>
           </div>
 

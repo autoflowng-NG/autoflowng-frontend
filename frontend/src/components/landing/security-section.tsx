@@ -62,7 +62,7 @@ export function SecuritySection() {
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
         {/* Header */}
         <div className="mb-20">
-          <span className={`inline-flex items-center gap-4 text-sm font-mono text-muted-foreground mb-8 transition-all duration-700 ${
+          <span className={`inline-flex items-center gap-4 text-sm font-mono text-white/60 mb-8 transition-all duration-700 ${
             isVisible ? "opacity-100" : "opacity-0"
           }`}>
             <span className="w-12 h-px bg-foreground/20" />
@@ -75,14 +75,14 @@ export function SecuritySection() {
           }`}>
             Autonomous,
             <br />
-            <span className="text-muted-foreground">not uncontrolled.</span>
+            <span className="text-white/70">not uncontrolled.</span>
           </h2>
           
           {/* Description — below title */}
           <div className={`transition-all duration-1000 delay-100 ${
             isVisible ? "opacity-100" : "opacity-0"
           }`}>
-            <p className="text-xl text-muted-foreground leading-relaxed max-w-2xl">
+            <p className="text-xl text-white/70 leading-relaxed max-w-2xl">
               Your agents are powerful but constrained. Enterprise-grade security ensures they only do what you allow.
             </p>
           </div>
@@ -108,10 +108,10 @@ export function SecuritySection() {
             </div>
             
             <div className="relative z-10">
-              <span className="font-mono text-sm text-muted-foreground">Active protection</span>
+              <span className="font-mono text-sm text-white/70">Active protection</span>
               <div className="mt-8">
                 <span className="text-7xl lg:text-8xl font-display">0</span>
-                <span className="block text-muted-foreground mt-2">Security incidents this year</span>
+                <span className="block text-white/70 mt-2">Security incidents this year</span>
               </div>
             </div>
             
@@ -120,7 +120,7 @@ export function SecuritySection() {
               {certifications.map((cert, index) => (
                 <span
                   key={cert}
-                  className={`px-3 py-1 border border-foreground/10 text-xs font-mono text-muted-foreground transition-all duration-500 ${
+                  className={`px-3 py-1 border border-foreground/10 text-xs font-mono text-white/70 transition-all duration-500 ${
                     isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                   }`}
                   style={{ transitionDelay: `${index * 100 + 300}ms` }}
@@ -155,7 +155,7 @@ export function SecuritySection() {
                   </div>
                   <div>
                     <h3 className="font-medium mb-1">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
+                    <p className="text-sm text-white/70">{feature.description}</p>
                   </div>
                 </div>
               </div>

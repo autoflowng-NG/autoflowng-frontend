@@ -41,7 +41,7 @@ export function TestimonialsSection() {
           <h2 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
             Trusted by builders
           </h2>
-          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+          <p className="text-white/70 text-lg max-w-xl mx-auto">
             Teams across the globe use AutoFlowNG to move faster.
           </p>
         </div>
@@ -52,14 +52,14 @@ export function TestimonialsSection() {
               className={`bg-card/50 border border-border/50 rounded-2xl p-6 flex flex-col gap-4 transition-all duration-700 hover:border-primary/30 hover:bg-card/80 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
               style={{ transitionDelay: `${i * 100 + 200}ms` }}
             >
-              <p className="text-muted-foreground text-sm leading-relaxed flex-1">"{t.text}"</p>
+              <p className="text-white/70 text-sm leading-relaxed flex-1">"{t.text}"</p>
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0" style={{ background: COLORS[i % COLORS.length] }}>
                   {t.avatar}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">{t.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{t.role} · {t.company}</p>
+                  <p className="text-xs text-white/70 font-mono">{t.role} · {t.company}</p>
                 </div>
               </div>
             </div>
