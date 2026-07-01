@@ -108,22 +108,22 @@ function StatPill({ label, value, color }: { label: string; value: string | numb
 const PLAN_DEFS = [
   {
     id: "trial", name: "3-Day Trial", color: "#94A3B8",
-    features: ["5 workflows (trial total)", "1,000 events (trial total)", "1 video job (trial total)", "1 basic AI agent", "Community support", "Watermark applied"],
+    features: ["2 workflows (trial total)", "200 events (trial total)", "1 video job (trial total)", "5 image jobs (trial total)", "Community support", "Watermark applied"],
     icon: Zap,
   },
   {
     id: "basic", name: "Basic", color: "#38BDF8",
-    features: ["20 active workflows", "25K events/month", "5 video jobs/month", "3 AI agents", "Email support", "Watermark applied"],
+    features: ["10 active workflows", "2,000 events/month", "5 video jobs/month", "30 images/month", "Content/Creative AI agents", "Email support", "Watermark applied"],
     icon: Activity,
   },
   {
     id: "pro", name: "Pro", color: "#00C896",
-    features: ["Unlimited workflows", "100K events/month", "10 video jobs/month", "10 AI agents", "Priority support", "No watermark"],
+    features: ["15 active workflows", "5,000 events/month", "15 video jobs/month", "100 images/month", "Content/Creative + Campaign/Marketing AI agents", "Priority support", "No watermark"],
     icon: Shield, popular: true,
   },
   {
     id: "business", name: "Business", color: "#A78BFA",
-    features: ["Unlimited everything", "1M events/month", "15 video jobs/month", "Unlimited AI agents", "24/7 support", "SLA guarantee", "No watermark"],
+    features: ["30 active workflows", "10,000 events/month", "25 video jobs/month", "300 images/month", "All AI agent categories (incl. Business-Department agents)", "24/7 support", "SLA guarantee", "No watermark"],
     icon: Bot,
   },
 ];
