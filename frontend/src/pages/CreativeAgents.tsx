@@ -12,6 +12,35 @@ import { Reveal } from '../components/Reveal';
 import { aiAPI, videoStyleAPI, animationAPI, quickVideoAPI, mediaCloudAPI } from '../lib/api';
 import { Wand2, Image, Film, Sparkles, Layers, Edit3, RefreshCw, ExternalLink } from 'lucide-react';
 
+/* ── Cross-origin-safe download helper ─────────────────────────────────
+ * R2/S3 public URLs are on a different origin than the app, and don't
+ * send Content-Disposition: attachment, so a plain <a download> silently
+ * just navigates instead of downloading (browser behavior, not a bug in
+ * our markup). Fetching as a blob and downloading via an object URL works
+ * regardless of the response headers, as long as the bucket allows GET
+ * via CORS (which public R2/S3 buckets do by default). Falls back to
+ * opening the URL in a new tab if the fetch/blob path fails for any
+ * reason (e.g. stricter CORS config), so the user can still long-press
+ * to save on mobile. */
+async function forceDownload(url: string, filename?: string) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Download fetch failed: ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename || url.split('/').pop()?.split('?')[0] || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    // Fallback: open in a new tab so the user can save manually
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
 /* ── Design tokens ──────────────────────────────────────────────────── */
 const C = {
   bg:      '#060810',
@@ -404,7 +433,7 @@ function ThumbnailTab({ headers, onComplete }: { headers: Record<string, string>
           <img src={result.image_url} alt="Generated thumbnail" style={{ width: '100%', borderRadius: 10, marginBottom: 10 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{providerLabel(result.provider)}</span>
-            <a href={result.image_url} download style={{ fontSize: 12, color: C.green, textDecoration: 'none' }}>⬇️ Download</a>
+            <button type="button" onClick={() => forceDownload(result.image_url, `thumbnail-${Date.now()}.png`)} style={{ fontSize: 12, color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⬇️ Download</button>
           </div>
         </div>
       )}
@@ -450,17 +479,17 @@ function SEOTab({ headers, onComplete }: { headers: Record<string, string>; onCo
   );
 }
 
-/* ── MediaAssetPicker ───────────────────────────────────────────────── */
+/* ── MediaLibraryUrlPicker ─────────────────────────────────────────────
+ * Simpler sibling of MediaAssetPicker for tabs that only need a raw file
+ * URL (like Edit, which calls fal.ai directly with imageUrl) rather than
+ * a linked media_projects/media_assets pipeline pair. No linking step —
+ * just returns the asset's public_url straight from Media Cloud. */
 interface MediaAsset { id: string; name: string; status: string; public_url?: string; asset_type: string; custom_metadata?: Record<string, any>; created_at: string; }
-
-function MediaAssetPicker({ assetType, label, selected, onSelect }: {
-  assetType: 'video' | 'image'; label: string;
-  selected: { projectId: string; assetId: string; name: string } | null;
-  onSelect: (v: { projectId: string; assetId: string; name: string; publicUrl?: string } | null) => void;
-}) {
+function MediaLibraryUrlPicker({ assetType, onSelect }: { assetType: 'video' | 'image'; onSelect: (url: string) => void }) {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false); const [open, setOpen] = useState(false);
   const [search, setSearch] = useState(''); const [error, setError] = useState<string | null>(null);
+  const [pickedName, setPickedName] = useState<string | null>(null);
 
   const loadAssets = async () => {
     setLoading(true); setError(null);
@@ -470,31 +499,18 @@ function MediaAssetPicker({ assetType, label, selected, onSelect }: {
 
   const handleOpen = () => { setOpen(o => !o); if (!open && assets.length === 0) loadAssets(); };
   const filtered = search.trim() ? assets.filter(a => a.name.toLowerCase().includes(search.toLowerCase())) : assets;
-  const hasPipelineIds = (a: MediaAsset) => { const m = a.custom_metadata || {}; return !!m.pipeline_project_id && !!m.pipeline_asset_id; };
 
   const handleSelect = (asset: MediaAsset) => {
-    const meta = asset.custom_metadata || {};
-    const projectId = meta.pipeline_project_id ? String(meta.pipeline_project_id) : '';
-    const assetId   = meta.pipeline_asset_id   ? String(meta.pipeline_asset_id)   : '';
-    onSelect({ projectId, assetId, name: asset.name, publicUrl: asset.public_url }); setOpen(false);
+    if (!asset.public_url) { setError('This asset has no accessible URL yet.'); return; }
+    setPickedName(asset.name);
+    onSelect(asset.public_url);
+    setOpen(false);
   };
 
   return (
-    <div style={fieldGroup}>
-      <label style={label_s}>{label}</label>
-      {selected && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: '8px 12px', background: 'rgba(0,200,150,0.07)', border: '1px solid rgba(0,200,150,0.22)', borderRadius: 9 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{selected.name}</div>
-            {selected.projectId
-              ? <div style={{ fontSize: 10, color: 'rgba(0,200,150,0.7)', fontFamily: "'DM Mono',monospace", marginTop: 2 }}>Project: {selected.projectId} · Asset: {selected.assetId}</div>
-              : <div style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>No pipeline IDs — this asset may not be compatible.</div>}
-          </div>
-          <button type="button" onClick={() => onSelect(null)} style={{ fontSize: 11, color: C.muted, background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Clear</button>
-        </div>
-      )}
-      <button type="button" onClick={handleOpen} style={{ ...inp, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: selected ? C.text : C.muted } as React.CSSProperties}>
-        <span>{selected ? `Selected: ${selected.name}` : `Choose ${assetType} from Media Cloud…`}</span>
+    <div>
+      <button type="button" onClick={handleOpen} style={{ ...inp, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: pickedName ? C.text : C.muted } as React.CSSProperties}>
+        <span>{pickedName ? `Selected: ${pickedName}` : `Choose ${assetType} from Media Cloud…`}</span>
         <span style={{ fontSize: 10 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
@@ -515,8 +531,103 @@ function MediaAssetPicker({ assetType, label, selected, onSelect }: {
                 {asset.public_url && assetType === 'image' && <img src={asset.public_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} onError={e => (e.currentTarget.style.display = 'none')} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.name}</div>
+                  <div style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>{new Date(asset.created_at).toLocaleDateString()}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── MediaAssetPicker ───────────────────────────────────────────────── */
+
+function MediaAssetPicker({ assetType, label, selected, onSelect }: {
+  assetType: 'video' | 'image'; label: string;
+  selected: { projectId: string; assetId: string; name: string } | null;
+  onSelect: (v: { projectId: string; assetId: string; name: string; publicUrl?: string } | null) => void;
+}) {
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [loading, setLoading] = useState(false); const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(''); const [error, setError] = useState<string | null>(null);
+
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const loadAssets = async () => {
+    setLoading(true); setError(null);
+    try { const data = await mediaCloudAPI.listAssets({ type: assetType, status: 'active', limit: 50 }); setAssets(data.assets ?? data.data ?? []); }
+    catch (err: any) { setError(err?.message || 'Failed to load assets'); } finally { setLoading(false); }
+  };
+
+  const handleOpen = () => { setOpen(o => !o); if (!open && assets.length === 0) loadAssets(); };
+  const filtered = search.trim() ? assets.filter(a => a.name.toLowerCase().includes(search.toLowerCase())) : assets;
+  const hasPipelineIds = (a: MediaAsset) => { const m = a.custom_metadata || {}; return !!m.pipeline_project_id && !!m.pipeline_asset_id; };
+
+  const handleSelect = async (asset: MediaAsset) => {
+    setLinkError(null);
+    const meta = asset.custom_metadata || {};
+    // Already linked from a previous selection — use it directly, no extra call.
+    if (meta.pipeline_project_id && meta.pipeline_asset_id) {
+      onSelect({ projectId: String(meta.pipeline_project_id), assetId: String(meta.pipeline_asset_id), name: asset.name, publicUrl: asset.public_url });
+      setOpen(false);
+      return;
+    }
+    // First time this asset is used in Creative Agents — link it into the
+    // pipeline model on demand, then use the returned IDs.
+    setLinkingId(asset.id);
+    try {
+      const link = await mediaCloudAPI.linkToPipeline(asset.id);
+      onSelect({ projectId: String(link.pipeline_project_id), assetId: String(link.pipeline_asset_id), name: asset.name, publicUrl: asset.public_url });
+      setOpen(false);
+    } catch (err: any) {
+      setLinkError(err?.message || 'Could not prepare this asset for Creative Agents');
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
+  return (
+    <div style={fieldGroup}>
+      <label style={label_s}>{label}</label>
+      {selected && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: '8px 12px', background: 'rgba(0,200,150,0.07)', border: '1px solid rgba(0,200,150,0.22)', borderRadius: 9 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{selected.name}</div>
+            {selected.projectId
+              ? <div style={{ fontSize: 10, color: 'rgba(0,200,150,0.7)', fontFamily: "'DM Mono',monospace", marginTop: 2 }}>Ready for Creative Agents</div>
+              : <div style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>Not linked yet — try selecting it again.</div>}
+          </div>
+          <button type="button" onClick={() => onSelect(null)} style={{ fontSize: 11, color: C.muted, background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Clear</button>
+        </div>
+      )}
+      <button type="button" onClick={handleOpen} style={{ ...inp, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: selected ? C.text : C.muted } as React.CSSProperties}>
+        <span>{selected ? `Selected: ${selected.name}` : `Choose ${assetType} from Media Cloud…`}</span>
+        <span style={{ fontSize: 10 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 6, background: C.raised, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', maxHeight: 280, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}` }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search assets…" style={{ ...inp, padding: '6px 10px', fontSize: 12 }} autoFocus />
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {loading && <div style={{ padding: 16, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading assets…</div>}
+            {error   && <div style={{ padding: '12px 16px', color: C.red, fontSize: 12 }}>{error}</div>}
+            {linkError && <div style={{ padding: '10px 16px', color: C.red, fontSize: 12 }}>{linkError}</div>}
+            {!loading && filtered.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: C.muted, fontSize: 12 }}>No {assetType} assets found.</div>}
+            {filtered.map(asset => (
+              <button key={asset.id} type="button" onClick={() => handleSelect(asset)} disabled={linkingId === asset.id}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `1px solid ${C.border}`, cursor: linkingId === asset.id ? 'wait' : 'pointer', textAlign: 'left', transition: 'background 0.1s', opacity: linkingId === asset.id ? 0.6 : 1 } as React.CSSProperties}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                {asset.public_url && assetType === 'image' && <img src={asset.public_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} onError={e => (e.currentTarget.style.display = 'none')} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.name}</div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 2, alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", color: hasPipelineIds(asset) ? C.green : C.faint }}>{hasPipelineIds(asset) ? '✓ Compatible' : 'No pipeline IDs'}</span>
+                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", color: hasPipelineIds(asset) ? C.green : C.faint }}>{linkingId === asset.id ? 'Preparing…' : hasPipelineIds(asset) ? '✓ Ready' : 'Tap to prepare'}</span>
                     <span style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace" }}>{new Date(asset.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -581,7 +692,7 @@ function RecentQuickGeneratesPanel({ onResumeTracking }: { onResumeTracking: (ai
                   <video src={asset.public_url || asset.presigned_url} controls style={{ width: '100%', borderRadius: 8, maxHeight: 200, background: '#000' }} />
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <a href="/media-cloud" style={{ fontSize: 11, color: C.green, textDecoration: 'none', fontFamily: "'DM Mono',monospace" }}>Open in Media Cloud →</a>
-                    <a href={asset.public_url || asset.presigned_url} download style={{ fontSize: 11, color: C.muted, textDecoration: 'none', fontFamily: "'DM Mono',monospace" }}>⬇️ Download</a>
+                    <button type="button" onClick={() => forceDownload(asset.public_url || asset.presigned_url, `styled-${Date.now()}.mp4`)} style={{ fontSize: 11, color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: "'DM Mono',monospace" }}>⬇️ Download</button>
                   </div>
                 </div>
               )}
@@ -673,7 +784,7 @@ function VideoTab({ token }: { token: string }) {
           {outputUrl && <video src={outputUrl} controls style={{ width: '100%', borderRadius: 10, marginBottom: 12, maxHeight: 320, background: '#000' }} />}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <a href="/media-cloud" style={{ ...submitBtn as any, textDecoration: 'none', display: 'inline-block', textAlign: 'center', width: 'auto', padding: '10px 20px' }}>View in Media Cloud</a>
-            {outputUrl && <a href={outputUrl} download style={{ padding: '10px 20px', borderRadius: 10, border: `1px solid rgba(0,200,150,0.3)`, color: C.green, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>⬇️ Download</a>}
+            {outputUrl && <button type="button" onClick={() => forceDownload(outputUrl, `animation-${Date.now()}.mp4`)} style={{ padding: '10px 20px', borderRadius: 10, border: `1px solid rgba(0,200,150,0.3)`, color: C.green, fontSize: 13, fontWeight: 700, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>⬇️ Download</button>}
             <button type="button" onClick={() => { setJob(null); setPollStatus(null); setOutputUrl(null); }} style={{ padding: '10px 16px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 13, cursor: 'pointer' }}>Generate another</button>
           </div>
         </div>
@@ -762,7 +873,7 @@ function AnimationTab({ token }: { token: string }) {
 
 /* ── ImageEditTab ───────────────────────────────────────────────────── */
 function ImageEditTab({ token }: { token: string }) {
-  const [imageUrl, setImageUrl] = useState(''); const [inputMode, setInputMode] = useState<'upload' | 'url'>('upload');
+  const [imageUrl, setImageUrl] = useState(''); const [inputMode, setInputMode] = useState<'upload' | 'url' | 'library'>('upload');
   const [prompt, setPrompt] = useState(''); const [negativePrompt, setNegativePrompt] = useState('');
   const [strength, setStrength] = useState(0.75); const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ outputUrl: string; provider: string; model: string } | null>(null);
@@ -774,24 +885,26 @@ function ImageEditTab({ token }: { token: string }) {
     setLoading(true); setResult(null); setError(null);
     try {
       const data = await aiAPI.imageEdit({ imageUrl: imageUrl.trim(), prompt, negativePrompt, strength });
-      if (data.outputUrl) setResult({ outputUrl: data.outputUrl, provider: data.provider || 'pollinations', model: data.model || 'flux' });
+      if (data.outputUrl) setResult({ outputUrl: data.outputUrl, provider: data.provider || 'fal', model: data.model || 'flux-kontext' });
       else throw new Error(data.error || 'No output returned');
     } catch (err: any) { setError(err?.message || 'Image editing failed'); } finally { setLoading(false); }
   };
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={infoBox}>🖼️ <strong>Image Edit</strong> uses Pollinations.ai's Kontext model for guided instruction-following edits.</div>
+      <div style={infoBox}>🖼️ <strong>Image Edit</strong> uses fal.ai's Flux Kontext model for guided instruction-following edits.</div>
       <div style={fieldGroup}>
         <label style={label_s}>Source Image</label>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          {(['upload', 'url'] as const).map(mode => (
-            <button key={mode} type="button" onClick={() => setInputMode(mode)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: inputMode === mode ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.04)', color: inputMode === mode ? C.blue : C.muted, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", transition: 'all 0.15s' }}>
-              {mode === 'upload' ? '📁 Upload File' : '🔗 Paste URL'}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          {([{ id: 'upload', label: '📁 Upload File' }, { id: 'library', label: '☁️ Media Cloud' }, { id: 'url', label: '🔗 Paste URL' }] as const).map(mode => (
+            <button key={mode.id} type="button" onClick={() => setInputMode(mode.id)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: inputMode === mode.id ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.04)', color: inputMode === mode.id ? C.blue : C.muted, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", transition: 'all 0.15s' }}>
+              {mode.label}
             </button>
           ))}
         </div>
-        {inputMode === 'upload' ? <DragDropUpload accept="image/*" label="" onUploaded={handleImageUpload} /> : <input style={inp} value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://example.com/your-image.jpg" />}
+        {inputMode === 'upload' && <DragDropUpload accept="image/*" label="" onUploaded={handleImageUpload} />}
+        {inputMode === 'library' && <MediaLibraryUrlPicker assetType="image" onSelect={(url) => setImageUrl(url)} />}
+        {inputMode === 'url' && <input style={inp} value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://example.com/your-image.jpg" />}
         {imageUrl.trim() && <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, maxHeight: 200 }}><img src={imageUrl} alt="Preview" style={{ width: '100%', objectFit: 'cover', maxHeight: 200, display: 'block' }} onError={e => { (e.currentTarget as HTMLElement).style.display = 'none'; }} /></div>}
       </div>
       <div style={fieldGroup}><label style={label_s}>Edit Instruction</label><textarea style={{ ...textarea_s, minHeight: 80 }} value={prompt} onChange={e => setPrompt(e.target.value)} maxLength={400} placeholder="Describe the edit…" required /></div>
@@ -806,12 +919,7 @@ function ImageEditTab({ token }: { token: string }) {
       {result && (
         <div style={{ marginTop: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <div><div style={{ ...label_s, marginBottom: 8 }}>Original</div><img src={imageUrl} alt="Original" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 240 }} /></div>
-            <div><div style={{ ...label_s, marginBottom: 8 }}>Edited</div><img src={result.outputUrl} alt="Edited" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 240 }} /></div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace" }}>via {result.provider} · {result.model}</span>
-            <a href={result.outputUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.green, textDecoration: 'none' }}>⬇️ Download</a>
+            <button type="button" onClick={() => forceDownload(result.outputUrl, `edited-${Date.now()}.png`)} style={{ fontSize: 12, color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⬇️ Download</button>
           </div>
         </div>
       )}
@@ -855,7 +963,7 @@ function ImageGenerateTab({ token }: { token: string }) {
           <img src={result.outputUrl} alt="Generated" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 360, marginBottom: 12 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace" }}>via {result.provider} · {result.model}</span>
-            <a href={result.outputUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.green, textDecoration: 'none' }}>⬇️ Download</a>
+            <button type="button" onClick={() => forceDownload(result.outputUrl, `generated-${Date.now()}.png`)} style={{ fontSize: 12, color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⬇️ Download</button>
           </div>
         </div>
       )}
