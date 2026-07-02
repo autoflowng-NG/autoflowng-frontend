@@ -68,6 +68,7 @@ const NAV = [
   { path: "/webhooks",     labelKey: "nav.webhooks",         icon: Webhook },
   { path: "/analytics",    labelKey: "nav.analytics",        icon: BarChart3 },
   { path: "/media-cloud",  labelKey: "nav.media_cloud",      icon: Library },
+  { path: "/campaign-agents", labelKey: "nav.campaign_agents", icon: Bot     },
   { path: "/reports",      labelKey: "nav.reports",          icon: FileText },
 ];
 
@@ -99,7 +100,7 @@ const NAV_SECTIONS = [
   },
   {
     sectionKey: "nav.section_insights",
-    items: ["/analytics", "/media-cloud", "/reports"],
+    items: ["/analytics", "/media-cloud", "/campaign-agents", "/reports"],
   },
 ];
 
