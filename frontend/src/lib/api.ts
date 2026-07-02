@@ -571,3 +571,102 @@ export const adPlatformAPI = {
       days: { date: string; spend_usd: number }[];
     }>,
 };
+
+
+// ── Campaign Agents (Phase 42A–46 Unified API) ────────────────────────────────
+// Endpoints served by routes/campaign-agent.js, routes/campaigns.js, routes/platform.js, routes/publishing-gate.js
+export const campaignAgents = {
+  /** Launch a new autonomous campaign. POST /api/campaign-agent/launch */
+  launch: (prompt: string) =>
+    api.post('/campaign-agent/launch', { prompt }) as Promise<{ campaignId: string }>,
+
+  /** Get campaign agent status/assets. GET /api/campaign-agent/status/:campaignId */
+  status: (campaignId: string) =>
+    api.get(`/campaign-agent/status/${campaignId}`) as Promise<{
+      campaignId: string; assets: any[]; count: number;
+    }>,
+
+  /** List all campaigns. GET /api/campaigns */
+  list: (params?: { status?: string; limit?: number }) =>
+    api.get('/campaigns', { params }) as Promise<{ campaigns: any[]; total: number }>,
+
+  /** Get single campaign. GET /api/campaigns/:id */
+  get: (id: string) =>
+    api.get(`/campaigns/${id}`) as Promise<any>,
+
+  /** Approve campaign plan. PATCH /api/campaigns/:id/approve */
+  approve: (id: string) =>
+    api.patch(`/campaigns/${id}/approve`, {}) as Promise<any>,
+
+  /** Pause campaign. PATCH /api/campaigns/:id/pause */
+  pause: (id: string) =>
+    api.patch(`/campaigns/${id}/pause`, {}) as Promise<any>,
+
+  /** Resume campaign. PATCH /api/campaigns/:id/resume */
+  resume: (id: string) =>
+    api.patch(`/campaigns/${id}/resume`, {}) as Promise<any>,
+
+  /** Submit campaign brief. POST /api/campaigns/:id/brief */
+  brief: (id: string, brief: string) =>
+    api.post(`/campaigns/${id}/brief`, { brief }) as Promise<any>,
+
+  /** Get campaign assets. GET /api/campaigns/:id/assets */
+  assets: (id: string) =>
+    api.get(`/campaigns/${id}/assets`) as Promise<{ assets: any[] }>,
+
+  /** Get campaign jobs. GET /api/campaigns/:id/jobs */
+  jobs: (id: string) =>
+    api.get(`/campaigns/${id}/jobs`) as Promise<{ jobs: any[] }>,
+
+  /** Get campaign analytics summary. GET /api/campaigns/analytics/summary */
+  analyticsSummary: (days: number) =>
+    api.get('/campaigns/analytics/summary', { params: { days } }) as Promise<any>,
+
+  /** Get campaign analytics detail. GET /api/campaigns/analytics/:id */
+  analyticsDetail: (id: string, days: number) =>
+    api.get(`/campaigns/analytics/${id}`, { params: { days } }) as Promise<any>,
+
+  /** Get org approval queue. GET /api/platform/campaigns/orgs/:orgId/approval-queue */
+  approvalQueue: (orgId: string) =>
+    api.get(`/platform/campaigns/orgs/${orgId}/approval-queue`, { params: { limit: 50 } }) as Promise<any>,
+
+  /** Get org escalation queue. GET /api/platform/campaigns/orgs/:orgId/escalation-queue */
+  escalationQueue: (orgId: string) =>
+    api.get(`/platform/campaigns/orgs/${orgId}/escalation-queue`, { params: { limit: 50 } }) as Promise<any>,
+
+  /** Act on approval queue item. POST /api/platform/campaigns/approval-queue/:id/action */
+  approvalAction: (id: string, action: string, note?: string) =>
+    api.post(`/platform/campaigns/approval-queue/${id}/action`, { action, note }) as Promise<any>,
+
+  /** Get org campaigns lifecycle. GET /api/platform/campaigns/orgs/:orgId/campaigns/lifecycle */
+  lifecycle: (orgId: string) =>
+    api.get(`/platform/campaigns/orgs/${orgId}/campaigns/lifecycle`, { params: { limit: 50 } }) as Promise<any>,
+
+  /** Optimize budget for a campaign (compute + optionally apply). POST /api/campaigns/:id/optimize-budget */
+  optimizeBudget: (id: string, apply?: boolean) =>
+    api.post(`/campaigns/${id}/optimize-budget`, { apply }) as Promise<any>,
+
+  /** List existing budget reallocation proposals. GET /api/platform/campaign-optim/campaigns/:id/budget-reallocations */
+  budgetReallocations: (id: string) =>
+    api.get(`/platform/campaign-optim/campaigns/${id}/budget-reallocations`) as Promise<any>,
+
+  /** Get risk audit entries for a campaign. GET /api/platform/campaigns/campaigns/:id/risk/audit */
+  riskAudit: (id: string) =>
+    api.get(`/platform/campaigns/campaigns/${id}/risk/audit`) as Promise<any>,
+
+  /** Get risk thresholds. GET /api/platform/campaigns/orgs/:orgId/risk-thresholds */
+  riskThresholds: (orgId: string) =>
+    api.get(`/platform/campaigns/orgs/${orgId}/risk-thresholds`) as Promise<any>,
+
+  /** Get performance metrics snapshot for a campaign. GET /api/campaigns/:id/performance-metrics */
+  performanceMetrics: (id: string) =>
+    api.get(`/campaigns/${id}/performance-metrics`) as Promise<any>,
+
+  /** Check publishing gate. GET /api/publishing-gate/:jobId/check */
+  gateCheck: (jobId: string) =>
+    api.get(`/publishing-gate/${jobId}/check`) as Promise<any>,
+
+  /** Set publishing gate. POST /api/publishing-gate/:jobId/set */
+  gateSet: (jobId: string, requires_approval: boolean) =>
+    api.post(`/publishing-gate/${jobId}/set`, { requires_approval }) as Promise<any>,
+};
