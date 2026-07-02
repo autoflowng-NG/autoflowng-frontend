@@ -114,6 +114,9 @@ const MediaCloudPage = lazy(() => import('./pages/MediaCloudPage'));
 
 // ── Phase 45: Global Autonomous Campaign Orchestration ──────────────────────
 const Phase45OpsCenter = lazy(() => import('./pages/Phase45OpsCenter'));
+
+// ── Phase 47: Campaign Agents Unified Page ──────────────────────────────────
+const CampaignAgentsPage = lazy(() => import('./pages/CampaignAgentsPage'));
 const NewsHub = lazy(() => import('./pages/NewsHub'));
 
 const Spinner = () => (
@@ -288,7 +291,7 @@ function AppProviders() {
           <Route path="/executions/:runId" element={<RequireAuth><ExecutionPageRoute /></RequireAuth>} />
           <Route path="/plans"             element={<RequireAuth><Plans /></RequireAuth>} />
           <Route path="/settings"          element={<RequireAuth><Settings /></RequireAuth>} />
-          <Route path="/settings/ad-accounts" element={<RequireAuth><AdAccounts /></RequireAuth>} />
+          <Route path="/settings/ad-accounts" element={<Navigate to="/campaign-agents?tab=adaccounts" replace />} />
           <Route path="/ai-chat"           element={<RequireAuth><AIChat /></RequireAuth>} />
 
           {/* ─────────────────────────────────────────────────────────────── */}
@@ -346,7 +349,12 @@ function AppProviders() {
           <Route path="/media-cloud" element={<RequireAuth><MediaCloudPage /></RequireAuth>} />
 
           {/* Phase 45 — Global Autonomous Campaign Orchestration */}
-          <Route path="/campaign-orchestration" element={<RequireAuth><Phase45OpsCenter /></RequireAuth>} />
+          <Route path="/campaign-orchestration" element={<Navigate to="/campaign-agents" replace />} />
+
+          {/* Phase 47 — Campaign Agents Unified Page */}
+          <Route path="/campaign-agents" element={<RequireAuth><CampaignAgentsPage /></RequireAuth>} />
+
+          {/* Phase 43A — Enterprise Media Cloud */}
           <Route path="/news" element={<RequireAuth><NewsHub /></RequireAuth>} />
 
           <Route path="/knowledge-hub" element={<RequireAuth><KnowledgeHub /></RequireAuth>} />
