@@ -177,7 +177,8 @@
     "badge_admin": "관리자",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "워크플로 & 자동화"
+    "workflows_automations": "워크플로 & 자동화",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "구독이 취소되었습니다.",

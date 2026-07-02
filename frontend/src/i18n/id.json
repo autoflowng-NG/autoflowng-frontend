@@ -177,7 +177,8 @@
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "Alur Kerja & Otomatisasi"
+    "workflows_automations": "Alur Kerja & Otomatisasi",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "Langganan Anda telah dibatalkan.",

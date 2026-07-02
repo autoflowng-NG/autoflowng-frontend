@@ -177,7 +177,8 @@
     "badge_admin": "管理者",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "ワークフロー & オートメーション"
+    "workflows_automations": "ワークフロー & オートメーション",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "サブスクリプションがキャンセルされました。",

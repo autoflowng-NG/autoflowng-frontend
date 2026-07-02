@@ -177,7 +177,8 @@
     "badge_admin": "管理员",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "工作流 & 自动化"
+    "workflows_automations": "工作流 & 自动化",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "您的订阅已取消。",

@@ -177,7 +177,8 @@
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "Workflows & Automations"
+    "workflows_automations": "Workflows & Automations",
+    "campaign_agents": "Campaign Agents"
   },
   "shell": {
     "log_out": "Log out",

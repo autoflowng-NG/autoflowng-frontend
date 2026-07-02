@@ -177,7 +177,8 @@
     "badge_admin": "АДМИН",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "Рабочие процессы & Автоматизации"
+    "workflows_automations": "Рабочие процессы & Автоматизации",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "Ваша подписка отменена.",

@@ -177,7 +177,8 @@
     "badge_admin": "مسؤول",
     "badge_sa": "SA",
     "badge_ops": "تشغيل",
-    "workflows_automations": "مهام العمل & الأتمتة"
+    "workflows_automations": "مهام العمل & الأتمتة",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "تم إلغاء اشتراكك.",

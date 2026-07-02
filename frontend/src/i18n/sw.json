@@ -177,7 +177,8 @@
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "Mtiririko wa Kazi & Otomatiki"
+    "workflows_automations": "Mtiririko wa Kazi & Otomatiki",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "Usajili wako umefutwa.",

@@ -177,7 +177,8 @@
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "İş Akışları & Otomasyonlar"
+    "workflows_automations": "İş Akışları & Otomasyonlar",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "Aboneliğiniz iptal edildi.",

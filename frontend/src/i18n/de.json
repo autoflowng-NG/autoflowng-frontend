@@ -177,7 +177,8 @@
     "badge_admin": "ADMIN",
     "badge_sa": "SA",
     "badge_ops": "OPS",
-    "workflows_automations": "Workflows & Automatisierungen"
+    "workflows_automations": "Workflows & Automatisierungen",
+    "campaign_agents": "Campaign Agents"
   },
   "billing": {
     "subscription_cancelled": "Ihr Abonnement wurde gekündigt.",
