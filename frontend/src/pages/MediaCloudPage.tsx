@@ -2069,12 +2069,30 @@ function PublishingGateTab() {
 // ── Social Composer Modal (Schedule / Post) ──────────────────────────────────
 function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => void }) {
   const PLATFORMS = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok'];
-  const [selected, setSelected] = useState<string[]>(['instagram']);
+  const [connected, setConnected] = useState<string[] | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [caption, setCaption] = useState(asset?.custom_metadata?.copy || '');
   const [scheduleAt, setScheduleAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/connections', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load connections')))
+      .then(rows => {
+        if (cancelled) return;
+        const connectedPlatforms = (Array.isArray(rows) ? rows : rows?.data || [])
+          .map((r: any) => r.platform)
+          .filter((p: string) => PLATFORMS.includes(p));
+        setConnected(connectedPlatforms);
+        // Default-select only platforms the user has actually connected.
+        setSelected(connectedPlatforms.length ? [connectedPlatforms[0]] : []);
+      })
+      .catch(() => { if (!cancelled) setConnected([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   const toggle = (p: string) =>
     setSelected(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
@@ -2083,7 +2101,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
     if (!selected.length) { setErr('Select at least one platform'); return; }
     setSubmitting(true); setErr(null);
     try {
-      await fetch('/api/social/posts', {
+      const res = await fetch('/api/social/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -2095,7 +2113,11 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
           scheduleAt: scheduleAt || null,
           mediaUrl:   asset.storage_url || null,
         }),
-      }).then(r => r.json());
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.error || `Failed to schedule post (${res.status})`);
+      }
       setDone(true);
     } catch (e: any) {
       setErr(e.message || 'Failed to schedule post');
@@ -2145,16 +2167,35 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
         <p style={{ color: '#E2E8FF', fontSize: 13, fontWeight: 600, margin: '0 0 16px' }}>{asset.name}</p>
 
         <p style={{ color: 'rgba(226,232,255,0.45)', fontSize: 11.5, margin: '0 0 8px' }}>PLATFORMS</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-          {PLATFORMS.map(p => (
-            <button key={p} onClick={() => toggle(p)} style={{
-              padding: '5px 13px', borderRadius: 20, border: 'none', cursor: 'pointer',
-              background: selected.includes(p) ? '#FBBF24' : 'rgba(255,255,255,0.07)',
-              color: selected.includes(p) ? '#1a1305' : 'rgba(226,232,255,0.6)',
-              fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
-            }}>{p}</button>
-          ))}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+          {PLATFORMS.map(p => {
+            const isConnected = connected === null || connected.includes(p);
+            return (
+              <button
+                key={p}
+                onClick={() => isConnected && toggle(p)}
+                disabled={!isConnected}
+                title={isConnected ? undefined : `${p} isn't connected — add it in Settings → Integrations`}
+                style={{
+                  padding: '5px 13px', borderRadius: 20, border: 'none',
+                  cursor: isConnected ? 'pointer' : 'not-allowed',
+                  background: selected.includes(p) ? '#FBBF24' : 'rgba(255,255,255,0.07)',
+                  color: selected.includes(p) ? '#1a1305' : 'rgba(226,232,255,0.6)',
+                  fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+                  opacity: isConnected ? 1 : 0.35,
+                }}
+              >{p}</button>
+            );
+          })}
         </div>
+        {connected !== null && connected.length === 0 && (
+          <p style={{ color: '#FB7185', fontSize: 11.5, margin: '0 0 16px' }}>
+            No social platforms connected yet. Connect one in Settings → Integrations.
+          </p>
+        )}
+        {connected !== null && connected.length > 0 && (
+          <div style={{ marginBottom: 16 }} />
+        )}
 
         <p style={{ color: 'rgba(226,232,255,0.45)', fontSize: 11.5, margin: '0 0 6px' }}>CAPTION</p>
         <textarea
