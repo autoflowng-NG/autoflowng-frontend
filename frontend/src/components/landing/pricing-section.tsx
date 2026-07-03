@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ArrowRight, Check, Zap } from "lucide-react";
+import api from "../../lib/api";
 
 // ── Country → Currency fallback map ──────────────────────────────────────────
 const COUNTRY_CURRENCY: Record<string, string> = {
@@ -154,17 +155,13 @@ export function PricingSection() {
 
       if (countryCode) {
         try {
-          const planRes = await fetch(
-            `${BACKEND_URL}/api/billing/plans?region=${countryCode}`,
-            { signal: AbortSignal.timeout(5000) }
-          );
-          if (planRes.ok) {
-            const planData = await planRes.json();
-            if (planData?.plans?.length) {
-              setRegionalPlans(planData.plans);
-              const backendCurrency = planData.plans[0]?.currency;
-              if (backendCurrency) setCurrency(backendCurrency);
-            }
+          const planData: any = await api.get("/payments/billing/plans", {
+            params: { region: countryCode },
+          });
+          if (planData?.plans?.length) {
+            setRegionalPlans(planData.plans);
+            const backendCurrency = planData.plans[0]?.currency;
+            if (backendCurrency) setCurrency(backendCurrency);
           }
         } catch {}
       }
