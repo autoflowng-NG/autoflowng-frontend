@@ -81,7 +81,23 @@ export const WorkflowRankingsTable: React.FC<{
           ))}
           {data?.length === 0 && (
             <tr>
-              <td colSpan={8} className="py-8 text-center text-slate-600">No workflow data yet</td>
+              <td colSpan={8} className="py-10 text-center">
+                {/* Informative empty state — rankings need execution history to build */}
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="M3 9h18M9 21V9" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-sm font-medium">No ranking data yet</p>
+                    <p className="text-slate-600 text-xs mt-1 max-w-xs mx-auto">
+                      Rankings appear once workflows have execution history — run a workflow to start building data.
+                    </p>
+                  </div>
+                </div>
+              </td>
             </tr>
           )}
         </tbody>
@@ -93,7 +109,16 @@ export const WorkflowRankingsTable: React.FC<{
 export const BottleneckList: React.FC<{ data: BottleneckWorkflow[] }> = ({ data }) => (
   <div className="space-y-2">
     {data?.length === 0 && (
-      <p className="text-slate-600 text-sm text-center py-4">No bottlenecks detected</p>
+      /* "No bottlenecks" is a genuinely positive signal — distinguish it visually from "no data" */
+      <div className="flex flex-col items-center gap-2 py-6">
+        <div className="w-8 h-8 rounded-full bg-emerald-950 border border-emerald-800 flex items-center justify-center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <p className="text-emerald-400 text-sm font-medium">No bottlenecks detected</p>
+        <p className="text-slate-600 text-xs">All monitored workflows are within normal operating parameters.</p>
+      </div>
     )}
     {data?.map(wf => (
       <div key={wf.workflow_id}
