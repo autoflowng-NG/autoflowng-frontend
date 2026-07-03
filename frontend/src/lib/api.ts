@@ -670,3 +670,51 @@ export const campaignAgents = {
   gateSet: (jobId: string, requires_approval: boolean) =>
     api.post(`/publishing-gate/${jobId}/set`, { requires_approval }) as Promise<any>,
 };
+
+// ── Brands (routes/brands.js) ───────────────────────────────────────────────
+export const brandAPI = {
+  /** List brands for the active org. GET /api/brands (returns a raw array). */
+  list: () => api.get('/brands') as Promise<{ id: string; name: string }[]>,
+
+  /** Get a single brand. GET /api/brands/:id */
+  get: (id: string) => api.get(`/brands/${id}`) as Promise<any>,
+};
+
+// ── Caption/Copy Engine (Phase 47B) ────────────────────────────────────────
+// Endpoints served by routes/caption-engine.js
+export type CaptionTone = 'professional' | 'gen_z' | 'naija';
+
+export interface CaptionEngineOutput {
+  meta_ads: { primary_text: string; headline: string; cta: string };
+  google_search: { headline_1: string; headline_2: string; headline_3: string; description_1: string; description_2: string };
+  tiktok_ads: { on_screen_hook: string; video_script: string; caption_text: string };
+  linkedin_ads: { introductory_text: string; headline: string };
+}
+
+export const captionEngine = {
+  /** Generate multi-channel ad copy. POST /api/caption-engine/generate */
+  generate: (input: { product: string; offer?: string; audience?: string; tone: CaptionTone; brandId?: string }) =>
+    api.post('/caption-engine/generate', input) as Promise<{ draftId: number | null; output: CaptionEngineOutput }>,
+
+  /** Rewrite a single field. POST /api/caption-engine/rewrite-line */
+  rewriteLine: (input: {
+    platform: string; field: string; currentText: string;
+    product: string; offer?: string; audience?: string; tone: CaptionTone;
+  }) => api.post('/caption-engine/rewrite-line', input) as Promise<{ text: string }>,
+
+  /** List saved drafts. GET /api/caption-engine/drafts */
+  listDrafts: (limit = 20) =>
+    api.get('/caption-engine/drafts', { params: { limit } }) as Promise<{ drafts: any[] }>,
+
+  /** Get a single draft. GET /api/caption-engine/drafts/:id */
+  getDraft: (id: number | string) =>
+    api.get(`/caption-engine/drafts/${id}`) as Promise<any>,
+
+  /** Save a brand's target audience. PUT /api/caption-engine/brands/:brandId/audience */
+  saveAudience: (brandId: string, targetAudience: string) =>
+    api.put(`/caption-engine/brands/${brandId}/audience`, { targetAudience }) as Promise<{ ok: boolean }>,
+
+  /** Save a brand's banned words list. PUT /api/caption-engine/brands/:brandId/banned-words */
+  saveBannedWords: (brandId: string, words: string[]) =>
+    api.put(`/caption-engine/brands/${brandId}/banned-words`, { words }) as Promise<{ ok: boolean }>,
+};
