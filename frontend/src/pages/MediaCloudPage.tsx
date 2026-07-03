@@ -671,11 +671,12 @@ function DrawerTab({ label, active, onClick }: { label: string; active: boolean;
 
 /* ── Asset Drawer ──────────────────────────────────────────────────── */
 
-function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
+function AssetDrawer({ assetId, orgId, onClose, onRefresh, onSchedule }: {
   assetId: string;
   orgId: string;
   onClose: () => void;
   onRefresh: () => void;
+  onSchedule: (asset: Asset) => void;
 }) {
   const [asset, setAsset]               = useState<Asset | null>(null);
   const [versions, setVersions]         = useState<AssetVersion[]>([]);
@@ -855,7 +856,7 @@ function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
                   <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
                     <p style={{ color: C.faint, fontSize: 10.5, margin: "0 0 8px", fontFamily: FONT_MONO }}>SOCIAL & CAMPAIGNS</p>
                     <button
-                      onClick={() => setComposerAsset(asset)}
+                      onClick={() => onSchedule(asset)}
                       style={{
                         display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
                         width: "100%", background: C.amber, color: "#1a1305",
@@ -1026,7 +1027,7 @@ function AssetDrawer({ assetId, orgId, onClose, onRefresh }: {
 
 /* ── Library Tab ───────────────────────────────────────────────────── */
 
-function LibraryTab() {
+function LibraryTab({ onSchedule }: { onSchedule: (asset: Asset) => void }) {
   const [assets, setAssets]       = useState<Asset[]>([]);
   const [total, setTotal]         = useState(0);
   const [page, setPage]           = useState(1);
@@ -1097,6 +1098,7 @@ function LibraryTab() {
           orgId=""
           onClose={() => setSelectedId(null)}
           onRefresh={load}
+          onSchedule={onSchedule}
         />
       )}
     </div>
@@ -1813,7 +1815,7 @@ export default function MediaCloudPage() {
 
         <TabBar active={tab} onChange={setTab} />
 
-        {tab === 'library'    && <LibraryTab />}
+        {tab === 'library'    && <LibraryTab onSchedule={setComposerAsset} />}
         {tab === 'governance' && <GovernanceTab />}
         {tab === 'brands'     && <BrandsTab />}
         {tab === 'reviews'    && <ReviewsTab />}

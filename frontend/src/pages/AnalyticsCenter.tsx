@@ -96,6 +96,7 @@ function Card({
       padding: 20,
       position: 'relative',
       overflow: 'hidden',
+      minWidth: 0,
       ...style,
     }}>
       {accent && (
@@ -512,7 +513,7 @@ export default function AnalyticsCenter() {
           </div>
 
           {/* Tab bar */}
-          <div style={{ display: 'flex', gap: 2 }}>
+          <div style={{ display: 'flex', gap: 2, overflowX: 'auto', scrollbarWidth: 'none' }}>
             {TABS.map(tab => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -521,7 +522,7 @@ export default function AnalyticsCenter() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
+                    display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, whiteSpace: 'nowrap',
                     padding: '9px 16px', border: 'none', cursor: 'pointer',
                     background: active ? 'rgba(167,139,250,0.1)' : 'transparent',
                     color: active ? C.purple : C.muted,
@@ -571,7 +572,7 @@ export default function AnalyticsCenter() {
             {summary.error && <ErrorState error={summary.error} />}
 
             {/* Main chart + top workflows — 2 col */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+            <div className="af-an-grid-main" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,320px)', gap: 16 }}>
 
               {/* Executions Over Time chart */}
               <Card accent={C.purple}>
@@ -636,7 +637,7 @@ export default function AnalyticsCenter() {
             </div>
 
             {/* Success rate + throughput row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="af-an-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16 }}>
               <Card accent={C.green}>
                 <SectionHeader title="Success Rate Trend" />
                 {volume.loading ? <SkBlock height={180} /> : volume.data
@@ -652,7 +653,7 @@ export default function AnalyticsCenter() {
             </div>
 
             {/* Duration + health row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="af-an-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16 }}>
               <Card accent={C.amber}>
                 <SectionHeader title="Execution Duration" sub="AVG & P95" />
                 {volume.loading ? <SkBlock height={180} /> : volume.data
@@ -692,7 +693,7 @@ export default function AnalyticsCenter() {
         {/* ── Integrations Tab ── */}
         {activeTab === 'integrations' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="af-an-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16 }}>
               <Card accent={C.blue}>
                 <SectionHeader title="API Call Volume" sub="TOP 12 INTEGRATIONS" />
                 {integrations.loading ? <SkBlock height={220} /> : integrations.data
@@ -827,6 +828,10 @@ export default function AnalyticsCenter() {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @media (max-width: 900px) {
+          .af-an-grid-main { grid-template-columns: minmax(0,1fr) !important; }
+          .af-an-grid-2 { grid-template-columns: minmax(0,1fr) !important; }
         }
       `}</style>
     </div>

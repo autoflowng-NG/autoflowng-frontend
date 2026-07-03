@@ -111,6 +111,8 @@ function Card({ children, style = {} }: { children: React.ReactNode; style?: Rea
       border: `1px solid ${C.border}`,
       borderRadius: 14,
       padding: "20px",
+      minWidth: 0,
+      overflow: "hidden",
       ...style,
     }}>
       {children}
@@ -323,22 +325,22 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
     return `${Math.floor(n / 60000)}m ${Math.floor((n % 60000) / 1000)}s`;
   };
   const shortId = (id: any) => { const s = String(id ?? ""); return s.length > 10 ? `…${s.slice(-8)}` : s || "—"; };
-  const COL = "88px 1fr 110px 72px 96px 1fr 32px";
+  const COL = "72px minmax(0,1fr) 92px 60px 88px minmax(0,1fr) 28px";
 
   return (
-    <div>
+    <div className="af-runs-table" style={{ minWidth: 0 }}>
       <SectionHeader title={t('dashboard.recent_workflow_runs')} sub={t('dashboard.execution_history_live')} />
-      {/* Header row */}
-      <div style={{
+      {/* Header row — hidden on narrow screens in favor of stacked cards */}
+      <div className="af-runs-header" style={{
         display: "grid", gridTemplateColumns: COL,
-        gap: 8, padding: "4px 10px 8px",
+        gap: 8, padding: "4px 10px 8px", minWidth: 0,
         borderBottom: `1px solid ${C.border}`, marginBottom: 4,
       }}>
         {[
           t('dashboard.col_run_id'), t('dashboard.col_workflow'), t('dashboard.col_started'),
           t('dashboard.col_duration'), t('dashboard.col_status'), t('dashboard.col_error'), "",
         ].map((h, idx) => (
-          <div key={`${h}-${idx}`} style={{ fontSize: 9, fontWeight: 800, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>{h}</div>
+          <div key={`${h}-${idx}`} style={{ fontSize: 9, fontWeight: 800, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{h}</div>
         ))}
       </div>
       {loading ? (
@@ -350,7 +352,7 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
           {t('dashboard.no_recent_runs')}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
           {runs.slice(0, 10).map((run: any, i: number) => {
             const st = (run.status || "pending").toLowerCase();
             const sc = STATUS_C[st] ?? "rgba(226,232,255,0.3)";
@@ -360,8 +362,9 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.035, duration: 0.18 }}
                 onClick={() => onRowClick(run)}
+                className="af-runs-row"
                 style={{
-                  display: "grid", gridTemplateColumns: COL, gap: 8,
+                  display: "grid", gridTemplateColumns: COL, gap: 8, minWidth: 0,
                   alignItems: "center", padding: "9px 10px",
                   background: "rgba(255,255,255,0.02)", borderRadius: 8,
                   border: `1px solid rgba(255,255,255,0.04)`, cursor: "pointer",
@@ -370,18 +373,35 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${sc}06`; (e.currentTarget as HTMLElement).style.borderColor = `${sc}18`; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
               >
-                <div style={{ fontSize: 10, color: C.blue, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortId(run.id || run.run_id)}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.workflow_name || run.name || t('dashboard.workflow_run_fallback')}</div>
-                <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>{fmtTs(run.started_at || run.created_at)}</div>
-                <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace" }}>{fmtDur(run.duration || run.duration_ms)}</div>
-                <StatusBadge status={st} />
-                <div style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: run.error ? 1 : 0.15 }}>{run.error || t('dashboard.error_none')}</div>
-                <div onClick={e => e.stopPropagation()}><RowActionMenu run={run} onViewDetails={() => onRowClick(run)} /></div>
+                <div className="af-runs-id" style={{ fontSize: 10, color: C.blue, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{shortId(run.id || run.run_id)}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{run.workflow_name || run.name || t('dashboard.workflow_run_fallback')}</div>
+                <div className="af-runs-started" style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{fmtTs(run.started_at || run.created_at)}</div>
+                <div className="af-runs-dur" style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{fmtDur(run.duration || run.duration_ms)}</div>
+                <div style={{ minWidth: 0, overflow: "hidden" }}><StatusBadge status={st} /></div>
+                <div className="af-runs-err" style={{ fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: run.error ? 1 : 0.15, minWidth: 0 }}>{run.error || t('dashboard.error_none')}</div>
+                <div onClick={e => e.stopPropagation()} style={{ minWidth: 0 }}><RowActionMenu run={run} onViewDetails={() => onRowClick(run)} /></div>
               </motion.div>
             );
           })}
         </div>
       )}
+      <style>{`
+        @media (max-width: 620px) {
+          .af-runs-header { display: none !important; }
+          .af-runs-row {
+            grid-template-columns: 1fr auto !important;
+            grid-template-areas: "wf status" "id id" "meta meta" "err err";
+            row-gap: 4px !important;
+          }
+          .af-runs-row > div:nth-child(1) { grid-area: id; }
+          .af-runs-row > div:nth-child(2) { grid-area: wf; }
+          .af-runs-row > div:nth-child(3) { grid-area: meta; }
+          .af-runs-row > div:nth-child(4) { display: none; }
+          .af-runs-row > div:nth-child(5) { grid-area: status; justify-self: end; }
+          .af-runs-row > div:nth-child(6) { grid-area: err; }
+          .af-runs-row > div:nth-child(7) { display: none; }
+        }
+      `}</style>
     </div>
   );
 }
