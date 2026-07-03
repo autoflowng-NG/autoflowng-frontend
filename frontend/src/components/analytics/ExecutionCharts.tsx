@@ -55,12 +55,19 @@ const DarkTooltip: React.FC<TooltipProps> = ({ active, payload, label }) => {
 };
 
 // ── Execution Volume Chart ─────────────────────────────────────────────────────
-export const ExecutionVolumeChart: React.FC<{ data: VolumeDataPoint[] | null | undefined }> = ({ data }) => {
+export const ExecutionVolumeChart: React.FC<{
+  data: VolumeDataPoint[] | null | undefined;
+  inProgressData?: Array<{ bucket: string; in_progress: number }> | null;
+}> = ({ data, inProgressData }) => {
   if (!data || data.length === 0) return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
+
+  const inProgressMap = new Map((inProgressData || []).map(d => [d.bucket, d.in_progress]));
+
   const formatted = data.map(d => ({
     ...d,
     date: fmtDate(d.bucket),
     successRate: d.total > 0 ? Math.round((d.successes / d.total) * 100) : 0,
+    inProgress: inProgressMap.get(d.bucket) ?? 0,
   }));
 
   return (
@@ -75,14 +82,19 @@ export const ExecutionVolumeChart: React.FC<{ data: VolumeDataPoint[] | null | u
             <stop offset="5%"  stopColor={COLORS.failure} stopOpacity={0.25} />
             <stop offset="95%" stopColor={COLORS.failure} stopOpacity={0}    />
           </linearGradient>
+          <linearGradient id="gradProgress" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor={COLORS.total} stopOpacity={0.25} />
+            <stop offset="95%" stopColor={COLORS.total} stopOpacity={0}    />
+          </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey="date" tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
         <Tooltip content={<DarkTooltip />} />
         <Legend wrapperStyle={{ fontSize: 11, color: COLORS.text }} />
-        <Area type="monotone" dataKey="successes" name="Success" stroke={COLORS.success} fill="url(#gradSuccess)" strokeWidth={2} />
-        <Area type="monotone" dataKey="failures"  name="Failure" stroke={COLORS.failure} fill="url(#gradFailure)" strokeWidth={2} />
+        <Area type="monotone" dataKey="successes"  name="Successful"  stroke={COLORS.success} fill="url(#gradSuccess)"  strokeWidth={2} />
+        <Area type="monotone" dataKey="failures"   name="Failed"      stroke={COLORS.failure} fill="url(#gradFailure)"  strokeWidth={2} />
+        <Area type="monotone" dataKey="inProgress" name="In Progress" stroke={COLORS.total}   fill="url(#gradProgress)" strokeWidth={2} />
       </AreaChart>
     </ResponsiveContainer>
   );
