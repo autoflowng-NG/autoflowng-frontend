@@ -39,6 +39,8 @@ interface NotifPrefs {
   security_emails:    boolean;
   digest_daily:       boolean;
   digest_weekly:      boolean;
+  // Phase 48
+  whatsapp_alerts_enabled: boolean;
 }
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -262,6 +264,25 @@ export function NotificationPreferences() {
             description="Last week's orchestration summary every Monday"
             value={prefs.digest_weekly ?? false}
             onChange={v => update({ digest_weekly: v })}
+          />
+        </div>
+
+        {/* WhatsApp section */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+            <Bell size={12} color="#00C896" />
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: "#00C896",
+              fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", textTransform: "uppercase",
+            }}>
+              WhatsApp
+            </span>
+          </div>
+          <ToggleRow
+            label="Send critical campaign alerts to my WhatsApp"
+            description="Requires a phone number on file and an approved WhatsApp template"
+            value={prefs.whatsapp_alerts_enabled ?? false}
+            onChange={v => update({ whatsapp_alerts_enabled: v })}
           />
         </div>
 
