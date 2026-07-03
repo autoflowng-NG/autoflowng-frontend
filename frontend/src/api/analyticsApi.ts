@@ -345,3 +345,58 @@ export const useReportHistory      = () =>
 
 export const useReportSchedules    = () =>
   useAnalyticsQuery(() => analyticsApi.getSchedules());
+
+// ── Post Analytics (Content Tab) ──────────────────────────────────────────────
+
+export interface PostAnalyticsSeries {
+  platform:    string;
+  views:       number;
+  likes:       number;
+  comments:    number;
+  shares:      number;
+  impressions: number;
+  reach:       number;
+  fetched_at:  string;
+}
+
+export interface PostAnalyticsData {
+  job: {
+    id:               number;
+    title:            string;
+    status:           string;
+    target_platforms: string[];
+    completed_at:     string | null;
+    created_at:       string;
+  };
+  series:  PostAnalyticsSeries[];
+  totals:  Record<string, number>;
+}
+
+/**
+ * usePostAnalytics(jobId)
+ * Fetches time-series engagement data for a single publishing job.
+ * Powers the Analytics Center "Content" tab per-post trend chart.
+ * Calls GET /api/publishing/jobs/:id/analytics
+ */
+export function usePostAnalytics(jobId: number | null) {
+  const [data,    setData]    = useState<PostAnalyticsData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+
+  const fetch_ = useCallback(async () => {
+    if (!jobId) { setData(null); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await apiFetch<PostAnalyticsData>(`/publishing/jobs/${jobId}/analytics`));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      if (msg !== '__auth_error__') setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId]);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+  return { data, loading, error, refetch: fetch_ };
+}
