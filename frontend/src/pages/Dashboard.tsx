@@ -45,8 +45,22 @@ import {
   Clock, CheckCircle2, XCircle, RefreshCw, Radio, Link2,
   MoreVertical, Eye, RotateCcw, FileText, X as XIcon,
   Shield, ShieldCheck, AlertTriangle, Database, Cpu, Server,
-  BarChart2, Users, Plus,
+  BarChart2, Users, Plus, ChevronDown,
 } from "lucide-react";
+
+/* FIX: the "Workflow Executions" chart always requested the 'daily' period
+   with no days override, which the backend hardcoded to a 30-day lookback
+   (see analytics/executionAnalytics.js). For workspaces with only a handful
+   of real executions, that meant ~29 empty zero-buckets plus one spike near
+   the end — rendering as a near-flat line spanning a full month
+   (e.g. "Jun 3 – Jul 3") instead of the intended "Last 7 days" enterprise
+   view. VOLUME_RANGE_OPTIONS + the dropdown below let the user pick the
+   window; 7 days is now the default to match the reference design. */
+const VOLUME_RANGE_OPTIONS: { label: string; days: number }[] = [
+  { label: "Last 7 days",  days: 7 },
+  { label: "Last 30 days", days: 30 },
+  { label: "Last 90 days", days: 90 },
+];
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
 const C = {
@@ -832,14 +846,20 @@ export default function Dashboard() {
     queryFn:  () => resourceUsageAPI.get(),
     staleTime: 60 * 1000,
   });
+  // FIX: default window is now 7 days (was an implicit 30 via the backend's
+  // 'daily'-period hardcode) — see VOLUME_RANGE_OPTIONS above. volumeRangeDays
+  // is user-selectable via the dropdown next to the "Workflow Executions"
+  // chart title, same as the reference design's "Last 7 days" control.
+  const [volumeRangeDays, setVolumeRangeDays] = useState<number>(7);
+  const [volumeRangeOpen, setVolumeRangeOpen] = useState(false);
   const { data: volumeData } = useQuery({
-    queryKey: ["execution-volume", "daily"],
-    queryFn: () => analyticsApi.getExecutionVolume("daily"),
+    queryKey: ["execution-volume", "daily", volumeRangeDays],
+    queryFn: () => analyticsApi.getExecutionVolume("daily", undefined, volumeRangeDays),
     staleTime: 60 * 1000,
   });
   const { data: inProgressData } = useQuery({
-    queryKey: ["execution-in-progress", "daily"],
-    queryFn: () => analyticsApi.getInProgressVolume("daily"),
+    queryKey: ["execution-in-progress", "daily", volumeRangeDays],
+    queryFn: () => analyticsApi.getInProgressVolume("daily", volumeRangeDays),
     staleTime: 30 * 1000,
     refetchInterval: 30 * 1000,
   });
@@ -997,8 +1017,51 @@ export default function Dashboard() {
             background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`,
             borderRadius: 14, padding: 20,
           }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif", marginBottom: 12 }}>
-              Workflow Executions
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, position: "relative" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif" }}>
+                Workflow Executions
+              </div>
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setVolumeRangeOpen(o => !o)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: C.raised, border: `1px solid ${C.border}`,
+                    borderRadius: 8, padding: "6px 10px", cursor: "pointer",
+                    fontSize: 12, color: C.muted, fontFamily: "'DM Sans',sans-serif",
+                  }}
+                >
+                  {VOLUME_RANGE_OPTIONS.find(o => o.days === volumeRangeDays)?.label ?? "Last 7 days"}
+                  <ChevronDown size={13} />
+                </button>
+                {volumeRangeOpen && (
+                  <>
+                    <div onClick={() => setVolumeRangeOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 29 }} />
+                    <div style={{
+                      position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 30,
+                      background: C.raised, border: `1px solid ${C.border}`, borderRadius: 10,
+                      overflow: "hidden", minWidth: 140, boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+                    }}>
+                      {VOLUME_RANGE_OPTIONS.map(opt => (
+                        <div
+                          key={opt.days}
+                          onClick={() => { setVolumeRangeDays(opt.days); setVolumeRangeOpen(false); }}
+                          style={{
+                            padding: "9px 12px", fontSize: 12.5, cursor: "pointer",
+                            fontFamily: "'DM Sans',sans-serif",
+                            color: opt.days === volumeRangeDays ? C.text : C.muted,
+                            background: opt.days === volumeRangeDays ? "rgba(124,58,237,0.1)" : "transparent",
+                          }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = opt.days === volumeRangeDays ? "rgba(124,58,237,0.1)" : "transparent"}
+                        >
+                          {opt.label}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <ExecutionVolumeChart data={volumeData as any} inProgressData={inProgressData as any} />
           </div>

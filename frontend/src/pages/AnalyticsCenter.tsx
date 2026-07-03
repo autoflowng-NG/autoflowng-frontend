@@ -39,8 +39,22 @@ import { OperationalHealthPanel, HealthTrendChart, StatCard } from '../component
 import {
   BarChart3, TrendingUp, TrendingDown, Clock, Zap, Activity,
   Download, RefreshCw, GitBranch, AlertTriangle, Brain,
-  LineChart, Layers, Bug, Cpu,
+  LineChart, Layers, Bug, Cpu, ChevronDown,
 } from 'lucide-react';
+
+/* FIX: "Executions Over Time" / "Success Rate Trend" / "Execution Duration"
+   all shared the `volume` query, which called useExecutionVolume(period)
+   with no days override — the backend's 'daily' period hardcodes a 30-day
+   lookback (analytics/executionAnalytics.js), so low-volume workspaces got
+   ~29 empty zero-buckets plus one spike, same root cause as the Dashboard's
+   "Workflow Executions" chart. VOLUME_RANGE_OPTIONS + a dropdown next to
+   "Executions Over Time" let the user pick the window; default is now 7
+   days to match the reference "Last 7 days" enterprise chart. */
+const VOLUME_RANGE_OPTIONS: { label: string; days: number }[] = [
+  { label: 'Last 7 days',  days: 7 },
+  { label: 'Last 30 days', days: 30 },
+  { label: 'Last 90 days', days: 90 },
+];
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
 const C = {
@@ -314,6 +328,10 @@ export default function AnalyticsCenter() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [period,    setPeriod]    = useState<Period>('daily');
   const [computing, setComputing] = useState(false);
+  // FIX: default the execution volume window to 7 days (was an implicit
+  // 30 via the backend's 'daily'-period hardcode) — see VOLUME_RANGE_OPTIONS.
+  const [volumeRangeDays, setVolumeRangeDays] = useState<number>(7);
+  const [volumeRangeOpen, setVolumeRangeOpen] = useState(false);
 
   // All hooks preserved exactly
   const summary      = useExecutionSummary(30);
@@ -334,7 +352,7 @@ export default function AnalyticsCenter() {
       setAiRequestsPrev(prevAi != null && currAi != null ? prevAi - currAi : null);
     }).catch(() => {});
   }, []);
-  const volume       = useExecutionVolume(period);
+  const volume       = useExecutionVolume(period, volumeRangeDays);
   const throughput   = useThroughput();
   const rankings     = useWorkflowRankings('health_score');
   const bottlenecks  = useBottlenecks();
@@ -576,7 +594,53 @@ export default function AnalyticsCenter() {
 
               {/* Executions Over Time chart */}
               <Card accent={C.purple}>
-                <SectionHeader title="Executions Over Time" sub={`${period.toUpperCase()} · LAST 30 DAYS`} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, position: 'relative' }}>
+                  <SectionHeader
+                    title="Executions Over Time"
+                    sub={`${period.toUpperCase()} · ${VOLUME_RANGE_OPTIONS.find(o => o.days === volumeRangeDays)?.label.toUpperCase() ?? 'LAST 7 DAYS'}`}
+                  />
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <button
+                      onClick={() => setVolumeRangeOpen(o => !o)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        background: C.raised, border: `1px solid ${C.border}`,
+                        borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
+                        fontSize: 12, color: C.muted, fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      {VOLUME_RANGE_OPTIONS.find(o => o.days === volumeRangeDays)?.label ?? 'Last 7 days'}
+                      <ChevronDown size={13} />
+                    </button>
+                    {volumeRangeOpen && (
+                      <>
+                        <div onClick={() => setVolumeRangeOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 29 }} />
+                        <div style={{
+                          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
+                          background: C.raised, border: `1px solid ${C.border}`, borderRadius: 10,
+                          overflow: 'hidden', minWidth: 140, boxShadow: '0 12px 32px rgba(0,0,0,0.4)',
+                        }}>
+                          {VOLUME_RANGE_OPTIONS.map(opt => (
+                            <div
+                              key={opt.days}
+                              onClick={() => { setVolumeRangeDays(opt.days); setVolumeRangeOpen(false); }}
+                              style={{
+                                padding: '9px 12px', fontSize: 12.5, cursor: 'pointer',
+                                fontFamily: "'DM Sans',sans-serif",
+                                color: opt.days === volumeRangeDays ? C.text : C.muted,
+                                background: opt.days === volumeRangeDays ? 'rgba(124,58,237,0.1)' : 'transparent',
+                              }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = opt.days === volumeRangeDays ? 'rgba(124,58,237,0.1)' : 'transparent'}
+                            >
+                              {opt.label}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
                 {volume.loading ? <SkBlock height={220} /> : volume.data
                   ? <ExecutionVolumeChart data={volume.data} />
                   : null}
