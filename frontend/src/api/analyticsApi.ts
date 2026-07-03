@@ -163,6 +163,11 @@ export const analyticsApi = {
       `/analytics/executions/volume?period=${period}${workflowId ? `&workflowId=${workflowId}` : ''}`
     ),
 
+  getInProgressVolume: (period = 'daily') =>
+    apiFetch<Array<{ bucket: string; in_progress: number }>>(
+      `/analytics/executions/in-progress?period=${period}`
+    ),
+
   getThroughput: () =>
     apiFetch<Array<{ hour: string; executions: number }>>(`/analytics/executions/throughput`),
 
