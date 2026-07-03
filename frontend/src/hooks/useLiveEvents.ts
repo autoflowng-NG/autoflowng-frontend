@@ -30,7 +30,10 @@ const MAX_EVENTS = 50;
 
 function toEventType(raw: any): LiveEventType {
   const ev = (raw.event || raw.type || "").toLowerCase();
-  if (ev.includes("workflow.run") || ev.includes("workflow_run")) {
+  if (
+    ev.includes("workflow.run") || ev.includes("workflow_run") ||
+    ev === "run_started" || ev === "run_completed" || ev === "run_failed"
+  ) {
     if (ev.includes("start")) return "workflow_run_start";
     if (ev.includes("end") || ev.includes("complete") || ev.includes("finish")) return "workflow_run_end";
     return "workflow_run";
@@ -75,7 +78,13 @@ function buildDetail(raw: any): string {
 }
 
 function normalize(raw: any): LiveEvent | null {
-  const skippedEvents = ["ping", "pong", "authenticated", "auth", "connected"];
+  const skippedEvents = [
+    "ping", "pong", "authenticated", "auth", "connected",
+    // Admin-only queue health heartbeats (websocket/queue-health-broadcaster.js)
+    // — infrastructure telemetry, not user-facing workflow events.
+    "queue:tier:health", "queue:tier:saturation", "queue:tier:critical",
+    "queue:tier:worker_error", "queue:tier:dlq_spike", "queue:tier:recovery",
+  ];
   const evType = (raw.event || raw.type || "").toLowerCase();
   if (skippedEvents.includes(evType)) return null;
 
