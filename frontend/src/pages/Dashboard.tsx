@@ -37,6 +37,9 @@ import { TrialCountdownBanner } from "../components/TrialCountdownBanner";
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip,
 } from "recharts";
+import { ExecutionVolumeChart } from "../components/analytics/ExecutionCharts";
+import { RankedTopWorkflows } from "../components/analytics/RankedTopWorkflows";
+import { analyticsApi } from "../api/analyticsApi";
 import {
   GitBranch, Zap, Activity, Bot, ArrowRight, Play, TrendingUp, TrendingDown,
   Clock, CheckCircle2, XCircle, RefreshCw, Radio, Link2,
@@ -829,6 +832,18 @@ export default function Dashboard() {
     queryFn:  () => resourceUsageAPI.get(),
     staleTime: 60 * 1000,
   });
+  const { data: volumeData } = useQuery({
+    queryKey: ["execution-volume", "daily"],
+    queryFn: () => analyticsApi.getExecutionVolume("daily"),
+    staleTime: 60 * 1000,
+  });
+  const { data: inProgressData } = useQuery({
+    queryKey: ["execution-in-progress", "daily"],
+    queryFn: () => analyticsApi.getInProgressVolume("daily"),
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
+  });
+
   // FIX: the header's "All Systems Operational" badge used to render
   // unconditionally regardless of actual system state — same bug class as
   // the System Health card below. It now reflects the same real check.
@@ -976,6 +991,20 @@ export default function Dashboard() {
                     sparkData={hasVolumeHistory ? successesSpark : undefined} />
         </div>
 
+        {/* ── Enterprise Analytics: Execution Trend Chart + Ranked Top Workflows ── */}
+        <div className="af-analytics-row" style={{ display: "grid", gridTemplateColumns: "minmax(0,1.7fr) minmax(0,1fr)", gap: 16, marginBottom: 20 }}>
+          <div style={{
+            background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`,
+            borderRadius: 14, padding: 20,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, fontFamily: "'Syne',sans-serif", marginBottom: 12 }}>
+              Workflow Executions
+            </div>
+            <ExecutionVolumeChart data={volumeData as any} inProgressData={inProgressData as any} />
+          </div>
+          <RankedTopWorkflows onNav={nav} />
+        </div>
+
         {/* ── 3-column mid section ── */}
         <div className="af-dash-mid" style={{ display: "grid", gap: 16, marginBottom: 20, alignItems: "start" }}>
           {/* LEFT: Runs table + Live events */}
@@ -1070,6 +1099,12 @@ export default function Dashboard() {
       </div>
 
       <style>{`
+        .af-analytics-row {
+          grid-template-columns: minmax(0,1.7fr) minmax(0,1fr);
+        }
+        @media (max-width: 900px) {
+          .af-analytics-row { grid-template-columns: 1fr; }
+        }
         .af-dash-mid {
           grid-template-columns: minmax(0,1.8fr) minmax(0,1fr) minmax(0,1fr);
         }
