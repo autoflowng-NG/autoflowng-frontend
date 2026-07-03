@@ -1100,18 +1100,11 @@ export default function Dashboard() {
             <Reveal delay={160}>
               <Card>
                 <SectionHeader title={t('dashboard.resource_usage')} sub={t('dashboard.current_billing_period')} />
-                <div style={{ display: "flex", justifyContent: "space-around", paddingTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: 48, paddingTop: 4 }}>
                   {loadingResourceUsage ? (
-                    [0, 1, 2].map(i => <Sk key={i} h={70} r={35} />)
+                    [0, 1].map(i => <Sk key={i} h={70} r={35} />)
                   ) : (
                     <>
-                      <ResourceMeter
-                        label={t('dashboard.res_ai_credits')}
-                        percent={resourceUsage?.ai_credits?.percent ?? null}
-                        displayValue={`${resourceUsage?.ai_credits?.used ?? 0} / ${resourceUsage?.ai_credits?.limit ?? 0}`}
-                        unlimitedLabel={`${resourceUsage?.ai_credits?.used ?? 0} · ${t('dashboard.res_unlimited')}`}
-                        color={C.purple}
-                      />
                       <ResourceMeter
                         label={t('dashboard.res_storage')}
                         percent={resourceUsage?.storage?.percent ?? null}

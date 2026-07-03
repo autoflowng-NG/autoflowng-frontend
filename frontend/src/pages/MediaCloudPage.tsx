@@ -1596,7 +1596,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
       .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load connections')))
       .then(rows => {
         if (cancelled) return;
-        const connectedPlatforms = (Array.isArray(rows) ? rows : rows?.data || [])
+        const connectedPlatforms = (Array.isArray(rows) ? rows : rows?.connections || [])
           .map((r: any) => r.platform)
           .filter((p: string) => PLATFORMS.includes(p));
         setConnected(connectedPlatforms);

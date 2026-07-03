@@ -11,13 +11,26 @@
  *   text: #E2E8FF | muted: rgba(226,232,255,0.45) | faint: rgba(226,232,255,0.22)
  *   green: #00C896 | blue: #38BDF8 | purple: #A78BFA | amber: #FBBF24 | red: #FB7185
  *   Fonts: Syne (headers/values) · DM Sans (body) · DM Mono (labels/badges)
+ *
+ * Overview tab — restructured per analytics best practices:
+ *   REMOVED: "Executions Over Time" — redundant with Dashboard execution charts
+ *   REMOVED: "Hourly Throughput" — operational monitoring, not analytics
+ *   REMOVED: "Success Rate Trend" — workflow-level version; SuccessRateChart component
+ *     is intentionally kept (not deleted) in ExecutionCharts.tsx for potential
+ *     reuse in a future per-workflow drill-down view. It is NOT the component
+ *     that powers the Content tab's per-post trend — that is PostEngagementChart.
+ *   KEPT: Top Workflows ranking, Execution Duration (Avg & P95), Operational Health
+ *   Layout: 2-col grid so the 3 remaining panels read as an intentional layout.
+ *
+ * Content tab (new) — per-post scheduled-content engagement trends.
+ *   Post picker (list of recent publishing jobs) + detail panel showing engagement
+ *   time series (views/likes/comments/shares) since publish, with elapsed-time x-axis.
  */
 
 import React, { useState, useCallback } from 'react';
 import {
   useExecutionSummary,
   useExecutionVolume,
-  useThroughput,
   useWorkflowRankings,
   useBottlenecks,
   useIntegrationSummary,
@@ -26,35 +39,26 @@ import {
   useHealthScores,
   useHealthTrend,
   useForecasts,
+  usePostAnalytics,
   analyticsApi,
   type ExecutionSummary,
 } from '../api/analyticsApi';
 import { useMemo } from 'react';
-import { ExecutionVolumeChart, SuccessRateChart, ThroughputChart, DurationChart } from '../components/analytics/ExecutionCharts';
+import { DurationChart } from '../components/analytics/ExecutionCharts';
+// SuccessRateChart is intentionally NOT rendered on the Overview tab (see header note above).
+// Import is kept here in case a future per-workflow drill-down reuses it.
+// import { SuccessRateChart } from '../components/analytics/ExecutionCharts';
 import { WorkflowRankingsTable, BottleneckList } from '../components/analytics/WorkflowRankings';
 import { IntegrationUsageChart, IntegrationErrorRateChart, IntegrationUsageRanking } from '../components/analytics/IntegrationUsage';
 import { ErrorHeatmap, TopErrorCausesList } from '../components/analytics/ErrorHeatmap';
 import { ForecastGrid } from '../components/analytics/ForecastChart';
-import { OperationalHealthPanel, HealthTrendChart, StatCard } from '../components/analytics/HealthScoreWidgets';
+import { OperationalHealthPanel, HealthTrendChart } from '../components/analytics/HealthScoreWidgets';
+import PostEngagementChart from '../components/analytics/PostEngagementChart';
 import {
   BarChart3, TrendingUp, TrendingDown, Clock, Zap, Activity,
   Download, RefreshCw, GitBranch, AlertTriangle, Brain,
-  LineChart, Layers, Bug, Cpu, ChevronDown,
+  LineChart, Layers, Bug, Cpu, FileText, ChevronRight,
 } from 'lucide-react';
-
-/* FIX: "Executions Over Time" / "Success Rate Trend" / "Execution Duration"
-   all shared the `volume` query, which called useExecutionVolume(period)
-   with no days override — the backend's 'daily' period hardcodes a 30-day
-   lookback (analytics/executionAnalytics.js), so low-volume workspaces got
-   ~29 empty zero-buckets plus one spike, same root cause as the Dashboard's
-   "Workflow Executions" chart. VOLUME_RANGE_OPTIONS + a dropdown next to
-   "Executions Over Time" let the user pick the window; default is now 7
-   days to match the reference "Last 7 days" enterprise chart. */
-const VOLUME_RANGE_OPTIONS: { label: string; days: number }[] = [
-  { label: 'Last 7 days',  days: 7 },
-  { label: 'Last 30 days', days: 30 },
-  { label: 'Last 90 days', days: 90 },
-];
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
 const C = {
@@ -205,6 +209,7 @@ const TABS = [
   { id: 'errors',       label: 'Errors',        icon: Bug        },
   { id: 'intelligence', label: 'Intelligence',  icon: Brain      },
   { id: 'forecasts',    label: 'Forecasts',     icon: LineChart  },
+  { id: 'content',      label: 'Content',       icon: FileText   },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -323,15 +328,217 @@ function IntegrationTable({ data }: { data: any[] }) {
   );
 }
 
+/* ── Content Tab — Post Picker + Engagement Detail ─────────────────── */
+function ContentTab() {
+  const [jobs, setJobs]         = React.useState<any[]>([]);
+  const [jobsLoading, setJobsLoading] = React.useState(true);
+  const [jobsError, setJobsError]     = React.useState<string | null>(null);
+  const [selectedJobId, setSelectedJobId] = React.useState<number | null>(null);
+
+  const postAnalytics = usePostAnalytics(selectedJobId);
+
+  // Load the publishing jobs list
+  React.useEffect(() => {
+    const token = localStorage.getItem('autoflowng_token');
+    const BASE = ((import.meta as any).env?.VITE_API_URL || '').replace(/\/$/, '') + '/api';
+    fetch(`${BASE}/publishing/jobs?limit=30`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
+      .then(json => {
+        const list: any[] = json.jobs ?? json.data ?? [];
+        setJobs(list);
+        // Auto-select first published job
+        const first = list.find(j => j.status === 'completed' || j.status === 'published') || list[0];
+        if (first) setSelectedJobId(Number(first.id));
+      })
+      .catch(e => setJobsError(e.message))
+      .finally(() => setJobsLoading(false));
+  }, []);
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const platformBadge = (platforms: string[]) => (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {(platforms || []).map(p => (
+        <span key={p} style={{
+          fontSize: 9, fontWeight: 700, color: C.blue,
+          background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.2)',
+          borderRadius: 4, padding: '2px 5px',
+          fontFamily: "'DM Mono',monospace", letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}>
+          {p}
+        </span>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="af-an-content-grid" style={{
+      display: 'grid',
+      gridTemplateColumns: '300px minmax(0,1fr)',
+      gap: 16, alignItems: 'start',
+    }}>
+      {/* Post picker */}
+      <Card accent={C.blue} style={{ padding: 0 }}>
+        <div style={{
+          padding: '14px 16px',
+          borderBottom: `1px solid ${C.border}`,
+        }}>
+          <SectionHeader title="Published Posts" sub="SELECT A POST TO VIEW ITS TREND" />
+        </div>
+
+        {jobsLoading && (
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[1, 2, 3, 4].map(i => <SkBlock key={i} height={56} />)}
+          </div>
+        )}
+
+        {jobsError && (
+          <div style={{ padding: 16 }}>
+            <ErrorState error={jobsError} />
+          </div>
+        )}
+
+        {!jobsLoading && !jobsError && jobs.length === 0 && (
+          <div style={{
+            padding: '32px 16px', textAlign: 'center',
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: '50%',
+              background: C.raised, border: `1px solid ${C.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 12px',
+            }}>
+              <FileText size={16} color={C.faint} />
+            </div>
+            <p style={{
+              fontSize: 13, fontWeight: 600, color: C.muted,
+              fontFamily: "'DM Sans',sans-serif", marginBottom: 6,
+            }}>
+              No posts yet
+            </p>
+            <p style={{
+              fontSize: 11, color: C.faint,
+              fontFamily: "'DM Sans',sans-serif", lineHeight: 1.5,
+            }}>
+              Schedule your first post via Media Cloud → Asset Details → Schedule / Post
+            </p>
+          </div>
+        )}
+
+        {!jobsLoading && jobs.length > 0 && (
+          <div style={{ maxHeight: 480, overflowY: 'auto', padding: '4px 0' }}>
+            {jobs.map(job => {
+              const isSelected = selectedJobId === Number(job.id);
+              return (
+                <div
+                  key={job.id}
+                  onClick={() => setSelectedJobId(Number(job.id))}
+                  style={{
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    borderLeft: isSelected ? `3px solid ${C.blue}` : '3px solid transparent',
+                    background: isSelected ? 'rgba(56,189,248,0.05)' : 'transparent',
+                    transition: 'all 0.12s',
+                  }}
+                  onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; }}
+                  onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <div style={{
+                    fontSize: 12, fontWeight: 600, color: isSelected ? C.text : C.muted,
+                    fontFamily: "'DM Sans',sans-serif",
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    marginBottom: 5,
+                  }}>
+                    {job.title || `Post #${job.id}`}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    {platformBadge(job.target_platforms || [])}
+                    <span style={{
+                      fontSize: 9, color: C.faint,
+                      fontFamily: "'DM Mono',monospace",
+                      flexShrink: 0,
+                    }}>
+                      {formatDate(job.created_at)}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700,
+                      color: job.status === 'completed' ? C.green : job.status === 'failed' ? C.red : C.amber,
+                      fontFamily: "'DM Mono',monospace", textTransform: 'uppercase',
+                    }}>
+                      {job.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Engagement detail panel */}
+      <Card accent={C.blue}>
+        {!selectedJobId && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', minHeight: 320, gap: 12,
+          }}>
+            <ChevronRight size={24} color={C.faint} />
+            <p style={{
+              fontSize: 13, color: C.faint,
+              fontFamily: "'DM Sans',sans-serif",
+            }}>
+              Select a post on the left to view its engagement trend
+            </p>
+          </div>
+        )}
+
+        {selectedJobId && postAnalytics.loading && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
+              {[0,1,2,3].map(i => <SkBlock key={i} height={56} />)}
+            </div>
+            <SkBlock height={220} />
+          </>
+        )}
+
+        {selectedJobId && postAnalytics.error && (
+          <ErrorState error={postAnalytics.error} />
+        )}
+
+        {selectedJobId && postAnalytics.data && !postAnalytics.loading && (() => {
+          const d = postAnalytics.data;
+          return (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <SectionHeader
+                  title={d.job.title || `Post #${d.job.id}`}
+                  sub={`${(d.job.target_platforms || []).join(' · ').toUpperCase()} · PUBLISHED ${d.job.completed_at ? new Date(d.job.completed_at).toLocaleDateString() : '—'}`}
+                />
+              </div>
+              <PostEngagementChart data={d} />
+            </>
+          );
+        })()}
+      </Card>
+    </div>
+  );
+}
+
 /* ── Main Component ────────────────────────────────────────────────── */
 export default function AnalyticsCenter() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [period,    setPeriod]    = useState<Period>('daily');
   const [computing, setComputing] = useState(false);
-  // FIX: default the execution volume window to 7 days (was an implicit
-  // 30 via the backend's 'daily'-period hardcode) — see VOLUME_RANGE_OPTIONS.
-  const [volumeRangeDays, setVolumeRangeDays] = useState<number>(7);
-  const [volumeRangeOpen, setVolumeRangeOpen] = useState(false);
 
   // All hooks preserved exactly
   const summary      = useExecutionSummary(30);
@@ -352,8 +559,7 @@ export default function AnalyticsCenter() {
       setAiRequestsPrev(prevAi != null && currAi != null ? prevAi - currAi : null);
     }).catch(() => {});
   }, []);
-  const volume       = useExecutionVolume(period, volumeRangeDays);
-  const throughput   = useThroughput();
+  const volume       = useExecutionVolume(period, 30);
   const rankings     = useWorkflowRankings('health_score');
   const bottlenecks  = useBottlenecks();
   const integrations = useIntegrationSummary(30);
@@ -376,7 +582,7 @@ export default function AnalyticsCenter() {
     }
   }, []);
 
-  const s = summary.data;
+  const s  = summary.data;
   const sp = summaryPrev.data;
 
   // Compute real period-over-period change % (current 30d vs prior 30d window)
@@ -569,7 +775,7 @@ export default function AnalyticsCenter() {
         {/* ── Overview Tab ── */}
         {activeTab === 'overview' && (
           <>
-            {/* KPI row — 4 cards matching reference */}
+            {/* KPI row — 4 cards */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
@@ -589,63 +795,16 @@ export default function AnalyticsCenter() {
             </div>
             {summary.error && <ErrorState error={summary.error} />}
 
-            {/* Main chart + top workflows — 2 col */}
-            <div className="af-an-grid-main" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,320px)', gap: 16 }}>
-
-              {/* Executions Over Time chart */}
-              <Card accent={C.purple}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, position: 'relative' }}>
-                  <SectionHeader
-                    title="Executions Over Time"
-                    sub={`${period.toUpperCase()} · ${VOLUME_RANGE_OPTIONS.find(o => o.days === volumeRangeDays)?.label.toUpperCase() ?? 'LAST 7 DAYS'}`}
-                  />
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <button
-                      onClick={() => setVolumeRangeOpen(o => !o)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        background: C.raised, border: `1px solid ${C.border}`,
-                        borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
-                        fontSize: 12, color: C.muted, fontFamily: "'DM Sans',sans-serif",
-                      }}
-                    >
-                      {VOLUME_RANGE_OPTIONS.find(o => o.days === volumeRangeDays)?.label ?? 'Last 7 days'}
-                      <ChevronDown size={13} />
-                    </button>
-                    {volumeRangeOpen && (
-                      <>
-                        <div onClick={() => setVolumeRangeOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 29 }} />
-                        <div style={{
-                          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
-                          background: C.raised, border: `1px solid ${C.border}`, borderRadius: 10,
-                          overflow: 'hidden', minWidth: 140, boxShadow: '0 12px 32px rgba(0,0,0,0.4)',
-                        }}>
-                          {VOLUME_RANGE_OPTIONS.map(opt => (
-                            <div
-                              key={opt.days}
-                              onClick={() => { setVolumeRangeDays(opt.days); setVolumeRangeOpen(false); }}
-                              style={{
-                                padding: '9px 12px', fontSize: 12.5, cursor: 'pointer',
-                                fontFamily: "'DM Sans',sans-serif",
-                                color: opt.days === volumeRangeDays ? C.text : C.muted,
-                                background: opt.days === volumeRangeDays ? 'rgba(124,58,237,0.1)' : 'transparent',
-                              }}
-                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'}
-                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = opt.days === volumeRangeDays ? 'rgba(124,58,237,0.1)' : 'transparent'}
-                            >
-                              {opt.label}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {volume.loading ? <SkBlock height={220} /> : volume.data
-                  ? <ExecutionVolumeChart data={volume.data} />
-                  : null}
-                {volume.error && <ErrorState error={volume.error} />}
-              </Card>
+            {/*
+              Overview panels — 2-column grid.
+              Row 1: Top Workflows (left) + Execution Duration (right)
+              Row 2: Operational Health (full-width)
+              Panels removed from here (not deleted from codebase):
+                - "Executions Over Time" — duplicates Dashboard execution charts
+                - "Hourly Throughput" — operational monitoring, not analytics
+                - "Success Rate Trend" — use SuccessRateChart in a future per-workflow drill-down
+            */}
+            <div className="af-an-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16 }}>
 
               {/* Top Workflows ranked list */}
               <Card accent={C.green}>
@@ -698,39 +857,23 @@ export default function AnalyticsCenter() {
                 ) : null}
                 {rankings.error && <ErrorState error={rankings.error} />}
               </Card>
-            </div>
 
-            {/* Success rate + throughput row */}
-            <div className="af-an-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16 }}>
-              <Card accent={C.green}>
-                <SectionHeader title="Success Rate Trend" />
-                {volume.loading ? <SkBlock height={180} /> : volume.data
-                  ? <SuccessRateChart data={volume.data} />
-                  : null}
-              </Card>
-              <Card accent={C.blue}>
-                <SectionHeader title="Hourly Throughput" sub="LAST 48H" />
-                {throughput.loading ? <SkBlock height={180} /> : throughput.data
-                  ? <ThroughputChart data={throughput.data} />
-                  : null}
-              </Card>
-            </div>
-
-            {/* Duration + health row */}
-            <div className="af-an-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16 }}>
+              {/* Execution Duration — Avg & P95 (genuinely analytical — percentile analysis) */}
               <Card accent={C.amber}>
                 <SectionHeader title="Execution Duration" sub="AVG & P95" />
-                {volume.loading ? <SkBlock height={180} /> : volume.data
+                {volume.loading ? <SkBlock height={220} /> : volume.data
                   ? <DurationChart data={volume.data} />
                   : null}
               </Card>
-              <Card accent={C.purple}>
-                <SectionHeader title="Operational Health" />
-                {health.loading ? <SkBlock height={180} /> : health.data
-                  ? <OperationalHealthPanel health={health.data} />
-                  : null}
-              </Card>
             </div>
+
+            {/* Operational Health — full-width (correctly analytical/derived) */}
+            <Card accent={C.purple}>
+              <SectionHeader title="Operational Health" />
+              {health.loading ? <SkBlock height={180} /> : health.data
+                ? <OperationalHealthPanel health={health.data} />
+                : null}
+            </Card>
           </>
         )}
 
@@ -882,6 +1025,10 @@ export default function AnalyticsCenter() {
             </Card>
           </>
         )}
+
+        {/* ── Content Tab ── per-post scheduled-content engagement trends ── */}
+        {activeTab === 'content' && <ContentTab />}
+
       </div>
 
       <style>{`
@@ -894,8 +1041,8 @@ export default function AnalyticsCenter() {
           to { transform: rotate(360deg); }
         }
         @media (max-width: 900px) {
-          .af-an-grid-main { grid-template-columns: minmax(0,1fr) !important; }
           .af-an-grid-2 { grid-template-columns: minmax(0,1fr) !important; }
+          .af-an-content-grid { grid-template-columns: minmax(0,1fr) !important; }
         }
       `}</style>
     </div>
