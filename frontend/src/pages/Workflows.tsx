@@ -11,7 +11,7 @@
  *   - All existing LiveBadge, WorkflowHealthBadge, WorkflowPredictionBadge preserved
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LayoutGroup, AnimatePresence, motion } from "framer-motion";
 import { useWorkflows, useDeleteWorkflow, useToggleWorkflow, useWorkflowTemplates, useActivateTemplate } from "../hooks/useWorkflows";
@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { WorkflowHealthBadge } from "../components/OrchestrationIntelligence";
 import { WorkflowPredictionBadge } from "../components/PredictiveInsightsPanel";
 import { useExecutionStream, formatDuration } from "../hooks/useExecutionStream";
+import { useWebSocketContext } from "../contexts/WebSocketContext";
 import {
   Plus, Search, GitBranch, Trash2,
   Edit3, Activity, Clock, Zap, Radio, Loader,
@@ -662,9 +663,34 @@ export default function Workflows() {
     }
   };
 
+  // Track the most-recently-triggered workflow ID so the live-event
+  // subscription below can match run_failed / run_blocked_quota events
+  // back to a specific trigger the user initiated in this session.
+  const lastTriggeredId = useRef<string | null>(null);
+
+  const { subscribe } = useWebSocketContext();
+  useEffect(() => {
+    const unsub = subscribe("*", (raw: any) => {
+      const ev = (raw.event || raw.type || "").toLowerCase();
+      if (ev !== "run_failed" && ev !== "run_blocked_quota") return;
+      // Match to the workflow the user just ran — ignore background runs from
+      // other sessions / scheduled triggers that share the same WS channel.
+      const evId = String(raw.workflowId ?? raw.workflow_id ?? "");
+      if (!evId || evId !== lastTriggeredId.current) return;
+      lastTriggeredId.current = null; // consume — only fire once per trigger
+      const reason = raw.reason || raw.error || "The run failed on the server.";
+      toast({ title: "Run failed", description: reason, variant: "destructive" });
+      refetch();
+    });
+    return unsub;
+  }, [subscribe, toast, refetch]);
+
   const handleTrigger = useCallback(async (id: string) => {
     try {
       await workflowsAPI.trigger(id);
+      // Record which workflow was just triggered so the live-event
+      // subscription above can surface a server-side failure if one arrives.
+      lastTriggeredId.current = String(id);
       toast({ title: "Workflow triggered!", description: "Execution started." });
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Trigger failed", variant: "destructive" });
