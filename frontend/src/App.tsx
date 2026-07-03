@@ -119,6 +119,9 @@ const Phase45OpsCenter = lazy(() => import('./pages/Phase45OpsCenter'));
 const CampaignAgentsPage = lazy(() => import('./pages/CampaignAgentsPage'));
 const NewsHub = lazy(() => import('./pages/NewsHub'));
 
+// ── Phase 47B: Caption/Copy Engine ───────────────────────────────────────────
+const CaptionWizard = lazy(() => import('./pages/CaptionWizard'));
+
 const Spinner = () => (
   <div className="min-h-screen bg-[#04060F] flex flex-col items-center justify-center gap-4">
     <div className="relative w-12 h-12">
@@ -353,6 +356,9 @@ function AppProviders() {
 
           {/* Phase 47 — Campaign Agents Unified Page */}
           <Route path="/campaign-agents" element={<RequireAuth><CampaignAgentsPage /></RequireAuth>} />
+
+          {/* Phase 47B — Caption/Copy Engine Wizard */}
+          <Route path="/caption-wizard" element={<RequireAuth><CaptionWizard /></RequireAuth>} />
 
           {/* Phase 43A — Enterprise Media Cloud */}
           <Route path="/news" element={<RequireAuth><NewsHub /></RequireAuth>} />
