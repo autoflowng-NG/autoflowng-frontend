@@ -8,6 +8,11 @@
  *   - Filter tabs: All · Active · Paused + category filter pills
  *   - Inline log drawer expands below each row
  *   - All data-testid attributes preserved
+ *
+ * Bug 8A: Amber "LOCAL AI" badge on log entries where any action used local fallback.
+ * Bug 8B (UI): Clicking the badge expands per-action correction forms; submits via
+ *              POST /api/automation/replies/:actionId/correct using the shared api helper
+ *              from lib/api.ts (Bearer token attached automatically by tokenStore).
  */
 
 import { useState } from "react";
@@ -21,6 +26,7 @@ import {
   ChevronDown, CheckCircle2, XCircle, Circle, Plus,
   Loader, Tag,
 } from "lucide-react";
+import { api } from "../lib/api";
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
 const C = {
@@ -171,6 +177,301 @@ function CatPill({ label, active, color, onClick }: {
   );
 }
 
+/* ── Bug 8B: Inline correction form for a single local-fallback action ── */
+// Verification:
+//  ✓ Only rendered for actions where provider === 'local' (controlled by LocalActionRow caller)
+//  ✓ api.post() from lib/api.ts attaches Bearer token via tokenStore — same auth layer as all other
+//    API calls in the app. No raw unauthenticated fetch().
+//  ✓ Body fields exactly match routes/automation-corrections.js: platform, senderIdentifier,
+//    sentReply, correctedReply.
+//  ✓ No alert() used. Success and error states render inline.
+function LocalActionRow({ action, actionId }: { action: any; actionId: string }) {
+  const [correcting,  setCorrecting]  = useState(false);
+  const [correction,  setCorrection]  = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!correction.trim()) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      // api from lib/api.ts — attaches Bearer token automatically via tokenStore.
+      // Body fields match routes/automation-corrections.js exactly.
+      const res = await api.post(`/automation/replies/${encodeURIComponent(actionId)}/correct`, {
+        platform:          action.platform  || "unknown",
+        senderIdentifier:  action.to        || "",
+        sentReply:         action.preview   || "",
+        correctedReply:    correction.trim(),
+      });
+      if (res?.ok) {
+        setSaved(true);
+        setCorrecting(false);
+        setCorrection("");
+      } else {
+        setSubmitError(res?.error || "Failed to save correction.");
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message || "Failed to save correction.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{
+      margin: "0 10px 6px",
+      borderRadius: 6,
+      background: "rgba(251,191,36,0.04)",
+      border: `1px solid rgba(251,191,36,0.12)`,
+      overflow: "hidden",
+    }}>
+      {/* Action summary row */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        padding: "8px 10px",
+      }}>
+        {/* Platform badge */}
+        <span style={{
+          fontSize: 9, fontWeight: 700, color: C.amber,
+          background: `${C.amber}18`, border: `1px solid ${C.amber}28`,
+          borderRadius: 4, padding: "2px 6px", flexShrink: 0,
+          fontFamily: "'DM Mono',monospace", marginTop: 1,
+        }}>
+          {(action.platform || "Unknown").toUpperCase()}
+        </span>
+
+        {/* Recipient + preview */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {action.to && (
+            <div style={{
+              fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace",
+              marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              To: {action.to}
+            </div>
+          )}
+          <div style={{
+            fontSize: 11, color: C.faint, fontFamily: "'DM Sans',sans-serif",
+            fontStyle: "italic", lineHeight: 1.4,
+          }}>
+            "{action.preview || "(no preview)"}"
+          </div>
+        </div>
+
+        {/* Action button or saved confirmation */}
+        {saved ? (
+          <span style={{
+            fontSize: 10, color: C.green, fontFamily: "'DM Mono',monospace",
+            flexShrink: 0, paddingTop: 1,
+          }}>
+            ✓ Saved
+          </span>
+        ) : !correcting ? (
+          <button
+            onClick={() => { setCorrecting(true); setSubmitError(""); }}
+            style={{
+              flexShrink: 0,
+              fontSize: 10, fontWeight: 600, color: C.amber,
+              background: `${C.amber}12`, border: `1px solid ${C.amber}25`,
+              borderRadius: 5, padding: "4px 8px", cursor: "pointer",
+              fontFamily: "'DM Sans',sans-serif", transition: "all 0.12s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${C.amber}22`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${C.amber}12`; }}
+          >
+            Correct this reply
+          </button>
+        ) : null}
+      </div>
+
+      {/* Inline correction form — only shown when correcting === true */}
+      {correcting && !saved && (
+        <div style={{
+          borderTop: `1px solid rgba(251,191,36,0.1)`,
+          padding: "10px 10px 10px",
+        }}>
+          <div style={{
+            fontSize: 9, fontWeight: 700, color: C.amber,
+            fontFamily: "'DM Mono',monospace", letterSpacing: "0.07em", marginBottom: 7,
+          }}>
+            ENTER CORRECTION
+          </div>
+          <textarea
+            value={correction}
+            onChange={e => setCorrection(e.target.value)}
+            placeholder="Type the reply that should have been sent…"
+            rows={3}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              background: "rgba(255,255,255,0.04)",
+              border: `1px solid rgba(251,191,36,0.22)`,
+              borderRadius: 6, padding: "8px 10px",
+              color: C.text, fontSize: 12, fontFamily: "'DM Sans',sans-serif",
+              lineHeight: 1.5, resize: "vertical", outline: "none",
+            }}
+            onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = `${C.amber}55`; }}
+            onBlur={e  => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(251,191,36,0.22)"; }}
+          />
+
+          {/* Error message — inline, no alert() */}
+          {submitError && (
+            <div style={{
+              marginTop: 5, fontSize: 11, color: C.red,
+              fontFamily: "'DM Mono',monospace",
+            }}>
+              {submitError}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !correction.trim()}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                fontSize: 11, fontWeight: 600, color: "#000",
+                background: submitting || !correction.trim() ? `${C.amber}60` : C.amber,
+                border: "none", borderRadius: 6, padding: "6px 12px",
+                cursor: submitting || !correction.trim() ? "default" : "pointer",
+                fontFamily: "'DM Sans',sans-serif", transition: "all 0.12s",
+              }}
+            >
+              {submitting
+                ? <><Loader size={10} style={{ animation: "spin-slow 1s linear infinite" }} /> Saving…</>
+                : "Submit correction"}
+            </button>
+            <button
+              onClick={() => { setCorrecting(false); setCorrection(""); setSubmitError(""); }}
+              disabled={submitting}
+              style={{
+                fontSize: 11, fontWeight: 500, color: C.faint,
+                background: "rgba(255,255,255,0.04)",
+                border: `1px solid ${C.border}`, borderRadius: 6, padding: "6px 10px",
+                cursor: submitting ? "default" : "pointer",
+                fontFamily: "'DM Sans',sans-serif",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/* Note: this correction takes effect the next time dm-reply runs for this contact. */}
+          <div style={{
+            marginTop: 8, fontSize: 10, color: C.faint,
+            fontFamily: "'DM Mono',monospace", lineHeight: 1.4,
+          }}>
+            Future replies to this contact will use your correction. Changes do not affect
+            already-sent messages.
+          </div>
+        </div>
+      )}
+
+      {/* Saved confirmation state — shown after successful submit */}
+      {saved && (
+        <div style={{
+          borderTop: `1px solid rgba(0,200,150,0.1)`,
+          padding: "8px 10px",
+          fontSize: 11, color: C.green, fontFamily: "'DM Sans',sans-serif",
+        }}>
+          Correction saved — future replies to this contact will use it.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Bug 8B (UI): Log entry row — manages its own local-action expand state ── */
+// Extracted from the inline .map() so it can hold useState for the expand toggle.
+function LogEntry({ l, logIndex }: { l: any; logIndex: number }) {
+  const [showLocal, setShowLocal] = useState(false);
+
+  const isOk  = l.success === true;
+  const isBad = l.success === false;
+  const color = isOk ? C.green : isBad ? C.red : C.muted;
+  const Icon  = isOk ? CheckCircle2 : isBad ? XCircle : Circle;
+
+  // Bug 8A: detect local-fallback actions
+  const hasLocalProvider = Array.isArray(l.actions) && l.actions.some((a: any) => a.provider === 'local');
+  const localActions: any[] = hasLocalProvider
+    ? (l.actions as any[]).filter((a: any) => a.provider === 'local')
+    : [];
+
+  return (
+    <div style={{ borderRadius: 7, background: "rgba(255,255,255,0.02)", overflow: "hidden" }}>
+      {/* Summary row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px" }}>
+        <Icon size={11} color={color} />
+        <span style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>
+          {l.created_at ? new Date(l.created_at).toLocaleTimeString() : ""}
+        </span>
+        <span style={{
+          fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace",
+          flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {l.summary || "Completed"}
+        </span>
+
+        {/* Bug 8A + 8B: amber badge — also acts as the toggle for the correction panel */}
+        {hasLocalProvider && (
+          <button
+            onClick={() => setShowLocal(s => !s)}
+            title={showLocal ? "Hide local-fallback replies" : "Review replies sent with local AI fallback"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 9, fontWeight: 700, color: C.amber,
+              background: showLocal ? `${C.amber}22` : `${C.amber}15`,
+              border: `1px solid ${C.amber}${showLocal ? "45" : "30"}`,
+              borderRadius: 100, padding: "2px 7px 2px 6px",
+              fontFamily: "'DM Mono',monospace", flexShrink: 0,
+              cursor: "pointer", transition: "all 0.14s",
+            }}
+          >
+            LOCAL AI
+            <ChevronDown
+              size={9}
+              style={{ transform: showLocal ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+            />
+          </button>
+        )}
+
+        <span style={{
+          fontSize: 9, fontWeight: 700, color,
+          background: `${color}10`, border: `1px solid ${color}20`,
+          borderRadius: 100, padding: "1px 6px",
+          fontFamily: "'DM Mono',monospace",
+        }}>
+          {l.success === true ? "SUCCESS" : l.success === false ? "FAILED" : "RUNNING"}
+        </span>
+      </div>
+
+      {/* Bug 8B: Expandable local-action correction panel */}
+      {showLocal && localActions.length > 0 && (
+        <div style={{ paddingBottom: 4 }}>
+          <div style={{
+            padding: "4px 10px 6px",
+            fontSize: 9, fontWeight: 700, color: `${C.amber}99`,
+            fontFamily: "'DM Mono',monospace", letterSpacing: "0.07em",
+          }}>
+            LOCAL-FALLBACK REPLIES — REVIEW &amp; CORRECT
+          </div>
+          {localActions.map((action: any, ai: number) => (
+            <LocalActionRow
+              key={ai}
+              action={action}
+              // Use DB row id if available; fall back to logIndex-actionIndex composite.
+              // actionId is a traceability field only — the backend stores it in metadata,
+              // not used as a lookup key (per automation-corrections.js).
+              actionId={l.id != null ? `${l.id}-${ai}` : `${logIndex}-${ai}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Inline log drawer ─────────────────────────────────────────────── */
 function LogDrawer({ templateId }: { templateId: string }) {
   const { data: logs = [] } = useAutomationLogs(templateId);
@@ -201,35 +502,9 @@ function LogDrawer({ templateId }: { templateId: string }) {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {logList.slice(0, 8).map((l: any, i: number) => {
-              const isOk  = l.success === true;
-              const isBad = l.success === false;
-              const color = isOk ? C.green : isBad ? C.red : C.muted;
-              const Icon  = isOk ? CheckCircle2 : isBad ? XCircle : Circle;
-              return (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "7px 10px", borderRadius: 7,
-                  background: "rgba(255,255,255,0.02)",
-                }}>
-                  <Icon size={11} color={color} />
-                  <span style={{ fontSize: 10, color: C.faint, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>
-                    {l.created_at ? new Date(l.created_at).toLocaleTimeString() : ""}
-                  </span>
-                  <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {l.summary || "Completed"}
-                  </span>
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, color,
-                    background: `${color}10`, border: `1px solid ${color}20`,
-                    borderRadius: 100, padding: "1px 6px",
-                    fontFamily: "'DM Mono',monospace",
-                  }}>
-                    {(l.success === true ? "SUCCESS" : l.success === false ? "FAILED" : "RUNNING")}
-                  </span>
-                </div>
-              );
-            })}
+            {logList.slice(0, 8).map((l: any, i: number) => (
+              <LogEntry key={l.id ?? i} l={l} logIndex={i} />
+            ))}
           </div>
         )}
       </div>

@@ -1592,8 +1592,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/connections', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load connections')))
+    API('/connections')
       .then(rows => {
         if (cancelled) return;
         const connectedPlatforms = (Array.isArray(rows) ? rows : rows?.connections || [])
@@ -1614,10 +1613,8 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
     if (!selected.length) { setErr('Select at least one platform'); return; }
     setSubmitting(true); setErr(null);
     try {
-      const res = await fetch('/api/social/posts', {
+      const body = await API('/social/posts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           title:      asset.name,
           content:    caption,
@@ -1627,9 +1624,8 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
           mediaUrl:   asset.storage_url || null,
         }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || body.ok === false) {
-        throw new Error(body.error || `Failed to schedule post (${res.status})`);
+      if (body?.ok === false) {
+        throw new Error(body.error || 'Failed to schedule post');
       }
       setDone(true);
     } catch (e: any) {
