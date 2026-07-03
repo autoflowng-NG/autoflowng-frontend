@@ -158,14 +158,19 @@ export const analyticsApi = {
       volume: unknown;
     }>(`/analytics?range=${range}`),
 
-  getExecutionVolume:    (period = 'daily', workflowId?: string) =>
+  // FIX: `days` lets callers request an explicit lookback window (e.g. 7)
+  // instead of being stuck with the 'daily' period's hardcoded 30-day
+  // window on the backend — this is what was causing the Dashboard and
+  // Analytics Center charts to span a full month (e.g. "Jun 3 – Jul 3")
+  // and show a mostly-flat line for low-volume workspaces.
+  getExecutionVolume:    (period = 'daily', workflowId?: string, days?: number) =>
     apiFetch<VolumeDataPoint[]>(
-      `/analytics/executions/volume?period=${period}${workflowId ? `&workflowId=${workflowId}` : ''}`
+      `/analytics/executions/volume?period=${period}${workflowId ? `&workflowId=${workflowId}` : ''}${days ? `&days=${days}` : ''}`
     ),
 
-  getInProgressVolume: (period = 'daily') =>
+  getInProgressVolume: (period = 'daily', days?: number) =>
     apiFetch<Array<{ bucket: string; in_progress: number }>>(
-      `/analytics/executions/in-progress?period=${period}`
+      `/analytics/executions/in-progress?period=${period}${days ? `&days=${days}` : ''}`
     ),
 
   getThroughput: () =>
@@ -305,8 +310,8 @@ function useAnalyticsQuery<T>(
 export const useExecutionSummary   = (days = 30) =>
   useAnalyticsQuery(() => analyticsApi.getExecutionSummary(days), [days]);
 
-export const useExecutionVolume    = (period = 'daily') =>
-  useAnalyticsQuery(() => analyticsApi.getExecutionVolume(period), [period]);
+export const useExecutionVolume    = (period = 'daily', days?: number) =>
+  useAnalyticsQuery(() => analyticsApi.getExecutionVolume(period, undefined, days), [period, days]);
 
 export const useThroughput         = () =>
   useAnalyticsQuery(() => analyticsApi.getThroughput());
