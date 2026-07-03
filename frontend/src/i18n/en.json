@@ -139,7 +139,6 @@
     "status_paused": "PAUSED",
     "resource_usage": "Resource Usage",
     "current_billing_period": "CURRENT BILLING PERIOD",
-    "res_ai_credits": "AI Credits",
     "res_storage": "Storage",
     "res_executions": "Executions",
     "res_unlimited": "Unlimited",

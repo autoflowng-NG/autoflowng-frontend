@@ -137,7 +137,6 @@
     "status_paused": "일시정지",
     "resource_usage": "리소스 사용량",
     "current_billing_period": "현재 결제 기간",
-    "res_ai_credits": "AI 크레딧",
     "res_storage": "저장공간",
     "res_executions": "실행 수",
     "manage_plan": "요금제 관리 →",

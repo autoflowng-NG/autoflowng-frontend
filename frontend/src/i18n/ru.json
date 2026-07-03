@@ -137,7 +137,6 @@
     "status_paused": "НА ПАУЗЕ",
     "resource_usage": "Использование ресурсов",
     "current_billing_period": "ТЕКУЩИЙ РАСЧЁТНЫЙ ПЕРИОД",
-    "res_ai_credits": "Кредиты ИИ",
     "res_storage": "Хранилище",
     "res_executions": "Выполнения",
     "manage_plan": "Управление тарифом →",

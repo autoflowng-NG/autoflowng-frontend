@@ -137,7 +137,6 @@
     "status_paused": "一時停止",
     "resource_usage": "リソース使用量",
     "current_billing_period": "現在の請求期間",
-    "res_ai_credits": "AIクレジット",
     "res_storage": "ストレージ",
     "res_executions": "実行数",
     "manage_plan": "プランを管理 →",

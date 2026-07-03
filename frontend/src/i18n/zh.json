@@ -137,7 +137,6 @@
     "status_paused": "已暂停",
     "resource_usage": "资源使用情况",
     "current_billing_period": "当前计费周期",
-    "res_ai_credits": "AI 额度",
     "res_storage": "存储空间",
     "res_executions": "执行次数",
     "manage_plan": "管理套餐 →",

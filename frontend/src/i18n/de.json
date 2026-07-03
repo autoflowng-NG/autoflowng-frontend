@@ -137,7 +137,6 @@
     "status_paused": "PAUSIERT",
     "resource_usage": "Ressourcennutzung",
     "current_billing_period": "AKTUELLER ABRECHNUNGSZEITRAUM",
-    "res_ai_credits": "KI-Guthaben",
     "res_storage": "Speicher",
     "res_executions": "Ausführungen",
     "manage_plan": "Tarif verwalten →",

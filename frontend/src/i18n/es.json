@@ -137,7 +137,6 @@
     "status_paused": "PAUSADO",
     "resource_usage": "Uso de recursos",
     "current_billing_period": "PERÍODO DE FACTURACIÓN ACTUAL",
-    "res_ai_credits": "Créditos de IA",
     "res_storage": "Almacenamiento",
     "res_executions": "Ejecuciones",
     "manage_plan": "Gestionar plan →",
