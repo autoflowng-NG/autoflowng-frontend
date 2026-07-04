@@ -7,7 +7,7 @@
 import React from 'react';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine, Brush,
 } from 'recharts';
 import type { ForecastResult } from '../../api/analyticsApi';
 
@@ -119,9 +119,10 @@ export const ForecastCard: React.FC<ForecastCardProps> = ({ metricType, forecast
         ))}
       </div>
 
-      {/* Mini trend line */}
+      {/* Mini trend line — Brush only shown when there are enough horizon points
+          to make panning meaningful (>= 5 data points including "Today"). */}
       {forecasts.some(f => !f.warning?.includes('INSUFFICIENT')) && (
-        <ResponsiveContainer width="100%" height={100}>
+        <ResponsiveContainer width="100%" height={chartData.length > 4 ? 120 : 100}>
           <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
             <XAxis dataKey="label" tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -132,6 +133,18 @@ export const ForecastCard: React.FC<ForecastCardProps> = ({ metricType, forecast
                   fill={color} fillOpacity={0.15} />
             <Line type="monotone" dataKey="predicted" name="Predicted"
                   stroke={color} strokeWidth={2} dot={{ fill: color, r: 3 }} strokeDasharray="5 3" />
+            {chartData.length > 4 && (
+              <Brush
+                dataKey="label"
+                stroke="#1e293b"
+                fill="#0f172a"
+                travellerWidth={6}
+                height={16}
+                startIndex={0}
+                endIndex={chartData.length - 1}
+                tickFormatter={() => ''}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       )}

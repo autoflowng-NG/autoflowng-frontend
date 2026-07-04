@@ -15,10 +15,10 @@
  * aggregate workflow success/failure ratios over calendar buckets).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer, Brush,
 } from 'recharts';
 
 // ── Design tokens (mirrors AnalyticsCenter palette) ─────────────────────────
@@ -193,6 +193,8 @@ interface Props {
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function PostEngagementChart({ data }: Props) {
   const [selectedMetrics, setSelectedMetrics] = useState<Metric[]>(['views', 'likes']);
+  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const publishedAt = data.job.completed_at
     ? new Date(data.job.completed_at).getTime()
@@ -223,6 +225,42 @@ export default function PostEngagementChart({ data }: Props) {
       }));
   }, [data.series, publishedAt]);
 
+  const len = chartData.length;
+  const defaultStart = Math.max(0, len - 20);
+
+  // Clamp stale brushRange if the series length changes (e.g. job switch).
+  React.useEffect(() => {
+    if (!brushRange || len === 0) return;
+    const clamped = {
+      startIndex: Math.max(0, Math.min(brushRange.startIndex, len - 1)),
+      endIndex:   Math.max(0, Math.min(brushRange.endIndex,   len - 1)),
+    };
+    if (
+      clamped.startIndex !== brushRange.startIndex ||
+      clamped.endIndex   !== brushRange.endIndex
+    ) {
+      setBrushRange(clamped);
+    }
+  }, [len]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startIndex = brushRange?.startIndex ?? defaultStart;
+  const endIndex   = brushRange?.endIndex   ?? (len - 1);
+
+  // Scroll-wheel zoom: scroll up → zoom in, scroll down → zoom out.
+  // preventDefault is gated to len > 2 so sparse charts don't block page scroll.
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (len <= 2) return;
+    e.preventDefault();
+    const cur = brushRange ?? { startIndex: defaultStart, endIndex: len - 1 };
+    const visible = cur.endIndex - cur.startIndex + 1;
+    const step    = Math.max(1, Math.round(visible * 0.15));
+    const delta   = e.deltaY > 0 ? step : -step;
+    const newVis  = Math.max(2, Math.min(len, visible + delta));
+    const newEnd  = cur.endIndex;
+    const newStart = Math.max(0, newEnd - newVis + 1);
+    setBrushRange({ startIndex: newStart, endIndex: newEnd });
+  }, [len, brushRange, defaultStart]);
+
   if (chartData.length === 0) {
     return (
       <div style={{
@@ -235,7 +273,7 @@ export default function PostEngagementChart({ data }: Props) {
   }
 
   return (
-    <div>
+    <div ref={containerRef}>
       <TotalsStrip totals={data.totals} />
 
       <div style={{
@@ -244,51 +282,72 @@ export default function PostEngagementChart({ data }: Props) {
       }}>
         <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono', monospace" }}>
           {chartData.length} SNAPSHOT{chartData.length !== 1 ? 'S' : ''} · X-AXIS: ELAPSED SINCE PUBLISH
+          {len > 4 && <span style={{ marginLeft: 8, opacity: 0.6 }}>· SCROLL TO ZOOM</span>}
         </div>
         <MetricToggle selected={selectedMetrics} onChange={setSelectedMetrics} />
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <defs>
-            {METRICS.map(({ key, color }) => (
-              <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-              </linearGradient>
-            ))}
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-          <XAxis
-            dataKey="elapsedLabel"
-            tick={{ fill: C.faint, fontSize: 10, fontFamily: "'DM Mono', monospace" }}
-            axisLine={false} tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: C.faint, fontSize: 10, fontFamily: "'DM Mono', monospace" }}
-            axisLine={false} tickLine={false}
-            width={48}
-            tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
-          />
-          <Tooltip content={<DarkTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans', monospace", color: C.muted }}
-          />
-          {METRICS.filter(m => selectedMetrics.includes(m.key)).map(({ key, label, color }) => (
-            <Area
-              key={key}
-              type="monotone"
-              dataKey={key}
-              name={label}
-              stroke={color}
-              strokeWidth={2}
-              fill={`url(#grad-${key})`}
-              dot={false}
-              activeDot={{ r: 4, fill: color }}
+      <div onWheel={handleWheel} style={{ userSelect: 'none' }}>
+        <ResponsiveContainer width="100%" height={len > 4 ? 240 : 220}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <defs>
+              {METRICS.map(({ key, color }) => (
+                <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+            <XAxis
+              dataKey="elapsedLabel"
+              tick={{ fill: C.faint, fontSize: 10, fontFamily: "'DM Mono', monospace" }}
+              axisLine={false} tickLine={false}
             />
-          ))}
-        </AreaChart>
-      </ResponsiveContainer>
+            <YAxis
+              tick={{ fill: C.faint, fontSize: 10, fontFamily: "'DM Mono', monospace" }}
+              axisLine={false} tickLine={false}
+              width={48}
+              tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
+            />
+            <Tooltip content={<DarkTooltip />} />
+            <Legend
+              wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans', monospace", color: C.muted }}
+            />
+            {METRICS.filter(m => selectedMetrics.includes(m.key)).map(({ key, label, color }) => (
+              <Area
+                key={key}
+                type="monotone"
+                dataKey={key}
+                name={label}
+                stroke={color}
+                strokeWidth={2}
+                fill={`url(#grad-${key})`}
+                dot={false}
+                activeDot={{ r: 4, fill: color }}
+              />
+            ))}
+            {len > 4 && (
+              <Brush
+                dataKey="elapsedLabel"
+                stroke={C.border}
+                fill={C.surface}
+                travellerWidth={8}
+                height={20}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                onChange={(range) => {
+                  setBrushRange({
+                    startIndex: range.startIndex ?? 0,
+                    endIndex:   range.endIndex   ?? (len - 1),
+                  });
+                }}
+                tickFormatter={() => ''}
+              />
+            )}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
