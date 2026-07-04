@@ -357,6 +357,11 @@ export interface PostAnalyticsSeries {
   impressions: number;
   reach:       number;
   fetched_at:  string;
+  // YouTube Analytics API watch-time fields — null for non-YouTube platforms
+  // or YouTube posts without the yt-analytics.readonly scope granted.
+  watch_time_minutes?:        number | null;
+  avg_view_duration_seconds?: number | null;
+  avg_view_percentage?:       number | null;
 }
 
 export interface PostAnalyticsData {
