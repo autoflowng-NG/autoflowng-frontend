@@ -1585,6 +1585,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
   const [connected, setConnected] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [caption, setCaption] = useState(asset?.custom_metadata?.copy || '');
+  const [title, setTitle] = useState('');
   const [scheduleAt, setScheduleAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -1625,7 +1626,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
       const body = await API('/social/posts', {
         method: 'POST',
         body: JSON.stringify({
-          title:      asset.name,
+          title:      title.trim() || asset.name,
           content:    caption,
           assetId:    asset.id,
           platforms:  selected,
@@ -1719,6 +1720,21 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
         {connected !== null && connected.length > 0 && (
           <div style={{ marginBottom: 16 }} />
         )}
+
+        <p style={{ color: 'rgba(226,232,255,0.45)', fontSize: 11.5, margin: '0 0 6px' }}>TITLE (optional)</p>
+        <input
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          maxLength={100}
+          style={{
+            width: '100%', background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
+            color: '#E2E8FF', fontSize: 13, padding: '9px 12px',
+            fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12,
+          }}
+          placeholder={asset?.name || 'Enter a title for this post…'}
+        />
 
         <p style={{ color: 'rgba(226,232,255,0.45)', fontSize: 11.5, margin: '0 0 6px' }}>CAPTION</p>
         <textarea
