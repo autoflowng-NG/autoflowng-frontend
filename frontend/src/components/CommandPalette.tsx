@@ -285,7 +285,7 @@ export function CommandPalette() {
       color: wf.is_active ? "#00C896" : "rgba(232,238,255,0.3)",
       keywords: wf.trigger_type || "",
       badge: { text: wf.is_active ? "ACTIVE" : "PAUSED", color: wf.is_active ? "#00C896" : "rgba(232,238,255,0.3)" },
-      onSelect: () => go(`/workflows/${wf.id}`),
+      onSelect: () => go(`/workflow-builder/${wf.id}`),
     }));
 
     /* Automations from cache */
@@ -319,7 +319,7 @@ export function CommandPalette() {
         color:    st.color,
         badge:    { text: st.label, color: st.color },
         keywords: `${run.status || ""} ${wfName} running`,
-        onSelect: () => go(wfId ? `/workflows/${wfId}` : "/workflows"),
+        onSelect: () => go(wfId ? `/workflow-builder/${wfId}` : "/workflows"),
       };
     });
 
