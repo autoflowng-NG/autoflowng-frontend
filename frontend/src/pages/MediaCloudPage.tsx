@@ -1581,7 +1581,7 @@ function AuditLogTab() {
 /* ── Publishing Gate Tab ───────────────────────────────────────────── */
 
 function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => void }) {
-  const PLATFORMS = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok'];
+  const PLATFORMS = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube'];
   const [connected, setConnected] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [caption, setCaption] = useState(asset?.custom_metadata?.copy || '');
