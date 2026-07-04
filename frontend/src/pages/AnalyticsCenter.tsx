@@ -916,7 +916,7 @@ export default function AnalyticsCenter() {
                   </div>
                 )}
                 {durationChartLoading ? <SkBlock height={220} /> : durationChartData
-                  ? <DurationChart data={durationChartData} />
+                  ? <DurationChart data={durationChartData} period={useDailyFallbackForDuration ? 'daily' : period} />
                   : null}
               </Card>
             </div>
