@@ -852,6 +852,8 @@ export default function Dashboard() {
   // chart title, same as the reference design's "Last 7 days" control.
   const [volumeRangeDays, setVolumeRangeDays] = useState<number>(7);
   const [volumeRangeOpen, setVolumeRangeOpen] = useState(false);
+  // GAP 2: true when the user has panned to the left edge at the 90-day cap.
+  const [atHistoryCap, setAtHistoryCap] = useState(false);
   const { data: volumeData } = useQuery({
     queryKey: ["execution-volume", "daily", volumeRangeDays],
     queryFn: () => analyticsApi.getExecutionVolume("daily", undefined, volumeRangeDays),
@@ -1063,7 +1065,40 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-            <ExecutionVolumeChart data={volumeData as any} inProgressData={inProgressData as any} />
+            {/* Bug B FIX: onRangeExtend lets the Brush/wheel-zoom in ExecutionVolumeChart
+                signal when the user pans to the left edge — we widen the fetch window
+                by 7 days (capped at 90 so we don't request years of data at once).
+                GAP 2 FIX: track when we've hit the 90-day cap so the user gets feedback
+                instead of the chart silently ignoring further left-pans. The message is
+                cleared as soon as the user pans back right (onBrushChange: startIndex > 0). */}
+            <ExecutionVolumeChart
+              data={volumeData as any}
+              inProgressData={inProgressData as any}
+              onRangeExtend={(dir) => {
+                if (dir === 'left') {
+                  setVolumeRangeDays(d => {
+                    const next = Math.min(d + 7, 90);
+                    if (next === 90) setAtHistoryCap(true);
+                    return next;
+                  });
+                }
+              }}
+              onBrushChange={(startIndex) => {
+                // User panned away from the left edge — cap message no longer relevant.
+                if (startIndex > 0) setAtHistoryCap(false);
+              }}
+            />
+            {atHistoryCap && (
+              <p style={{
+                margin: '6px 0 0',
+                fontSize: 11,
+                color: '#94a3b8',
+                textAlign: 'right',
+                opacity: 0.75,
+              }}>
+                Showing the last 90 days — earlier history isn&apos;t available in this view
+              </p>
+            )}
           </div>
           <RankedTopWorkflows onNav={nav} />
         </div>

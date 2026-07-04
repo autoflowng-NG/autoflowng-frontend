@@ -559,7 +559,13 @@ export default function AnalyticsCenter() {
       setAiRequestsPrev(prevAi != null && currAi != null ? prevAi - currAi : null);
     }).catch(() => {});
   }, []);
-  const volume       = useExecutionVolume(period, 30);
+  // FIX (Bug B): map each period to a sensible default window so "today" is
+  // always in the data and the chart doesn't span an unnecessarily wide range.
+  // The 'days' override here is independent of the lookback defaults hardcoded
+  // inside getExecutionVolume — it lets the frontend control the window without
+  // requiring a backend change for each period selection.
+  const PERIOD_DAYS: Record<string, number> = { hourly: 3, daily: 7, weekly: 84, monthly: 365 };
+  const volume       = useExecutionVolume(period, PERIOD_DAYS[period] ?? 7);
   const rankings     = useWorkflowRankings('health_score');
   const bottlenecks  = useBottlenecks();
   const integrations = useIntegrationSummary(30);
@@ -603,11 +609,16 @@ export default function AnalyticsCenter() {
     : undefined;
 
   // Dynamic date range label: today minus 30 days → today
+  // GAP 1 FIX: fmt previously used toLocaleDateString() with no timeZone, converting the
+  // UTC-aligned bucket boundary into the browser's local timezone before display. For users
+  // behind UTC this renders the start/end of a UTC-anchored range as the previous local day.
+  // Fix: pass timeZone:'UTC' so the label reflects the same UTC day the backend uses.
+  // (Non-bucket timestamps like last_used_at / completed_at are intentionally left local.)
   const dateRangeLabel = useMemo(() => {
     const now   = new Date();
     const start = new Date(now);
     start.setDate(start.getDate() - 30);
-    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
     return `${fmt(start)} – ${fmt(now)}`;
   }, []);
 
