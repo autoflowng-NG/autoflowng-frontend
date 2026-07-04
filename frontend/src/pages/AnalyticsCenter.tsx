@@ -580,6 +580,25 @@ export default function AnalyticsCenter() {
   // requiring a backend change for each period selection.
   const PERIOD_DAYS: Record<string, number> = { hourly: 3, daily: 7, weekly: 84, monthly: 365 };
   const volume       = useExecutionVolume(period, PERIOD_DAYS[period] ?? 7);
+  // BUG FIX (duration chart unreadable on sparse data): the currently
+  // selected period may not have enough real executions in it to draw a
+  // readable duration trend (e.g. 'hourly' over a 3-day window when the
+  // workspace only has a couple of executions total). Rather than showing a
+  // near-empty chart, fetch a safe 30-day/daily fallback in parallel and use
+  // it for the Execution Duration card whenever it has more real data points
+  // than the user-selected period — this is a fixed extra query (not a
+  // cascading chain per period) to keep the added request cost bounded.
+  const volumeFallback = useExecutionVolume('daily', 30);
+  const countRealVolumePoints = (d: typeof volume.data) =>
+    (d ?? []).filter((p: any) => (p.total ?? 0) > 0 && p.avg_duration_ms != null).length;
+  const MIN_READABLE_DURATION_POINTS = 4;
+  const primaryRealPoints  = countRealVolumePoints(volume.data);
+  const fallbackRealPoints = countRealVolumePoints(volumeFallback.data);
+  const useDailyFallbackForDuration =
+    !volume.loading && primaryRealPoints < MIN_READABLE_DURATION_POINTS &&
+    fallbackRealPoints > primaryRealPoints;
+  const durationChartData    = useDailyFallbackForDuration ? volumeFallback.data : volume.data;
+  const durationChartLoading = useDailyFallbackForDuration ? volumeFallback.loading : volume.loading;
   const rankings     = useWorkflowRankings('health_score');
   const bottlenecks  = useBottlenecks();
   const integrations = useIntegrationSummary(30);
@@ -891,8 +910,13 @@ export default function AnalyticsCenter() {
               {/* Execution Duration — Avg & P95 (genuinely analytical — percentile analysis) */}
               <Card accent={C.amber}>
                 <SectionHeader title="Execution Duration" sub="AVG & P95" />
-                {volume.loading ? <SkBlock height={220} /> : volume.data
-                  ? <DurationChart data={volume.data} />
+                {useDailyFallbackForDuration && !durationChartLoading && (
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>
+                    Not enough {period} history yet — showing last 30 days instead.
+                  </div>
+                )}
+                {durationChartLoading ? <SkBlock height={220} /> : durationChartData
+                  ? <DurationChart data={durationChartData} />
                   : null}
               </Card>
             </div>
