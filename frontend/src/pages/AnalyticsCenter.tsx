@@ -358,6 +358,7 @@ function ContentTab() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
+      cache: 'no-store',
     })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
       .then(json => {
