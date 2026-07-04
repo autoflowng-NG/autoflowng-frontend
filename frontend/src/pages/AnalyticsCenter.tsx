@@ -25,9 +25,20 @@
  * Content tab (new) — per-post scheduled-content engagement trends.
  *   Post picker (list of recent publishing jobs) + detail panel showing engagement
  *   time series (views/likes/comments/shares) since publish, with elapsed-time x-axis.
+ *
+ * BUG A FIX: Top Workflows rows are now clickable.
+ *   - useNavigate imported from react-router-dom and instantiated in the component.
+ *   - Each row has onClick={() => navigate(`/workflow-builder/${wf.workflow_id}`) so tapping
+ *     a workflow opens it in the Workflow Builder (same route Dashboard uses for
+ *     its "Top Workflows" card: onNav(`/workflow-builder/${wf.id}`)).
+ *   - cursor: 'pointer' added to the row style so it's visually clear.
+ *   - workflow_name is now returned by the backend (getWorkflowRankings LEFT JOINs
+ *     the workflows table), so wf.workflow_name renders the real name instead of
+ *     the 'Unnamed' fallback. The fallback chain is preserved as a safety net.
  */
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useExecutionSummary,
   useExecutionVolume,
@@ -540,6 +551,9 @@ export default function AnalyticsCenter() {
   const [period,    setPeriod]    = useState<Period>('daily');
   const [computing, setComputing] = useState(false);
 
+  // BUG A FIX: useNavigate for row click navigation to workflow detail pages.
+  const navigate = useNavigate();
+
   // All hooks preserved exactly
   const summary      = useExecutionSummary(30);
   // Fetch previous 60-day window to derive real period-over-period change %
@@ -835,12 +849,14 @@ export default function AnalyticsCenter() {
                     {(rankings.data as any[]).slice(0, 8).map((wf: any, idx: number) => (
                       <div
                         key={wf.workflow_id || idx}
+                        onClick={() => navigate(`/workflow-builder/${wf.workflow_id}`)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10,
                           padding: '8px 10px', borderRadius: 8,
+                          cursor: 'pointer',                    // BUG A FIX: pointer cursor
                           transition: 'background 0.12s',
                         }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                       >
                         <span style={{
@@ -854,7 +870,10 @@ export default function AnalyticsCenter() {
                           fontFamily: "'DM Sans',sans-serif",
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
-                          {wf.workflow_name || wf.name || 'Unnamed'}
+                          {/* BUG A FIX: wf.workflow_name is now returned by the backend
+                              (getWorkflowRankings LEFT JOINs workflows). The fallback chain
+                              handles legacy responses / external-source workflows gracefully. */}
+                          {wf.workflow_name || wf.name || wf.workflow_id || 'Unnamed'}
                         </span>
                         <span style={{
                           fontSize: 11, color: C.green,

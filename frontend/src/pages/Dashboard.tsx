@@ -721,7 +721,7 @@ function TopWorkflows({ workflows, loading, onNav }: { workflows: any[]; loading
               <button
                 key={wf.id}
                 data-testid={`workflow-card-${wf.id}`}
-                onClick={() => onNav(`/workflows/${wf.id}`)}
+                onClick={() => onNav(`/workflow-builder/${wf.id}`)}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 12px", background: "rgba(255,255,255,0.02)",
