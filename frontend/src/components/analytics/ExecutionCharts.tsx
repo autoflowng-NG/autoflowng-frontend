@@ -58,6 +58,22 @@ function fmtDate(bucket: string) {
     month: 'short', day: 'numeric', timeZone: 'UTC',
   });
 }
+/**
+ * BUG 3 FIX (duplicate x-axis labels in Hourly view):
+ * fmtDate formats by calendar date only, so multiple hourly buckets on the
+ * same day all get the same label (e.g. "Jul 3 Jul 3 Jul 3 ...").
+ * fmtBucket is period-aware: hourly view includes the hour ("Jul 3, 2 PM")
+ * so each tick is visually distinct. All other periods delegate to fmtDate.
+ */
+function fmtBucket(bucket: string, period: string): string {
+  if (period === 'hourly') {
+    const d = new Date(bucket);
+    const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const hourPart = d.toLocaleTimeString('en-US', { hour: 'numeric', timeZone: 'UTC' });
+    return `${datePart}, ${hourPart}`;
+  }
+  return fmtDate(bucket);
+}
 function fmtMs(ms: number) {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
   if (ms >= 1_000)  return `${(ms / 1_000).toFixed(1)}s`;
@@ -388,7 +404,7 @@ export const ThroughputChart: React.FC<{
 //   Avg Duration (hero):      strokeWidth={2.5}, full opacity, primary color.
 //   P95 Duration (reference): strokeWidth={1.5}, strokeOpacity={0.55}, dashed.
 //   Legend/tooltip order: Avg first, P95 second.
-export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefined; lowDataLabel?: string }> = ({ data, lowDataLabel }) => {
+export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefined; lowDataLabel?: string; period?: string }> = ({ data, lowDataLabel, period = 'daily' }) => {
   if (!data || data.length === 0) {
     return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
   }
@@ -423,7 +439,7 @@ export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefine
   const trimmed = data.slice(firstRealIdx, lastRealIdx + 1);
 
   const formatted = trimmed.map(d => ({
-    date: fmtDate(d.bucket),
+    date: fmtBucket(d.bucket, period),
     avg:  d.avg_duration_ms,
     p95:  d.p95_ms,
   }));
@@ -445,6 +461,7 @@ export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefine
           strokeWidth={2.5}
           dot={false}
           activeDot={{ r: 4 }}
+          connectNulls
         />
         {/* P95 — secondary/reference line: thinner, dimmed, dashed */}
         <Line
@@ -456,6 +473,7 @@ export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefine
           strokeOpacity={0.55}
           strokeDasharray="4 2"
           dot={false}
+          connectNulls
         />
       </LineChart>
     </ResponsiveContainer>
