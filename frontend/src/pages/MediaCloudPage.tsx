@@ -1630,7 +1630,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
           assetId:    asset.id,
           platforms:  selected,
           scheduleAt: immediate ? null : (scheduleAt || null),
-          mediaUrl:   asset.storage_url || null,
+          mediaUrl:   asset.presigned_url || asset.public_url || null,
         }),
       });
       if (body?.ok === false) {
