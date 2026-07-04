@@ -107,13 +107,9 @@ export const ExecutionVolumeChart: React.FC<{
   // events at the left boundary don't trigger multiple sequential fetches.
   const lastExtendAt = useRef<number>(0);
 
-  if (!data || data.length === 0) {
-    return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
-  }
-
   const inProgressMap = new Map((inProgressData || []).map(d => [d.bucket, d.in_progress]));
 
-  const formatted = data.map(d => ({
+  const formatted = (data || []).map(d => ({
     ...d,
     date:        fmtDate(d.bucket),
     successRate: d.total > 0 ? Math.round((d.successes / d.total) * 100) : 0,
@@ -124,9 +120,14 @@ export const ExecutionVolumeChart: React.FC<{
   // Default visible window: last 14 points (zoomed in on recent activity).
   const defaultStart = Math.max(0, len - 14);
 
-  // Clamp stale brushRange whenever the data array grows (parent fetched more history).
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+  // BUGFIX (React error #310 — "rendered more hooks than during the previous
+  // render"): this useEffect used to sit AFTER an early `if (!data...) return`
+  // above, so the hook was skipped entirely on empty-data renders but called
+  // on renders once data arrived — a rules-of-hooks violation that crashed
+  // the whole app with a blank screen. All hooks now run unconditionally on
+  // every render; the "no data" early return has moved below, after the hooks.
   useEffect(() => {
+    if (!data || data.length === 0) return;
     if (!brushRange) return;
     const clamped = {
       startIndex: Math.max(0, Math.min(brushRange.startIndex, len - 1)),
@@ -138,7 +139,7 @@ export const ExecutionVolumeChart: React.FC<{
     ) {
       setBrushRange(clamped);
     }
-  }, [len]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [len, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startIndex = brushRange?.startIndex ?? defaultStart;
   const endIndex   = brushRange?.endIndex   ?? (len - 1);
@@ -180,6 +181,10 @@ export const ExecutionVolumeChart: React.FC<{
     maybeExtend(newStart);
     onBrushChange?.(newStart);
   }, [len, brushRange, defaultStart, maybeExtend, onBrushChange]);
+
+  if (!data || data.length === 0) {
+    return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
+  }
 
   return (
     <div onWheel={handleWheel} style={{ userSelect: 'none' }}>
