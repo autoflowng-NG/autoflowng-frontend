@@ -1588,6 +1588,7 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
   const [scheduleAt, setScheduleAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [wasScheduled, setWasScheduled] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1609,7 +1610,15 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
   const toggle = (p: string) =>
     setSelected(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
 
-  const submit = async () => {
+  // BUG 2 FIX: immediate=true → Post Now (scheduleAt: null), immediate=false → Schedule for date.
+  const scheduleDate = scheduleAt ? new Date(scheduleAt) : null;
+  const hasFutureDate = !!scheduleDate && scheduleDate > new Date();
+  const scheduleLabel = hasFutureDate
+    ? `Schedule for ${scheduleDate!.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ` +
+      scheduleDate!.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : null;
+
+  const submit = async (immediate: boolean) => {
     if (!selected.length) { setErr('Select at least one platform'); return; }
     setSubmitting(true); setErr(null);
     try {
@@ -1620,16 +1629,17 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
           content:    caption,
           assetId:    asset.id,
           platforms:  selected,
-          scheduleAt: scheduleAt || null,
+          scheduleAt: immediate ? null : (scheduleAt || null),
           mediaUrl:   asset.storage_url || null,
         }),
       });
       if (body?.ok === false) {
-        throw new Error(body.error || 'Failed to schedule post');
+        throw new Error(body.error || 'Failed to post');
       }
+      setWasScheduled(!immediate && hasFutureDate);
       setDone(true);
     } catch (e: any) {
-      setErr(e.message || 'Failed to schedule post');
+      setErr(e.message || 'Failed to post');
     } finally {
       setSubmitting(false);
     }
@@ -1650,9 +1660,13 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
     <div style={OVERLAY} onClick={onClose}>
       <div style={{ ...MODAL, textAlign: 'center' }}>
         <Check size={40} color="#00C896" style={{ marginBottom: 16 }} />
-        <p style={{ color: '#E2E8FF', fontWeight: 700, fontSize: 17, margin: '0 0 8px' }}>Post Scheduled!</p>
+        <p style={{ color: '#E2E8FF', fontWeight: 700, fontSize: 17, margin: '0 0 8px' }}>
+          {wasScheduled ? 'Post Scheduled!' : 'Publishing Now!'}
+        </p>
         <p style={{ color: 'rgba(226,232,255,0.45)', fontSize: 13, margin: '0 0 20px' }}>
-          Your asset has been queued for publishing.
+          {wasScheduled
+            ? 'Your asset has been queued for publishing.'
+            : 'Your post is being published to the selected platforms.'}
         </p>
         <button onClick={onClose} style={{
           background: '#FBBF24', color: '#1a1305', padding: '10px 28px',
@@ -1734,16 +1748,46 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
 
         {err && <p style={{ color: '#FB7185', fontSize: 12, margin: '10px 0 0' }}>{err}</p>}
 
+        {/* BUG 2 FIX: Post Now / Schedule split
+              — no date selected: only "Post Now" (primary) + Cancel
+              — future date selected: "Post Now" (secondary) + "Schedule for [date]" (primary) */}
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{
             flex: 1, padding: '11px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.1)',
             background: 'transparent', color: 'rgba(226,232,255,0.5)', cursor: 'pointer', fontSize: 13,
           }}>Cancel</button>
-          <button onClick={submit} disabled={submitting} style={{
-            flex: 2, padding: '11px', borderRadius: 9, border: 'none',
-            background: submitting ? 'rgba(251,191,36,0.4)' : '#FBBF24',
-            color: '#1a1305', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 13,
-          }}>{submitting ? 'Scheduling…' : 'Schedule / Post'}</button>
+
+          {hasFutureDate && (
+            <button
+              onClick={() => submit(true)}
+              disabled={submitting}
+              style={{
+                flex: 1, padding: '11px', borderRadius: 9,
+                border: '1px solid rgba(251,191,36,0.5)',
+                background: 'transparent', color: '#FBBF24',
+                fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 13,
+              }}
+            >
+              Post Now
+            </button>
+          )}
+
+          <button
+            onClick={() => submit(!hasFutureDate)}
+            disabled={submitting}
+            style={{
+              flex: 2, padding: '11px', borderRadius: 9, border: 'none',
+              background: submitting ? 'rgba(251,191,36,0.4)' : '#FBBF24',
+              color: '#1a1305', fontWeight: 700,
+              cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 13,
+            }}
+          >
+            {submitting
+              ? (hasFutureDate ? 'Scheduling…' : 'Posting…')
+              : hasFutureDate
+                ? scheduleLabel
+                : 'Post Now'}
+          </button>
         </div>
       </div>
     </div>
