@@ -538,6 +538,116 @@ function ContentTab() {
                 />
               </div>
               <PostEngagementChart data={d} />
+
+              {/* ── YouTube Watch Time Panel ─────────────────────────────── */}
+              {/* Only rendered when at least one series entry has non-null   */}
+              {/* watch_time_minutes — i.e. a YouTube post where the user has  */}
+              {/* granted the yt-analytics.readonly scope (new connections).  */}
+              {(() => {
+                const latest = d.series.slice().reverse().find(
+                  (s: any) => s.watch_time_minutes != null
+                );
+                if (!latest) return null;
+
+                const fmtDuration = (sec: number | null | undefined) => {
+                  if (sec == null) return '—';
+                  const m = Math.floor(sec / 60);
+                  const s = Math.round(sec % 60);
+                  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+                };
+                const fmtMinutes = (min: number | null | undefined) => {
+                  if (min == null) return '—';
+                  if (min >= 1000) return `${(min / 1000).toFixed(1)}k min`;
+                  return `${Math.round(min).toLocaleString()} min`;
+                };
+
+                const stats = [
+                  {
+                    label: 'Watch Time',
+                    value: fmtMinutes(latest.watch_time_minutes),
+                    sub: 'estimated minutes watched',
+                    color: C.red,
+                    icon: <Clock size={14} color={C.red} />,
+                  },
+                  {
+                    label: 'Avg View Duration',
+                    value: fmtDuration(latest.avg_view_duration_seconds),
+                    sub: 'average time per view',
+                    color: C.purple,
+                    icon: <Clock size={14} color={C.purple} />,
+                  },
+                  {
+                    label: 'Retention',
+                    value: latest.avg_view_percentage != null
+                      ? `${latest.avg_view_percentage.toFixed(1)}%`
+                      : '—',
+                    sub: 'average view percentage',
+                    color: C.green,
+                    icon: <Activity size={14} color={C.green} />,
+                  },
+                ];
+
+                return (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                    }}>
+                      <div style={{
+                        fontSize: 10, fontWeight: 700, color: C.red,
+                        fontFamily: "'DM Mono',monospace", letterSpacing: '0.08em',
+                        background: 'rgba(251,113,133,0.08)',
+                        border: '1px solid rgba(251,113,133,0.18)',
+                        borderRadius: 5, padding: '3px 8px',
+                      }}>
+                        YOUTUBE WATCH TIME
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: C.faint, fontFamily: "'DM Sans',sans-serif",
+                      }}>
+                        via YouTube Analytics API
+                      </div>
+                    </div>
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10,
+                    }}>
+                      {stats.map(stat => (
+                        <div key={stat.label} style={{
+                          background: C.raised,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 10,
+                          padding: '14px 16px',
+                        }}>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                          }}>
+                            {stat.icon}
+                            <span style={{
+                              fontSize: 9, fontWeight: 700,
+                              fontFamily: "'DM Mono',monospace", letterSpacing: '0.06em',
+                              color: C.faint, textTransform: 'uppercase',
+                            }}>
+                              {stat.label}
+                            </span>
+                          </div>
+                          <div style={{
+                            fontSize: '1.3rem', fontWeight: 900,
+                            fontFamily: "'Syne',sans-serif", letterSpacing: '-0.03em',
+                            color: C.text, lineHeight: 1,
+                          }}>
+                            {stat.value}
+                          </div>
+                          <div style={{
+                            fontSize: 10, color: C.faint, marginTop: 4,
+                            fontFamily: "'DM Sans',sans-serif",
+                          }}>
+                            {stat.sub}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           );
         })()}
