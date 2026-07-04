@@ -388,11 +388,41 @@ export const ThroughputChart: React.FC<{
 //   Avg Duration (hero):      strokeWidth={2.5}, full opacity, primary color.
 //   P95 Duration (reference): strokeWidth={1.5}, strokeOpacity={0.55}, dashed.
 //   Legend/tooltip order: Avg first, P95 second.
-export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefined }> = ({ data }) => {
+export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefined; lowDataLabel?: string }> = ({ data, lowDataLabel }) => {
   if (!data || data.length === 0) {
     return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
   }
-  const formatted = data.map(d => ({
+
+  // BUG FIX (duration chart unreadable on sparse data):
+  // getExecutionVolume zero-fills every bucket in the requested lookback
+  // window via generate_series (so `total` is always a real 0, not missing),
+  // but avg_duration_ms/p95_ms are left NULL for buckets with no executions
+  // (AVG/PERCENTILE_CONT over zero rows). Rendering the full window
+  // regardless of how many buckets actually have data meant a workspace with
+  // 1-2 real executions in a 3-day hourly window got a chart stretched
+  // across ~72 empty hourly ticks with a single real point crammed at one
+  // edge — technically accurate, practically unreadable as a "trend".
+  // Fix: trim to the span that actually contains real executions, and if
+  // there still isn't enough inside that span to draw a meaningful line,
+  // show an explicit low-data message instead of a near-empty squiggle.
+  const MIN_READABLE_POINTS = 4;
+  const hasReal = (d: VolumeDataPoint) => (d.total ?? 0) > 0 && d.avg_duration_ms != null;
+  const realCount = data.filter(hasReal).length;
+
+  if (realCount < MIN_READABLE_POINTS) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-sm text-center gap-1 px-4">
+        <span>{lowDataLabel || 'Not enough execution history yet to show a duration trend.'}</span>
+        <span className="text-xs text-slate-600">Run a few more workflows and check back.</span>
+      </div>
+    );
+  }
+
+  const firstRealIdx = data.findIndex(hasReal);
+  const lastRealIdx  = data.length - 1 - [...data].reverse().findIndex(hasReal);
+  const trimmed = data.slice(firstRealIdx, lastRealIdx + 1);
+
+  const formatted = trimmed.map(d => ({
     date: fmtDate(d.bucket),
     avg:  d.avg_duration_ms,
     p95:  d.p95_ms,
