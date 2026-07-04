@@ -3,23 +3,38 @@
  * Recharts-based charts for execution volume, success/failure rates,
  * throughput, and duration metrics.
  *
- * Bug B FIX: All charts were completely static — no pan, zoom, or scroll.
- *   - Added <Brush> to ExecutionVolumeChart, SuccessRateChart, DurationChart,
- *     and ThroughputChart.
- *   - ExecutionVolumeChart adds scroll-wheel zoom and notifies the parent via
- *     onRangeExtend (debounced — 1.5 s cooldown) when the user reaches the
- *     left edge, so the parent can fetch a wider historical window.
- *   - brushRange is clamped whenever the data array length changes (e.g. after
- *     the parent fetches more history) so stale indices never go out of range.
- *   - wheel preventDefault is gated: only called when there are enough points
- *     to zoom (len > 2), so normal page-scroll is not blocked on sparse data.
+ * BUG 9 FIX: Removed <Brush> from all four charts.
+ *   - ExecutionVolumeChart uses direct pointer/touch drag-to-pan
+ *     (onPointerDown/onPointerMove/onPointerUp) — no brush strip, no
+ *     drag-affordance UI, just grab-and-slide. cursor: grab / cursor: grabbing
+ *     indicates the interaction.
+ *   - handleWheel (scroll/pinch zoom) is preserved unchanged.
+ *   - Range-preset pills (7d / 30d / 90d) give a fast way to jump windows.
+ *   - When startIndex reaches 0, onRangeExtend('left') fires (debounced) to
+ *     fetch real history from the backend — never pads with fake data.
+ *   - Loading indicator shown at the left edge while a fetch is in flight.
+ *   - SuccessRateChart, ThroughputChart, DurationChart are fixed-window
+ *     (bound to the period toggle on Analytics Center) — Brush removed,
+ *     no drag-pan replacement needed.
+ *
+ * BUG 10 FIX: DurationChart Avg vs P95 visual hierarchy.
+ *   - Avg Duration: strokeWidth={2.5}, full opacity — hero/primary line.
+ *   - P95 Duration: strokeWidth={1.5}, strokeOpacity={0.55}, dashed — reference.
+ *   - Legend/tooltip order: Avg first, P95 second.
+ *
+ * HOOKS ORDER: All React hooks are declared unconditionally at the top of each
+ *   component, before any conditional return — this satisfies the Rules of Hooks
+ *   and prevents "Rendered fewer hooks than expected" at runtime.
+ *
+ * GAP 1 FIX (preserved): fmtDate uses timeZone:'UTC' to avoid off-by-one day
+ *   rendering for users behind UTC.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ReferenceLine, Brush,
+  ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import type { VolumeDataPoint } from '../../api/analyticsApi';
 
@@ -35,24 +50,13 @@ const COLORS = {
 };
 
 /**
- * GAP 1 FIX: Previously used toLocaleDateString() with no timeZone option, which
- * converts the UTC bucket timestamp to the browser's local timezone before formatting.
- * For users behind UTC (e.g. Americas) a midnight-UTC bucket like "2026-07-04T00:00:00Z"
- * would render as "Jul 3" — the same off-by-one bug the backend fix was meant to remove.
- *
- * Fix: pass timeZone:'UTC' so the label always reflects the UTC day the backend
- * bucketed into, regardless of where the user's browser is running.
- *
- * Verification:
- *   bucket = "2026-07-04T00:00:00.000Z"
- *   LA  (UTC-7): new Date(bucket).toLocaleDateString('en-US',{month:'short',day:'numeric'})
- *                → "Jul 3"  ❌  (old)
- *                → "Jul 4"  ✅  (new, timeZone:'UTC')
- *   NZ  (UTC+12): both old and new → "Jul 4" ✅ (no regression)
+ * GAP 1 FIX: timeZone:'UTC' ensures bucket labels always match the UTC day
+ * the backend bucketed into, regardless of the browser's local timezone.
  */
 function fmtDate(bucket: string) {
-  const d = new Date(bucket);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return new Date(bucket).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', timeZone: 'UTC',
+  });
 }
 function fmtMs(ms: number) {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
@@ -81,53 +85,57 @@ const DarkTooltip: React.FC<TooltipProps> = ({ active, payload, label }) => {
   );
 };
 
-const BRUSH_PROPS = {
-  stroke:         COLORS.grid,
-  fill:           '#0f172a',
-  travellerWidth: 8,
-  height:         20,
-  tickFormatter:  () => '',
-} as const;
+/** Range pills shown above the ExecutionVolumeChart */
+const RANGE_PILLS = [
+  { label: '7d',  days: 7  },
+  { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
+] as const;
 
 // ── Execution Volume Chart ────────────────────────────────────────────────────
 export const ExecutionVolumeChart: React.FC<{
   data: VolumeDataPoint[] | null | undefined;
   inProgressData?: Array<{ bucket: string; in_progress: number }> | null;
-    /** Called (debounced) when the user reaches the left edge of the loaded range. */
+  /** Called (debounced) when the user reaches the left edge of loaded data. */
   onRangeExtend?: (direction: 'left') => void;
-  /**
-   * Called whenever the brush/wheel moves, reporting the current startIndex.
-   * Used by the parent to know when the user has panned away from the left edge
-   * (e.g. to hide the "at history cap" message when startIndex > 0).
-   */
+  /** Called whenever the view window moves, reporting current startIndex. */
   onBrushChange?: (startIndex: number) => void;
-}> = ({ data, inProgressData, onRangeExtend, onBrushChange }) => {
+  /** True while the parent is fetching more history. */
+  isLoadingMore?: boolean;
+}> = ({ data, inProgressData, onRangeExtend, onBrushChange, isLoadingMore }) => {
+
+  // ── ALL HOOKS FIRST — before any conditional returns ──────────────────────
+  // This satisfies the Rules of Hooks: hooks must be called unconditionally
+  // on every render, in the same order. The early "no data" return below is
+  // safe because it comes after every hook declaration.
   const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
-  // Debounce ref: track last time onRangeExtend was fired so rapid wheel/drag
-  // events at the left boundary don't trigger multiple sequential fetches.
+  const [isDragging, setIsDragging] = useState(false);
+  const [activePill, setActivePill] = useState<number>(7);
   const lastExtendAt = useRef<number>(0);
+  const pointerRef   = useRef<{ x: number; si: number; ei: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const inProgressMap = new Map((inProgressData || []).map(d => [d.bucket, d.in_progress]));
+  const inProgressMap = useMemo(
+    () => new Map((inProgressData || []).map(d => [d.bucket, d.in_progress])),
+    [inProgressData]
+  );
 
-  const formatted = (data || []).map(d => ({
-    ...d,
-    date:        fmtDate(d.bucket),
-    successRate: d.total > 0 ? Math.round((d.successes / d.total) * 100) : 0,
-    inProgress:  inProgressMap.get(d.bucket) ?? 0,
-  }));
+  const formatted = useMemo(
+    () => (data || []).map(d => ({
+      ...d,
+      date:        fmtDate(d.bucket),
+      successRate: d.total > 0 ? Math.round((d.successes / d.total) * 100) : 0,
+      inProgress:  inProgressMap.get(d.bucket) ?? 0,
+    })),
+    [data, inProgressMap]
+  );
 
   const len = formatted.length;
-  // Default visible window: last 14 points (zoomed in on recent activity).
-  const defaultStart = Math.max(0, len - 14);
+  const defaultWindowSize = Math.min(activePill, len);
+  const defaultStart = Math.max(0, len - defaultWindowSize);
 
-  // BUGFIX (React error #310 — "rendered more hooks than during the previous
-  // render"): this useEffect used to sit AFTER an early `if (!data...) return`
-  // above, so the hook was skipped entirely on empty-data renders but called
-  // on renders once data arrived — a rules-of-hooks violation that crashed
-  // the whole app with a blank screen. All hooks now run unconditionally on
-  // every render; the "no data" early return has moved below, after the hooks.
+  // Clamp stale brushRange whenever data grows (parent fetched more history).
   useEffect(() => {
-    if (!data || data.length === 0) return;
     if (!brushRange) return;
     const clamped = {
       startIndex: Math.max(0, Math.min(brushRange.startIndex, len - 1)),
@@ -139,10 +147,7 @@ export const ExecutionVolumeChart: React.FC<{
     ) {
       setBrushRange(clamped);
     }
-  }, [len, data]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const startIndex = brushRange?.startIndex ?? defaultStart;
-  const endIndex   = brushRange?.endIndex   ?? (len - 1);
+  }, [len]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Fire onRangeExtend at most once per 1.5 s to avoid fetch storms. */
   const maybeExtend = useCallback((si: number) => {
@@ -155,84 +160,181 @@ export const ExecutionVolumeChart: React.FC<{
     }
   }, [onRangeExtend]);
 
-  const handleBrushChange = useCallback((range: { startIndex?: number; endIndex?: number }) => {
-    const si = range.startIndex ?? 0;
-    const ei = range.endIndex   ?? (len - 1);
-    setBrushRange({ startIndex: si, endIndex: ei });
-    maybeExtend(si);
-    onBrushChange?.(si);
-  }, [len, maybeExtend, onBrushChange]);
-
-  // Scroll-wheel zoom: wheel-up = zoom in (fewer bars), wheel-down = zoom out.
-  // preventDefault is only called when there is actual data to zoom (len > 2)
-  // so normal page scroll is not blocked on empty/minimal charts.
+  // Scroll/pinch zoom — preserved from original.
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (len <= 2) return;
     e.preventDefault();
     const cur     = brushRange ?? { startIndex: defaultStart, endIndex: len - 1 };
     const visible = cur.endIndex - cur.startIndex + 1;
     const step    = Math.max(1, Math.round(visible * 0.15));
-    const delta   = e.deltaY > 0 ? step : -step; // scroll-down = zoom out (show more)
+    const delta   = e.deltaY > 0 ? step : -step;
     const newVis  = Math.max(2, Math.min(len, visible + delta));
-    // Anchor right edge (today stays pinned).
     const newEnd   = cur.endIndex;
     const newStart = Math.max(0, newEnd - newVis + 1);
     setBrushRange({ startIndex: newStart, endIndex: newEnd });
+    setActivePill(-1);
     maybeExtend(newStart);
     onBrushChange?.(newStart);
   }, [len, brushRange, defaultStart, maybeExtend, onBrushChange]);
 
+  // Pointer drag-to-pan.
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const si = brushRange?.startIndex ?? defaultStart;
+    const ei = brushRange?.endIndex   ?? (len - 1);
+    pointerRef.current = { x: e.clientX, si, ei };
+    setIsDragging(true);
+  }, [brushRange, defaultStart, len]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+    // Approximate plot width: container width minus YAxis (36px) and margins (8px).
+    const plotWidth  = Math.max(1, container.clientWidth - 44);
+    const windowSize = pointerRef.current.ei - pointerRef.current.si;
+    const pxPerPoint = plotWidth / Math.max(1, windowSize);
+    const dx    = e.clientX - pointerRef.current.x;
+    const shift = Math.round(-dx / pxPerPoint); // drag-left → shift toward older data
+
+    let newSi = Math.max(0, pointerRef.current.si + shift);
+    let newEi = newSi + windowSize;
+    if (newEi >= len) {
+      newEi = len - 1;
+      newSi = Math.max(0, newEi - windowSize);
+    }
+    setBrushRange({ startIndex: newSi, endIndex: newEi });
+    setActivePill(-1);
+    maybeExtend(newSi);
+    onBrushChange?.(newSi);
+  }, [len, maybeExtend, onBrushChange]);
+
+  const handlePointerUp = useCallback(() => {
+    pointerRef.current = null;
+    setIsDragging(false);
+  }, []);
+
+  const handlePill = useCallback((days: number) => {
+    setActivePill(days);
+    const windowSize = Math.min(days, len);
+    const newEnd   = len - 1;
+    const newStart = Math.max(0, newEnd - windowSize + 1);
+    setBrushRange({ startIndex: newStart, endIndex: newEnd });
+    onBrushChange?.(newStart);
+  }, [len, onBrushChange]);
+
+  // ── Conditional early return — safe here because all hooks are above ───────
   if (!data || data.length === 0) {
-    return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
+    return (
+      <div className="flex items-center justify-center h-40 text-slate-500 text-sm">
+        No data available
+      </div>
+    );
   }
 
+  // Derived state (not hooks)
+  const startIndex = brushRange?.startIndex ?? defaultStart;
+  const endIndex   = brushRange?.endIndex   ?? (len - 1);
+  const sliced     = formatted.slice(startIndex, endIndex + 1);
+
   return (
-    <div onWheel={handleWheel} style={{ userSelect: 'none' }}>
-      <ResponsiveContainer width="100%" height={260}>
-        <AreaChart data={formatted} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id="gradSuccess" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={COLORS.success} stopOpacity={0.25} />
-              <stop offset="95%" stopColor={COLORS.success} stopOpacity={0}    />
-            </linearGradient>
-            <linearGradient id="gradFailure" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={COLORS.failure} stopOpacity={0.25} />
-              <stop offset="95%" stopColor={COLORS.failure} stopOpacity={0}    />
-            </linearGradient>
-            <linearGradient id="gradProgress" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={COLORS.total} stopOpacity={0.25} />
-              <stop offset="95%" stopColor={COLORS.total} stopOpacity={0}    />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-          <XAxis dataKey="date" tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
-          <Tooltip content={<DarkTooltip />} />
-          <Legend wrapperStyle={{ fontSize: 11, color: COLORS.text }} />
-          <Area type="monotone" dataKey="successes"  name="Successful"  stroke={COLORS.success} fill="url(#gradSuccess)"  strokeWidth={2} />
-          <Area type="monotone" dataKey="failures"   name="Failed"      stroke={COLORS.failure} fill="url(#gradFailure)"  strokeWidth={2} />
-          <Area type="monotone" dataKey="inProgress" name="In Progress" stroke={COLORS.total}   fill="url(#gradProgress)" strokeWidth={2} />
-          {len > 3 && (
-            <Brush
-              {...BRUSH_PROPS}
-              dataKey="date"
-              startIndex={startIndex}
-              endIndex={endIndex}
-              onChange={handleBrushChange}
-            />
-          )}
-        </AreaChart>
-      </ResponsiveContainer>
-      {len > 3 && (
-        <p style={{ textAlign: 'right', fontSize: 10, color: COLORS.text, marginTop: 2, opacity: 0.5 }}>
-          Scroll to zoom · drag handles to pan · drag to left edge to load more history
-        </p>
-      )}
+    <div style={{ position: 'relative' }}>
+      {/* Range pills + loading indicator row */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 6, paddingRight: 4,
+      }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {RANGE_PILLS.map(pill => (
+            <button
+              key={pill.days}
+              onClick={() => handlePill(pill.days)}
+              style={{
+                padding: '3px 10px',
+                borderRadius: 6,
+                border: `1px solid ${activePill === pill.days ? COLORS.total : COLORS.grid}`,
+                background: activePill === pill.days ? `${COLORS.total}22` : 'transparent',
+                color: activePill === pill.days ? COLORS.total : COLORS.text,
+                fontSize: 11, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'monospace',
+                transition: 'all 0.12s',
+              }}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+        {isLoadingMore && startIndex === 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 10, color: COLORS.text, opacity: 0.6,
+          }}>
+            <span style={{
+              display: 'inline-block', width: 10, height: 10,
+              borderRadius: '50%',
+              border: `2px solid ${COLORS.total}`,
+              borderTopColor: 'transparent',
+              animation: 'evc-spin 0.7s linear infinite',
+            }} />
+            Loading history…
+          </div>
+        )}
+      </div>
+
+      {/* Chart container — drag-to-pan target */}
+      <div
+        ref={containerRef}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{
+          userSelect: 'none',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          touchAction: 'none',
+        }}
+      >
+        <ResponsiveContainer width="100%" height={260}>
+          <AreaChart data={sliced} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="gradSuccess" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={COLORS.success} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={COLORS.success} stopOpacity={0}    />
+              </linearGradient>
+              <linearGradient id="gradFailure" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={COLORS.failure} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={COLORS.failure} stopOpacity={0}    />
+              </linearGradient>
+              <linearGradient id="gradProgress" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={COLORS.total} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={COLORS.total} stopOpacity={0}    />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
+            <XAxis dataKey="date" tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
+            <Tooltip content={<DarkTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 11, color: COLORS.text }} />
+            <Area type="monotone" dataKey="successes"  name="Successful"  stroke={COLORS.success} fill="url(#gradSuccess)"  strokeWidth={2} dot={{ r: 3, fill: COLORS.success }} />
+            <Area type="monotone" dataKey="failures"   name="Failed"      stroke={COLORS.failure} fill="url(#gradFailure)"  strokeWidth={2} dot={{ r: 3, fill: COLORS.failure }} />
+            <Area type="monotone" dataKey="inProgress" name="In Progress" stroke={COLORS.total}   fill="url(#gradProgress)" strokeWidth={2} dot={{ r: 3, fill: COLORS.total   }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <style>{`
+        @keyframes evc-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
 
 // ── Success Rate Chart ─────────────────────────────────────────────────────────
+// Fixed-window, bound to period toggle — Brush removed, no drag-pan needed.
 export const SuccessRateChart: React.FC<{ data: VolumeDataPoint[] | null | undefined }> = ({ data }) => {
   if (!data || data.length === 0) {
     return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
@@ -241,9 +343,6 @@ export const SuccessRateChart: React.FC<{ data: VolumeDataPoint[] | null | undef
     date:        fmtDate(d.bucket),
     successRate: d.total > 0 ? parseFloat(((d.successes / d.total) * 100).toFixed(1)) : 0,
   }));
-  const len = formatted.length;
-  const defaultStart = Math.max(0, len - 14);
-
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={formatted} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -255,20 +354,13 @@ export const SuccessRateChart: React.FC<{ data: VolumeDataPoint[] | null | undef
         <ReferenceLine y={95} stroke={COLORS.success} strokeDasharray="4 4" label={{ value: '95%', fill: COLORS.text, fontSize: 10 }} />
         <Line type="monotone" dataKey="successRate" name="Success Rate" stroke={COLORS.total}
               strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-        {len > 3 && (
-          <Brush
-            {...BRUSH_PROPS}
-            dataKey="date"
-            startIndex={defaultStart}
-            endIndex={len - 1}
-          />
-        )}
       </LineChart>
     </ResponsiveContainer>
   );
 };
 
 // ── Throughput Chart ──────────────────────────────────────────────────────────
+// Fixed 48-hour operational view — Brush removed, no drag-pan needed.
 export const ThroughputChart: React.FC<{
   data: Array<{ hour: string; executions: number }>
 }> = ({ data }) => {
@@ -276,31 +368,26 @@ export const ThroughputChart: React.FC<{
     hour:       new Date(d.hour).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
     executions: d.executions,
   }));
-  const len = formatted.length;
-
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={formatted} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey="hour" tick={{ fill: COLORS.text, fontSize: 10 }} axisLine={false} tickLine={false}
-               interval={3} />
+        <XAxis dataKey="hour" tick={{ fill: COLORS.text, fontSize: 10 }} axisLine={false} tickLine={false} interval={3} />
         <YAxis tick={{ fill: COLORS.text, fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
         <Tooltip content={<DarkTooltip />} />
         <Bar dataKey="executions" name="Executions" fill={COLORS.total} radius={[2, 2, 0, 0]} />
-        {len > 12 && (
-          <Brush
-            {...BRUSH_PROPS}
-            dataKey="hour"
-            startIndex={Math.max(0, len - 24)}
-            endIndex={len - 1}
-          />
-        )}
       </BarChart>
     </ResponsiveContainer>
   );
 };
 
 // ── Duration Distribution Chart ───────────────────────────────────────────────
+// Fixed-window, bound to period toggle — Brush removed, no drag-pan needed.
+//
+// BUG 10 FIX:
+//   Avg Duration (hero):      strokeWidth={2.5}, full opacity, primary color.
+//   P95 Duration (reference): strokeWidth={1.5}, strokeOpacity={0.55}, dashed.
+//   Legend/tooltip order: Avg first, P95 second.
 export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefined }> = ({ data }) => {
   if (!data || data.length === 0) {
     return <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data available</div>;
@@ -310,9 +397,6 @@ export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefine
     avg:  d.avg_duration_ms,
     p95:  d.p95_ms,
   }));
-  const len = formatted.length;
-  const defaultStart = Math.max(0, len - 14);
-
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={formatted} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -322,16 +406,27 @@ export const DurationChart: React.FC<{ data: VolumeDataPoint[] | null | undefine
                tickFormatter={v => fmtMs(v)} />
         <Tooltip content={<DarkTooltip />} formatter={(v: number) => [fmtMs(v)]} />
         <Legend wrapperStyle={{ fontSize: 11, color: COLORS.text }} />
-        <Line type="monotone" dataKey="avg" name="Avg Duration" stroke={COLORS.total}   strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="p95" name="P95 Duration" stroke={COLORS.timeout} strokeWidth={2} dot={false} strokeDasharray="4 2" />
-        {len > 3 && (
-          <Brush
-            {...BRUSH_PROPS}
-            dataKey="date"
-            startIndex={defaultStart}
-            endIndex={len - 1}
-          />
-        )}
+        {/* Avg — hero/primary line: rendered first → appears first in legend/tooltip */}
+        <Line
+          type="monotone"
+          dataKey="avg"
+          name="Avg Duration"
+          stroke={COLORS.total}
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 4 }}
+        />
+        {/* P95 — secondary/reference line: thinner, dimmed, dashed */}
+        <Line
+          type="monotone"
+          dataKey="p95"
+          name="P95 Duration"
+          stroke={COLORS.timeout}
+          strokeWidth={1.5}
+          strokeOpacity={0.55}
+          strokeDasharray="4 2"
+          dot={false}
+        />
       </LineChart>
     </ResponsiveContainer>
   );

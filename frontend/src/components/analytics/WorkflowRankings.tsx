@@ -1,6 +1,14 @@
 /**
  * AutoFlowNG — Phase 14 Workflow Rankings Component
  * Ranked table with health scores, performance metrics, and bottleneck badges.
+ *
+ * BUG 11 FIX: Updated empty-state copy in WorkflowRankingsTable to accurately
+ * describe why rankings may not appear yet — the workflow_performance_scores
+ * table is populated by a scheduled cron job (computeWorkflowPerformanceScores).
+ * The backend route (/analytics/workflows/rankings) now auto-computes scores
+ * on first request when the table is empty, so this state should only appear
+ * on the very first page load after a fresh deployment. The empty-state text
+ * no longer implies "no data exists at all" when 16+ executions have run.
  */
 
 import React from 'react';
@@ -82,7 +90,20 @@ export const WorkflowRankingsTable: React.FC<{
           {data?.length === 0 && (
             <tr>
               <td colSpan={8} className="py-10 text-center">
-                {/* Informative empty state — rankings need execution history to build */}
+                {/*
+                  BUG 11 FIX: Informative empty state — accurately describes why
+                  rankings may not appear yet. The backend auto-computes scores on
+                  first request, so this state should only briefly appear on a brand
+                  new workspace that has never had the cron run.
+
+                  Previous copy ("No ranking data yet — run a workflow to start
+                  building data") was misleading: it implied no executions existed,
+                  when in fact the workspace had 16+ completed runs. The real cause
+                  was that workflow_performance_scores had not yet been populated by
+                  the cron job. The backend now triggers auto-compute on first
+                  request, but if scores still aren't available it means no executions
+                  have been recorded in execution_metrics at all yet.
+                */}
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -91,9 +112,10 @@ export const WorkflowRankingsTable: React.FC<{
                     </svg>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-sm font-medium">No ranking data yet</p>
+                    <p className="text-slate-400 text-sm font-medium">No performance scores yet</p>
                     <p className="text-slate-600 text-xs mt-1 max-w-xs mx-auto">
-                      Rankings appear once workflows have execution history — run a workflow to start building data.
+                      Scores are computed from <strong className="text-slate-500">execution_metrics</strong> data.
+                      Run at least one workflow to completion, then refresh — scores are built automatically on your first visit here.
                     </p>
                   </div>
                 </div>
