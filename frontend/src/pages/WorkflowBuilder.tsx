@@ -5,7 +5,7 @@ import {
   useWorkflowRuns, useWorkflowRun,
 } from "../hooks/useWorkflows";
 import { useConnections } from "../hooks/useConnections";
-import { workflowsAPI } from "../lib/api";
+import { workflowsAPI, platformPausesAPI } from "../lib/api";
 import { useExecutionStream } from "../hooks/useExecutionStream";
 import { PageTransition } from "../components/PageTransition";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +13,7 @@ import {
   ArrowLeft, Save, Trash2, Settings2, ChevronDown, ChevronRight,
   Clock, CheckCircle2, XCircle, RefreshCw, Zap, GitBranch, Bot,
   Globe, Filter, Code, Database, Mail, MessageSquare, Send,
-  MessageCircle, Search, Radio, X, RotateCcw, Lock, AlertTriangle,
+  MessageCircle, Search, Radio, X, RotateCcw, Lock, AlertTriangle, PauseCircle, PlayCircle, Plus,
 } from "lucide-react";
 
 interface WorkflowBuilderProps { id: string; }
@@ -58,6 +58,18 @@ const NODE_CATALOG: CatalogNode[] = [
 ];
 
 const CATEGORY_ORDER: CatalogNode["category"][] = ["AI", "Messaging", "Social", "Logic", "Data", "Utility"];
+
+// Feature 1 + Feature 2: step types that carry a platform dependency
+const PLATFORM_SEND_TYPES: Record<string, string> = {
+  gmail_send:    "gmail",
+  gmail_reply:   "gmail",
+  slack_post:    "slack",
+  telegram_send: "telegram",
+  whatsapp_send: "whatsapp",
+  twitter_post:  "twitter",
+  linkedin_post: "linkedin",
+  facebook_post: "facebook",
+};
 
 // ─── Trigger types ────────────────────────────────────────────────────────────
 const TRIGGER_TYPES = [
@@ -540,6 +552,7 @@ function TraceStatusIcon({ status }: { status: string }) {
 // ─── NodeBox ──────────────────────────────────────────────────────────────────
 function NodeBox({
   node, selected, connecting, traceStatus, onSelect, onDelete, onConnectorClick,
+  isPaused, onPauseToggle, onFanout,
 }: {
   node: Node;
   selected: boolean;
@@ -548,6 +561,9 @@ function NodeBox({
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onConnectorClick: (id: string, e: React.MouseEvent) => void;
+  isPaused?: boolean;
+  onPauseToggle?: () => void;
+  onFanout?: () => void;
 }) {
   const entry = NODE_CATALOG.find(n => n.executorType === node.executorType) || NODE_CATALOG[0];
   const Icon = entry.icon;
@@ -579,10 +595,7 @@ function NodeBox({
         zIndex: selected ? 10 : 1,
       }}
     >
-      {/* Top accent */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, borderRadius: "12px 12px 0 0", background: `linear-gradient(90deg, transparent, ${traceColor ?? entry.color}88, transparent)` }} />
-
-      {/* Running shimmer */}
+      {/* Feature 3: top accent bar removed — Running shimmer */}
       {traceStatus === "running" && (
         <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.06) 50%, transparent 100%)", animation: "trace-shimmer 1.4s ease-in-out infinite", pointerEvents: "none" }} />
       )}
@@ -605,16 +618,58 @@ function NodeBox({
         onClick={e => { e.stopPropagation(); onConnectorClick(node.id, e); }}
         style={{
           position: "absolute", top: "50%", right: -6, width: 14, height: 14, borderRadius: "50%",
-          background: connecting ? "#00C896" : entry.color,
+          background: connecting ? "#00C896" : isPaused ? "rgba(251,113,133,0.6)" : entry.color,
           border: `2px solid ${connecting ? "#00C896" : "rgba(8,11,22,0.8)"}`,
           transform: "translateY(-50%)",
           cursor: "pointer",
-          boxShadow: connecting ? "0 0 10px #00C896, 0 0 0 3px rgba(0,200,150,0.2)" : `0 0 6px ${entry.color}60`,
+          boxShadow: connecting ? "0 0 10px #00C896, 0 0 0 3px rgba(0,200,150,0.2)" : isPaused ? "0 0 6px rgba(251,113,133,0.5)" : `0 0 6px ${entry.color}60`,
           animation: connecting ? "pulse-dot 1s ease-in-out infinite" : undefined,
           zIndex: 30,
           transition: "background 0.15s, box-shadow 0.15s",
         }}
       />
+
+      {/* Feature 1: Fan-out "+" — only on platform-send nodes, not while connecting */}
+      {PLATFORM_SEND_TYPES[node.executorType] && onFanout && !connecting && (
+        <button
+          onClick={e => { e.stopPropagation(); onFanout(); }}
+          title="Add fan-out branch"
+          style={{
+            position: "absolute", top: "50%", right: -32, width: 20, height: 20,
+            borderRadius: "50%", background: "rgba(167,139,250,0.15)",
+            border: "1.5px solid rgba(167,139,250,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", zIndex: 31,
+            transform: "translateY(-50%)",
+            transition: "background 0.15s",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.3)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.15)"; }}
+        >
+          <Plus size={10} color="#A78BFA" />
+        </button>
+      )}
+
+      {/* Feature 2: Pause/resume toggle — only on platform-send nodes */}
+      {PLATFORM_SEND_TYPES[node.executorType] && onPauseToggle && (
+        <button
+          onClick={e => { e.stopPropagation(); onPauseToggle(); }}
+          title={isPaused ? "Resume platform" : "Pause platform (24 h)"}
+          style={{
+            position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)",
+            background: isPaused ? "rgba(251,113,133,0.15)" : "rgba(255,255,255,0.04)",
+            border: isPaused ? "1.5px solid rgba(251,113,133,0.4)" : "1.5px solid rgba(255,255,255,0.09)",
+            borderRadius: 10, padding: "2px 6px",
+            display: "flex", alignItems: "center", gap: 3,
+            cursor: "pointer", zIndex: 31,
+            transition: "background 0.15s, border-color 0.15s",
+          }}
+        >
+          {isPaused
+            ? <><PauseCircle size={8} color="#FB7185" /><span style={{ fontSize: 7, color: "#FB7185", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>PAUSED</span></>
+            : <><PlayCircle size={8} color="rgba(232,238,255,0.3)" /><span style={{ fontSize: 7, color: "rgba(232,238,255,0.25)", fontFamily: "'DM Mono',monospace" }}>ACTIVE</span></>}
+        </button>
+      )}
 
       {/* Trace badge */}
       {traceStatus && (
@@ -848,6 +903,13 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [retrying, setRetrying] = useState(false);
   const [warnDismissed, setWarnDismissed] = useState(false);
 
+  // Feature 2: Platform-level pause state
+  const [pausedPlatforms, setPausedPlatforms] = useState<Set<string>>(new Set());
+
+  // Feature 1: Fan-out picker state
+  const [fanoutPickerOpen, setFanoutPickerOpen] = useState(false);
+  const [fanoutSourceNodeId, setFanoutSourceNodeId] = useState<string | null>(null);
+
   // FIX #1 & #3: use the existing useWorkflowRun hook instead of raw useQuery
   // traceRunId is set after trigger by polling /runs for the newest run
   const [traceRunId, setTraceRunId] = useState<string | null>(null);
@@ -1045,6 +1107,84 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     setEdges(es.map((e: any, i: number) => ({ id: `e${i}`, from: e.from || e.source, to: e.to || e.target })));
     if (ns.length > 0) nextId.current = ns.length + 1;
   }, [data]);
+
+  // Feature 2: load paused platforms on mount
+  useEffect(() => {
+    platformPausesAPI.list()
+      .then(d => setPausedPlatforms(new Set((d.paused || []).map((p: any) => p.platform))))
+      .catch(() => {}); // fail open — non-critical
+  }, []);
+
+  const togglePlatformPause = async (platform: string) => {
+    const wasPaused = pausedPlatforms.has(platform);
+    try {
+      await (wasPaused ? platformPausesAPI.resume(platform) : platformPausesAPI.pause(platform));
+      setPausedPlatforms(prev => {
+        const next = new Set(prev);
+        wasPaused ? next.delete(platform) : next.add(platform);
+        return next;
+      });
+      toast({
+        title: wasPaused ? `${platform} resumed` : `${platform} paused`,
+        description: wasPaused
+          ? `Workflows using ${platform} will resume.`
+          : `All ${platform} triggers paused for 24 h.`,
+      });
+    } catch { /* swallow — UI will reflect stale state */ }
+  };
+
+  // Feature 1: insert a router node + new branch from a platform-send node
+  const insertFanoutBranch = (sourceNodeId: string, targetPlatform: string) => {
+    const sourceNode = nodes.find(n => n.id === sourceNodeId);
+    if (!sourceNode) return;
+    const catalogEntry = NODE_CATALOG.find(c => PLATFORM_SEND_TYPES[c.executorType] === targetPlatform);
+    if (!catalogEntry) return;
+
+    const existingRouterEdge = edges.find(e => e.from === sourceNodeId);
+    const existingRouter = existingRouterEdge
+      ? nodes.find(n => n.id === existingRouterEdge.to && n.executorType === 'router')
+      : null;
+
+    const newBranchNode: Node = {
+      id: `n${nextId.current++}`,
+      executorType: catalogEntry.executorType,
+      label: catalogEntry.label,
+      x: sourceNode.x + (existingRouter ? 392 : 196),
+      y: existingRouter ? sourceNode.y + 90 : sourceNode.y,
+      config: {},
+    };
+
+    if (existingRouter) {
+      setNodes(ns => [...ns, newBranchNode]);
+      setEdges(es => [...es, { id: `e${Date.now()}`, from: existingRouter.id, to: newBranchNode.id }]);
+      toast({ title: "Branch added", description: `New ${catalogEntry.label} branch wired to router.` });
+    } else {
+      const routerNode: Node = {
+        id: `n${nextId.current++}`,
+        executorType: 'router',
+        label: 'Fan-out Router',
+        x: sourceNode.x + 196,
+        y: sourceNode.y,
+        config: {},
+      };
+      const downstream = edges.filter(e => e.from === sourceNodeId);
+      const downstreamIds = new Set(downstream.map(e => e.to));
+      setEdges(es => [
+        ...es.filter(e => e.from !== sourceNodeId),
+        { id: `e${Date.now()}`,     from: sourceNodeId,   to: routerNode.id },
+        ...downstream.map(e => ({ ...e, from: routerNode.id })),
+        { id: `e${Date.now() + 1}`, from: routerNode.id,  to: newBranchNode.id },
+      ]);
+      setNodes(ns => [
+        ...ns.map(n => downstreamIds.has(n.id) ? { ...n, y: n.y - 50 } : n),
+        routerNode,
+        { ...newBranchNode, y: newBranchNode.y + 50 },
+      ]);
+      toast({ title: "Fan-out created", description: `Router + ${catalogEntry.label} branch inserted.` });
+    }
+    setFanoutPickerOpen(false);
+    setFanoutSourceNodeId(null);
+  };
 
   // ── Add node ───────────────────────────────────────────────────────────────
   const addNode = (entry: CatalogNode) => {
@@ -1476,7 +1616,15 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     const bothDone = fromDone && toDone;
                     const isRunningEdge = isTracing && stepStatuses[fi] === "running";
 
-                    const edgeColor = bothDone
+                    // Feature 3: paused-platform edge — dimmed only when the source
+                    // platform is actually paused right now (checked against live state)
+                    const fromNode = fi >= 0 ? nodes[fi] : null;
+                    const fromPlatform = fromNode ? (PLATFORM_SEND_TYPES[fromNode.executorType] ?? null) : null;
+                    const isPausedEdge = fromPlatform ? pausedPlatforms.has(fromPlatform) : false;
+
+                    const edgeColor = isPausedEdge && !isTracing
+                      ? "rgba(251,113,133,0.25)"
+                      : bothDone
                       ? "#00C896"
                       : isTracing
                       ? "rgba(255,255,255,0.16)"
@@ -1507,10 +1655,20 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         <circle cx={x1} cy={y1} r={3} fill={edgeColor} />
                         <circle cx={x2} cy={y2} r={3} fill={edgeColor} />
 
-                        {/* Animated flow dot — only while this edge is actively running */}
+                        {/* Feature 3: staggered dots on running edges; trailing dot on success→pending */}
                         {isRunningEdge && (
-                          <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
-                            <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
+                          <>
+                            <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
+                              <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
+                            </circle>
+                            <circle r="3" fill="#38BDF8" opacity="0.55" style={{ filter: "drop-shadow(0 0 3px #38BDF8)" }}>
+                              <animateMotion dur="1s" repeatCount="indefinite" path={pathD} begin="-0.4s" />
+                            </circle>
+                          </>
+                        )}
+                        {!isRunningEdge && fromDone && !toDone && isTracing && (
+                          <circle r="3" fill="#00C896" opacity="0.7" style={{ filter: "drop-shadow(0 0 3px #00C896)" }}>
+                            <animateMotion dur="1.4s" repeatCount="indefinite" path={pathD} />
                           </circle>
                         )}
 
@@ -1554,26 +1712,82 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                   })}
                 </svg>
 
-                {nodes.map((n, idx) => (
-                  <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
-                    <NodeBox
-                      node={n}
-                      selected={selected === n.id}
-                      connecting={connecting?.fromId === n.id}
-                      // FIX #2: pass status by node index
-                      traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
-                      onSelect={setSelected}
-                      onDelete={deleteNode}
-                      onConnectorClick={onConnectorClick}
-                    />
-                  </div>
-                ))}
+                {nodes.map((n, idx) => {
+                  const nodePlatform = PLATFORM_SEND_TYPES[n.executorType] ?? null;
+                  const nodeIsPaused = nodePlatform ? pausedPlatforms.has(nodePlatform) : false;
+                  return (
+                    <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
+                      <NodeBox
+                        node={n}
+                        selected={selected === n.id}
+                        connecting={connecting?.fromId === n.id}
+                        // FIX #2: pass status by node index
+                        traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
+                        onSelect={setSelected}
+                        onDelete={deleteNode}
+                        onConnectorClick={onConnectorClick}
+                        isPaused={nodeIsPaused}
+                        onPauseToggle={nodePlatform ? () => togglePlatformPause(nodePlatform) : undefined}
+                        onFanout={nodePlatform ? () => { setFanoutSourceNodeId(n.id); setFanoutPickerOpen(true); } : undefined}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               {nodes.length > 0 && !isTracing && (
                 <div style={{ position: "absolute", bottom: 14, left: 14, zIndex: 10, pointerEvents: "none" }}>
                   <div style={{ background: "rgba(8,11,22,0.8)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "4px 12px", fontSize: 10, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace" }}>
                     {nodes.length} node{nodes.length !== 1 ? "s" : ""} · {edges.length} edge{edges.length !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              )}
+
+              {/* Feature 1: Fan-out platform picker modal */}
+              {fanoutPickerOpen && (
+                <div
+                  style={{ position: "absolute", inset: 0, zIndex: 200, background: "rgba(4,6,15,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  onClick={() => { setFanoutPickerOpen(false); setFanoutSourceNodeId(null); }}
+                >
+                  <div
+                    style={{ background: "rgba(8,11,22,0.98)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 16, padding: 24, width: 280, maxWidth: "90vw" }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 4 }}>Add Fan-out Branch</div>
+                    <div style={{ fontSize: 11, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", marginBottom: 16 }}>
+                      A Router node will be inserted. Pick a platform for the new branch:
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {Object.entries(PLATFORM_SEND_TYPES)
+                        .filter(([type]) => type !== 'gmail_reply')
+                        .map(([type, platform]) => {
+                          const entry = NODE_CATALOG.find(c => c.executorType === type);
+                          if (!entry) return null;
+                          const Icon = entry.icon;
+                          const isConn = connectedPlatforms.has(platform);
+                          return (
+                            <button
+                              key={type}
+                              onClick={() => fanoutSourceNodeId && insertFanoutBranch(fanoutSourceNodeId, platform)}
+                              style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${isConn ? "rgba(0,200,150,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", transition: "background 0.15s" }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = `${entry.color}12`; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.03)"; }}
+                            >
+                              <div style={{ width: 28, height: 28, borderRadius: 8, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <Icon size={13} color={entry.color} />
+                              </div>
+                              <div style={{ flex: 1, textAlign: "left" }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF" }}>{entry.label}</div>
+                                <div style={{ fontSize: 10, color: isConn ? "#00C896" : "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace" }}>{isConn ? "connected" : "not connected"}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                    <button
+                      onClick={() => { setFanoutPickerOpen(false); setFanoutSourceNodeId(null); }}
+                      style={{ width: "100%", marginTop: 14, background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px", color: "rgba(232,238,255,0.4)", fontSize: 12, cursor: "pointer" }}
+                    >Cancel</button>
                   </div>
                 </div>
               )}
