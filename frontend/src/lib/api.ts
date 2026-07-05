@@ -324,6 +324,12 @@ export const runsAPI = {
     workflowsAPI.runs(wfId).then((d: any) => d.runs || d || []),
 };
 
+export const platformPausesAPI = {
+  list:   ()                 => request("/platform-pauses"),
+  pause:  (platform: string) => request("/platform-pauses", { method: "POST", body: { platform } }),
+  resume: (platform: string) => request(`/platform-pauses/${platform}`, { method: "DELETE" }),
+};
+
 export const pingAPI = {
   check: () => fetch(`${BASE_URL}/api/ping`, { signal: AbortSignal.timeout(15000), cache: "no-store" }),
 };
