@@ -1002,6 +1002,17 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
                          const lastLog = stepLogs[stepLogs.length - 1];
                          const hasError = stepLogs.some((l: any) => l.level === "error");
                          const stepSc = hasError ? "#FB7185" : "#00C896";
+                         // Bug fix: for a router step, executor.js logs each branch's
+                         // actual result (e.g. "[branch-0] Replied to jane@x.com" or
+                         // "[branch-0] Gmail not connected") BEFORE its own final
+                         // "Router: N/M branches completed" summary line. Previously
+                         // this only rendered `lastLog` — the summary — so the real
+                         // per-branch outcome (including Gmail send/reply failures
+                         // happening inside a fan-out branch) was computed correctly
+                         // by the executor but never visible anywhere in this UI.
+                         const branchLogs = s.type === "router"
+                           ? stepLogs.filter((l: any) => /^\[branch-\d+\]/.test(l.msg || ""))
+                           : [];
                          return (
                            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "6px 8px", background: "rgba(0,0,0,0.15)", borderRadius: 6 }}>
                              <div style={{ width: 6, height: 6, borderRadius: "50%", background: stepSc, flexShrink: 0, marginTop: 4 }} />
@@ -1009,7 +1020,17 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
                                <div style={{ fontSize: 10, color: "#E8EEFF", fontFamily: "'DM Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                  {s.name || s.type || `step-${(s.step ?? i) + 1}`}
                                </div>
-                               {lastLog?.msg && (
+                               {branchLogs.length > 0 ? (
+                                 branchLogs.map((bl: any, bi: number) => (
+                                   <div key={bi} style={{
+                                     fontSize: 9, fontFamily: "'DM Mono',monospace", marginTop: 2,
+                                     color: bl.level === "error" ? "#FB7185" : "rgba(232,238,255,0.4)",
+                                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                   }}>
+                                     {bl.msg}
+                                   </div>
+                                 ))
+                               ) : lastLog?.msg && (
                                  <div style={{ fontSize: 9, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                    {lastLog.msg}
                                  </div>
