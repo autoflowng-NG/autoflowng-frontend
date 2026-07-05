@@ -33,7 +33,7 @@ export interface ExecutionLogEntry {
 export interface NodeState {
   id: string;
   name: string;
-  status: "pending" | "running" | "success" | "failed" | "skipped";
+  status: "pending" | "running" | "success" | "failed" | "skipped" | "paused";
   startedAt?: number;
   finishedAt?: number;
   durationMs?: number;
@@ -169,8 +169,42 @@ export function useExecutionStream(workflowId?: string) {
     /* Filter by workflowId if provided */
     if (workflowId && raw.workflow_id && raw.workflow_id !== workflowId) return;
 
+    // step_paused and step_skipped are node-level events — handle them directly
+    if (ev === "step_paused") {
+      setState(prev => {
+        const nodes = [...prev.nodes];
+        const nodeId = raw.node_id;
+        if (nodeId) {
+          const idx = nodes.findIndex(n => n.id === nodeId);
+          const updated: NodeState = {
+            id:   nodeId,
+            name: raw.stepName || raw.node_name || nodeId,
+            status: "paused",
+          };
+          if (idx >= 0) nodes[idx] = { ...nodes[idx], ...updated };
+          else nodes.push(updated);
+        }
+        return { ...prev, nodes };
+      });
+      return;
+    }
+    if (ev === "step_skipped") {
+      setState(prev => {
+        const nodes = [...prev.nodes];
+        const nodeId = raw.node_id;
+        if (nodeId) {
+          const idx = nodes.findIndex(n => n.id === nodeId);
+          const updated: NodeState = { id: nodeId, name: raw.stepName || nodeId, status: "skipped" };
+          if (idx >= 0) nodes[idx] = { ...nodes[idx], ...updated };
+          else nodes.push(updated);
+        }
+        return { ...prev, nodes };
+      });
+      return;
+    }
+
     const isWorkflowEvent =
-      ev.includes("workflow") || ev.includes("run") || ev.includes("execution");
+      ev.includes("workflow") || ev.includes("run") || ev.includes("execution") || ev.includes("step");
     if (!isWorkflowEvent) return;
 
     const phase = toPhase(raw);
