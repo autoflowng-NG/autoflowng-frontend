@@ -1854,19 +1854,6 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // Delete badge stays at the true connector midpoint.
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
-                    // Part 4 "+" — real cause of "still glued to the node": node boxes are
-                    // ~58px tall (nodeH) centered on y1, meaning the box extends ~29px both
-                    // above AND below y1. The previous y1+22 offset was still INSIDE that
-                    // box's vertical span, not below it — so the button sat on top of the
-                    // node visually and was still getting swallowed by the node's click
-                    // area. Horizontally, adjacent nodes are only ~8px apart (160px spacing
-                    // minus 150px width), so there's no usable horizontal gap to place it
-                    // in at all — attempting to squeeze it between the nodes will always
-                    // fail at this spacing. Fix: drop it clearly below both node boxes
-                    // (nodeH/2 + real clearance) so it renders in genuinely empty canvas
-                    // space, with a short connector stub linking it back to the line.
-                    const plusX = (x1 + x2) / 2;
-                    const plusY = y1 + nodeH / 2 + 20;
 
                     return (
                       <g key={e.id}>
@@ -1946,38 +1933,6 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                           </text>
                         </g>
 
-                        {/* Part 4: generic "+" on the connector — inserts a new node at
-                            this edge's midpoint, splitting it into two. Offset from the
-                            delete badge above so the two click targets never overlap.
-                            Always visible (not hover-only) for the same touch-device
-                            reason as the delete badge above. */}
-                        {/* Short stub connecting the dropped-down "+" back up to the
-                            connector line — without this it looks like a floating button
-                            unrelated to the connection it actually edits. */}
-                        <line
-                          x1={plusX} y1={(y1 + y2) / 2} x2={plusX} y2={plusY - 9}
-                          stroke="rgba(0,200,150,0.4)" strokeWidth={1} strokeDasharray="2 3"
-                        />
-                        <g
-                          style={{ cursor: "pointer", pointerEvents: "all" }}
-                          onClick={ev => {
-                            ev.stopPropagation();
-                            setEdgeInsertTargetId(e.id);
-                            setEdgeInsertPickerOpen(true);
-                          }}
-                        >
-                          {/* Invisible larger tap zone (r=15) around the small visible
-                              circle — gives touch input the extra margin it needs without
-                              making the button itself look big. This is the real fix for
-                              "hard to tap without hitting the node": the tappable area is
-                              much bigger than what's drawn, but visually stays compact. */}
-                          <circle cx={plusX} cy={plusY} r={15} fill="transparent" />
-                          <circle cx={plusX} cy={plusY} r={7} fill="rgba(8,11,22,0.95)" stroke="rgba(0,200,150,0.7)" strokeWidth={1.25} opacity={0.95} className="edge-insert-btn" />
-                          <g pointerEvents="none" opacity={0.95}>
-                            <line x1={plusX - 3} y1={plusY} x2={plusX + 3} y2={plusY} stroke="#00C896" strokeWidth={1.25} strokeLinecap="round" />
-                            <line x1={plusX} y1={plusY - 3} x2={plusX} y2={plusY + 3} stroke="#00C896" strokeWidth={1.25} strokeLinecap="round" />
-                          </g>
-                        </g>
                       </g>
                     );
                   })}
