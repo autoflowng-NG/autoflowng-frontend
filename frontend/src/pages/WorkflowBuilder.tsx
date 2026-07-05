@@ -62,7 +62,7 @@ const NODE_CATALOG: CatalogNode[] = [
   { executorType: "condition", label: "Condition", icon: GitBranch, color: "#FBBF24", category: "Logic",   description: "Branch based on a field value" },
   { executorType: "filter",    label: "Filter",    icon: Filter,    color: "#FBBF24", category: "Logic",   description: "Stop execution if condition not met" },
   { executorType: "delay",     label: "Delay",     icon: Clock,     color: "#FBBF24", category: "Logic",   description: "Wait before continuing" },
-  { executorType: "router",    label: "Router",    icon: GitBranch, color: "#FBBF24", category: "Logic",   description: "Fan out to multiple branches simultaneously (like make.com)" },
+  { executorType: "router",    label: "Router",    icon: GitBranch, color: "#FBBF24", category: "Logic",   description: "Fan out to multiple branches, running each one at the same time" },
   // Data
   { executorType: "database",     label: "Database",         icon: Database, color: "#00C896", category: "Data",    description: "Read or write database records" },
   { executorType: "webhook",      label: "Webhook",          icon: Globe,    color: "#00C896", category: "Data",    description: "Call an external HTTP endpoint" },
@@ -581,7 +581,7 @@ function NodeConfigFields({ node, setNodes }: { node: Node; setNodes: React.Disp
           <div style={{ fontSize: 11, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", lineHeight: 1.7, marginTop: 8 }}>
             <div style={{ color: "#FBBF24", fontWeight: 700, marginBottom: 6 }}>MULTI-BRANCH ROUTER</div>
             Connect this node to <strong style={{ color: "#E8EEFF" }}>multiple nodes</strong> using the right connector dot.
-            Each connected node runs as its own parallel branch — like a Router module in make.com.
+            Each connected node runs as its own parallel branch, all firing at once.
           </div>
           <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8 }}>
             <div style={{ fontSize: 10, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", lineHeight: 1.6 }}>
