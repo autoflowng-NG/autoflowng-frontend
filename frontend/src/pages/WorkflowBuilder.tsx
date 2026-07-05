@@ -1040,6 +1040,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [fanoutPickerOpen, setFanoutPickerOpen] = useState(false);
   const [fanoutSourceNodeId, setFanoutSourceNodeId] = useState<string | null>(null);
 
+  // make.com-style generic "+" on a connector — inserts a new node into the
+  // middle of an existing edge, splitting it into two. Reuses the same node
+  // catalog as the sidebar's addNode flow rather than a second catalog.
+  const [edgeInsertPickerOpen, setEdgeInsertPickerOpen] = useState(false);
+  const [edgeInsertTargetId, setEdgeInsertTargetId] = useState<string | null>(null);
+
   // FIX #1 & #3: use the existing useWorkflowRun hook instead of raw useQuery
   // traceRunId is set after trigger by polling /runs for the newest run
   const [traceRunId, setTraceRunId] = useState<string | null>(null);
@@ -1218,6 +1224,15 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   }, [nodes, execution.nodes, wsIsActive, wsIsDone, traceRun]);
 
   // ── Hydration ──────────────────────────────────────────────────────────────
+  // Defensive coordinate range: anything outside this window is treated as
+  // corrupt/leftover positional data (e.g. from a deleted node, or a stale
+  // template default) rather than a real, intentionally-placed node. Without
+  // this clamp, a single bad x/y on a saved node produces a connector that
+  // stretches out into empty canvas space and reads as a "floating" line
+  // disconnected from everything else, even though the guard against
+  // missing node ids (`if (!fn || !tn) return null`) is satisfied.
+  const SANE_COORD_MIN = -2000;
+  const SANE_COORD_MAX = 6000;
   useEffect(() => {
     if (!data) return;
     setName((data as any).name || "Workflow");
@@ -1225,16 +1240,42 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     setTriggerConfig((data as any).trigger_config || {});
     const ns = (data as any).nodes || [];
     const es = (data as any).edges || [];
-    const hydrated = ns.map((n: any, i: number) => ({
-      id: n.id || `n${i}`,
-      executorType: n.type || "ai_generate",
-      label: n.label || n.name || "Node",
-      x: n.x ?? 60 + i * 196,
-      y: n.y ?? 150,
-      config: n.config || {},
-    }));
+    const hydrated = ns.map((n: any, i: number) => {
+      let x = n.x ?? 60 + i * 160;
+      let y = n.y ?? 150;
+      if (!Number.isFinite(x) || x < SANE_COORD_MIN || x > SANE_COORD_MAX) {
+        console.warn(`[WorkflowBuilder] node ${n.id || i} had an out-of-range x (${n.x}); resetting to a safe default so it can't render a stray floating connector.`);
+        x = 60 + i * 160;
+      }
+      if (!Number.isFinite(y) || y < SANE_COORD_MIN || y > SANE_COORD_MAX) {
+        console.warn(`[WorkflowBuilder] node ${n.id || i} had an out-of-range y (${n.y}); resetting to a safe default so it can't render a stray floating connector.`);
+        y = 150;
+      }
+      return {
+        id: n.id || `n${i}`,
+        executorType: n.type || "ai_generate",
+        label: n.label || n.name || "Node",
+        x,
+        y,
+        config: n.config || {},
+      };
+    });
     setNodes(hydrated);
-    setEdges(es.map((e: any, i: number) => ({ id: `e${i}`, from: e.from || e.source, to: e.to || e.target })));
+    const nodeIds = new Set(hydrated.map((n: any) => n.id));
+    const hydratedEdges = es
+      .map((e: any, i: number) => ({ id: `e${i}`, from: e.from || e.source, to: e.to || e.target }))
+      // Orphaned edges — references to node ids that no longer exist in this
+      // workflow's saved node list — are dropped here rather than left for
+      // the render-time guard to skip silently, so stale data never has a
+      // chance to reach the SVG layer in the first place.
+      .filter((e: any) => {
+        const valid = nodeIds.has(e.from) && nodeIds.has(e.to);
+        if (!valid) {
+          console.warn(`[WorkflowBuilder] dropped edge ${e.id} — references a node id that doesn't exist (${e.from} -> ${e.to}).`);
+        }
+        return valid;
+      });
+    setEdges(hydratedEdges);
     if (ns.length > 0) nextId.current = ns.length + 1;
   }, [data]);
 
@@ -1279,7 +1320,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: catalogEntry.executorType,
       label: catalogEntry.label,
-      x: sourceNode.x + (existingRouter ? 392 : 196),
+      x: sourceNode.x + (existingRouter ? 320 : 160),
       y: existingRouter ? sourceNode.y + 90 : sourceNode.y,
       config: {},
     };
@@ -1293,7 +1334,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: `n${nextId.current++}`,
         executorType: 'router',
         label: 'Fan-out Router',
-        x: sourceNode.x + 196,
+        x: sourceNode.x + 160,
         y: sourceNode.y,
         config: {},
       };
@@ -1323,9 +1364,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       executorType: entry.executorType,
       label: entry.label,
       // make.com-style horizontal flow — tight 150px-wide cards sit on a
-      // 196px pitch, a clean ~46px gap, matching how make.com packs its
+      // 160px pitch, a clean ~10px gap, matching how make.com packs its
       // modules close together with just enough room for the connector line.
-      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 196,
+      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 160,
       y: 140,
       config: {},
     };
@@ -1341,6 +1382,36 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         toast({ title: "Connected", description: `${lastNode.label} → ${newNode.label}` });
       }
     }
+  };
+
+  // Part 4: make.com-style generic "+" on a connector — splits the edge into
+  // two by inserting a brand-new node at its midpoint. Reuses the same node
+  // catalog used by the sidebar's addNode flow, not a second picker.
+  const insertNodeOnEdge = (edgeId: string, entry: CatalogNode) => {
+    const edge = edges.find(ed => ed.id === edgeId);
+    if (!edge) return;
+    const fromNode = nodes.find(n => n.id === edge.from);
+    const toNode = nodes.find(n => n.id === edge.to);
+    if (!fromNode || !toNode) return;
+
+    const newNode: Node = {
+      id: `n${nextId.current++}`,
+      executorType: entry.executorType,
+      label: entry.label,
+      x: (fromNode.x + toNode.x) / 2,
+      y: (fromNode.y + toNode.y) / 2,
+      config: {},
+    };
+
+    setNodes(ns => [...ns, newNode]);
+    setEdges(es => [
+      ...es.filter(ed => ed.id !== edgeId),
+      { id: `e${Date.now()}`, from: edge.from, to: newNode.id },
+      { id: `e${Date.now() + 1}`, from: newNode.id, to: edge.to },
+    ]);
+    toast({ title: "Node inserted", description: `${entry.label} added between ${fromNode.label} and ${toNode.label}.` });
+    setEdgeInsertPickerOpen(false);
+    setEdgeInsertTargetId(null);
   };
 
   // ── Delete node ────────────────────────────────────────────────────────────
@@ -1704,14 +1775,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                   transformOrigin: "0 0",
                 }}
               >
-                {/* SVG edges — make.com-style smooth curves with circular junction dots */}
+                {/* SVG edges — make.com-style smooth curves with circular junction dots.
+                    No glow filter, no traveling animated dots — those are what made the
+                    resting/running state look busier and heavier than make.com's flat,
+                    quiet connectors. */}
                 <svg style={{ position: "absolute", overflow: "visible", pointerEvents: "none" }}>
-                  <defs>
-                    <filter id="edge-glow">
-                      <feGaussianBlur stdDeviation="2" result="blur" />
-                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                    </filter>
-                  </defs>
                   {edges.map(e => {
                     const fn = nodes.find(n => n.id === e.from);
                     const tn = nodes.find(n => n.id === e.to);
@@ -1752,53 +1820,69 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     const fromPlatform = fromNode ? (PLATFORM_SEND_TYPES[fromNode.executorType] ?? null) : null;
                     const isPausedEdge = fromPlatform ? pausedPlatforms.has(fromPlatform) : false;
 
+                    // make.com's idle connectors are a neutral dashed gray-white, not a
+                    // tinted-down brand color — turning teal's opacity down alone still
+                    // reads as "a teal line" against the dark canvas. Resting state now
+                    // uses a true neutral gray and a dash pattern to match; the completed
+                    // (bothDone) state stays solid bright teal so success still reads
+                    // clearly, and paused/tracing states are unchanged.
                     const edgeColor = isPausedEdge && !isTracing
                       ? "rgba(251,113,133,0.25)"
                       : bothDone
                       ? "#00C896"
                       : isTracing
                       ? "rgba(255,255,255,0.16)"
-                      : "rgba(0,200,150,0.55)";
-                    const edgeWidth = bothDone ? 2.5 : isRunningEdge ? 2.5 : 2;
+                      : "rgba(200,205,220,0.35)";
+                    // Dashed only in the idle/resting state, matching make.com's dotted
+                    // connectors — solid once a run actually touches this edge (paused,
+                    // tracing, or completed all read as "something happened here").
+                    const isIdleEdge = !isPausedEdge && !isTracing && !bothDone;
+                    const edgeDash = isIdleEdge ? "4 4" : undefined;
 
-                    // Midpoint for delete button
+                    // Thinner, quieter line weight to match make.com's understated connectors.
+                    const edgeWidth = bothDone ? 1.5 : isRunningEdge ? 1.5 : 1;
+                    // Endpoint dots read as small and muted against the background rather
+                    // than popping at the edge's full saturation.
+                    const dotColor = bothDone ? "#00C896" : edgeColor;
+                    const dotOpacity = bothDone ? 1 : 0.6;
+
+                    // Midpoint for delete + insert buttons
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
+                    // Offset the two midpoint controls slightly apart so the delete
+                    // badge and the new generic "+" don't overlap each other.
+                    const plusX = midX - 16;
+                    const plusY = midY;
 
                     return (
                       <g key={e.id}>
                         {/* Main edge — clean rounded line, no arrowhead marker, no glow.
-                            make.com's connectors are plain thin lines; the glow/blur layer
-                            and extra animated dots were what produced the stray floating
-                            "dot" artifact reported on screen, so they're gone. */}
+                            make.com's connectors are plain thin lines. */}
                         <path
                           d={pathD}
                           stroke={edgeColor}
                           strokeWidth={edgeWidth}
                           strokeLinecap="round"
+                          strokeDasharray={edgeDash}
                           fill="none"
                           style={{ transition: "stroke 0.35s, stroke-width 0.2s" }}
                         />
 
-                        {/* Endpoint dots — small filled circles exactly on the output/input
-                            ports, matching make.com's junction markers. Only these two. */}
-                        <circle cx={x1} cy={y1} r={3} fill={edgeColor} />
-                        <circle cx={x2} cy={y2} r={3} fill={edgeColor} />
+                        {/* Endpoint dots — small, muted circles exactly on the output/input
+                            ports, matching make.com's quiet junction markers. Only these two. */}
+                        <circle cx={x1} cy={y1} r={2} fill={dotColor} opacity={dotOpacity} />
+                        <circle cx={x2} cy={y2} r={2} fill={dotColor} opacity={dotOpacity} />
 
-                        {/* Feature 3: staggered dots on running edges; trailing dot on success→pending */}
+                        {/* Single traveling dot — only while THIS edge's source step is
+                            actively running. Deliberately just one small, unglowed dot
+                            (not the old dual glowing-dot pair) so it reads as a quiet
+                            in-progress signal rather than a decorative flourish. The
+                            make.com reference is a static screenshot so it can't show
+                            this motion, but make.com's own canvas does animate a moving
+                            dot along the active connector during a live run. */}
                         {isRunningEdge && (
-                          <>
-                            <circle r="4" fill="#38BDF8" opacity="0.95" style={{ filter: "drop-shadow(0 0 4px #38BDF8)" }}>
-                              <animateMotion dur="1s" repeatCount="indefinite" path={pathD} />
-                            </circle>
-                            <circle r="3" fill="#38BDF8" opacity="0.55" style={{ filter: "drop-shadow(0 0 3px #38BDF8)" }}>
-                              <animateMotion dur="1s" repeatCount="indefinite" path={pathD} begin="-0.4s" />
-                            </circle>
-                          </>
-                        )}
-                        {!isRunningEdge && fromDone && !toDone && isTracing && (
-                          <circle r="3" fill="#00C896" opacity="0.7" style={{ filter: "drop-shadow(0 0 3px #00C896)" }}>
-                            <animateMotion dur="1.4s" repeatCount="indefinite" path={pathD} />
+                          <circle r="2.5" fill="#38BDF8">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
                           </circle>
                         )}
 
@@ -1836,6 +1920,33 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
                             <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
                           </text>
+                        </g>
+
+                        {/* Part 4: generic "+" on the connector — inserts a new node at
+                            this edge's midpoint, splitting it into two. Offset from the
+                            delete badge above so the two click targets never overlap. */}
+                        <g
+                          style={{ cursor: "pointer", pointerEvents: "all" }}
+                          onClick={ev => {
+                            ev.stopPropagation();
+                            setEdgeInsertTargetId(e.id);
+                            setEdgeInsertPickerOpen(true);
+                          }}
+                        >
+                          <circle cx={plusX} cy={plusY} r={9} fill="rgba(8,11,22,0.97)" stroke="rgba(0,200,150,0.45)" strokeWidth={1.5} opacity={0} className="edge-insert-btn">
+                            <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                            <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                          </circle>
+                          <g pointerEvents="none" opacity={0}>
+                            <line x1={plusX - 4} y1={plusY} x2={plusX + 4} y2={plusY} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round">
+                              <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                              <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                            </line>
+                            <line x1={plusX} y1={plusY - 4} x2={plusX} y2={plusY + 4} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round">
+                              <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
+                              <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
+                            </line>
+                          </g>
                         </g>
                       </g>
                     );
@@ -1916,6 +2027,51 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     </div>
                     <button
                       onClick={() => { setFanoutPickerOpen(false); setFanoutSourceNodeId(null); }}
+                      style={{ width: "100%", marginTop: 14, background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px", color: "rgba(232,238,255,0.4)", fontSize: 12, cursor: "pointer" }}
+                    >Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Part 4: generic "+" node-insert picker — reuses the full NODE_CATALOG,
+                  same list the sidebar's addNode flow uses, not a second catalog. */}
+              {edgeInsertPickerOpen && (
+                <div
+                  style={{ position: "absolute", inset: 0, zIndex: 200, background: "rgba(4,6,15,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  onClick={() => { setEdgeInsertPickerOpen(false); setEdgeInsertTargetId(null); }}
+                >
+                  <div
+                    style={{ background: "rgba(8,11,22,0.98)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 16, padding: 24, width: 300, maxWidth: "90vw", maxHeight: "70vh", overflowY: "auto" }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 4 }}>Insert Node</div>
+                    <div style={{ fontSize: 11, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", marginBottom: 16 }}>
+                      Pick a node to insert on this connector — it will split into two.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {NODE_CATALOG.map(entry => {
+                        const Icon = entry.icon;
+                        const isLocked = !!(entry.requiredPlatform && !connectedPlatforms.has(entry.requiredPlatform));
+                        return (
+                          <button
+                            key={entry.executorType}
+                            onClick={() => edgeInsertTargetId && insertNodeOnEdge(edgeInsertTargetId, entry)}
+                            style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "9px 12px", cursor: "pointer", transition: "background 0.15s", opacity: isLocked ? 0.65 : 1 }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = `${entry.color}12`; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.03)"; }}
+                          >
+                            <div style={{ width: 26, height: 26, borderRadius: 7, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <Icon size={12} color={entry.color} />
+                            </div>
+                            <div style={{ flex: 1, textAlign: "left" }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF" }}>{entry.label}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => { setEdgeInsertPickerOpen(false); setEdgeInsertTargetId(null); }}
                       style={{ width: "100%", marginTop: 14, background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px", color: "rgba(232,238,255,0.4)", fontSize: 12, cursor: "pointer" }}
                     >Cancel</button>
                   </div>
