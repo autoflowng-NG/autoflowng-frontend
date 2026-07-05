@@ -1458,29 +1458,46 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   // ── Add node ───────────────────────────────────────────────────────────────
   const addNode = (entry: CatalogNode) => {
-    const newNode: Node = {
-      id: `n${nextId.current++}`,
-      executorType: entry.executorType,
-      label: entry.label,
-      // make.com-style horizontal flow — tight 150px-wide cards sit on a
-      // 160px pitch, a clean ~10px gap, matching how make.com packs its
-      // modules close together with just enough room for the connector line.
-      x: nodes.length === 0 ? 60 : Math.max(...nodes.map(n => n.x)) + 160,
-      y: 140,
-      config: {},
-    };
-    setNodes(ns => [...ns, newNode]);
-    // Auto-connect: wire to the most recent node immediately, no confirmation needed.
-    // (Previously this only opened a dialog the user could dismiss, leaving nodes
-    // visibly disconnected on the canvas — not how make.com behaves.)
-    if (nodes.length >= 1) {
-      const lastNode = nodes[nodes.length - 1];
-      const alreadyLinked = edges.some(e => e.from === lastNode.id && e.to === newNode.id);
-      if (!alreadyLinked) {
-        setEdges(es => [...es, { id: `e${Date.now()}`, from: lastNode.id, to: newNode.id }]);
+    // Bug fix: previously this read `nodes`/`edges` directly from the render
+    // closure to compute the new node's x-position and which node to
+    // auto-connect from. setNodes/setEdges are async and batched, so clicking
+    // multiple sidebar catalog entries in quick succession (before React
+    // commits the first click's state update) meant every click after the
+    // first still saw the pre-click nodes/edges — producing an auto-connect
+    // edge wired to the wrong (stale) "last node," or occasionally no edge
+    // at all. This is the root cause of nodes appearing on canvas with no
+    // visible connector lines between them. Using the functional updater
+    // form for both setNodes and setEdges guarantees each call always
+    // computes against the most recently committed state, even when several
+    // addNode() calls are queued back-to-back in the same tick.
+    setNodes(ns => {
+      const newNode: Node = {
+        id: `n${nextId.current++}`,
+        executorType: entry.executorType,
+        label: entry.label,
+        // make.com-style horizontal flow — tight 150px-wide cards sit on a
+        // 160px pitch, a clean ~10px gap, matching how make.com packs its
+        // modules close together with just enough room for the connector line.
+        x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 160,
+        y: 140,
+        config: {},
+      };
+
+      // Auto-connect: wire to the most recent node immediately, no confirmation needed.
+      // (Previously this only opened a dialog the user could dismiss, leaving nodes
+      // visibly disconnected on the canvas — not how make.com behaves.)
+      if (ns.length >= 1) {
+        const lastNode = ns[ns.length - 1];
+        setEdges(es => {
+          const alreadyLinked = es.some(e => e.from === lastNode.id && e.to === newNode.id);
+          if (alreadyLinked) return es;
+          return [...es, { id: `e${Date.now()}-${newNode.id}`, from: lastNode.id, to: newNode.id }];
+        });
         toast({ title: "Connected", description: `${lastNode.label} → ${newNode.label}` });
       }
-    }
+
+      return [...ns, newNode];
+    });
   };
 
   // Part 4: make.com-style generic "+" on a connector — splits the edge into
