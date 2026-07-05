@@ -1431,48 +1431,78 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     const sourceNode = nodes.find(n => n.id === sourceNodeId);
     if (!sourceNode) return;
 
-    const existingRouterEdge = edges.find(e => e.from === sourceNodeId);
-    const existingRouter = existingRouterEdge
-      ? nodes.find(n => n.id === existingRouterEdge.to && n.executorType === 'router')
-      : null;
+    // Bug fix: previously this only looked for an existing router by checking
+    // "does an edge FROM sourceNodeId point at a router node?" — which only
+    // covers tapping "+" on a plain node that already fans into a router.
+    // Tapping "+" directly ON the router itself (the natural way to add a
+    // second/third branch) was never handled: sourceNodeId IS the router's
+    // own id, so that lookup searched for an edge from the router to some
+    // OTHER node and could misidentify an unrelated downstream node as "the
+    // existing router," producing a corrupted edge graph. Checking
+    // sourceNode.executorType === 'router' first covers this directly.
+    const existingRouter = sourceNode.executorType === 'router'
+      ? sourceNode
+      : (() => {
+          const existingRouterEdge = edges.find(e => e.from === sourceNodeId);
+          return existingRouterEdge
+            ? nodes.find(n => n.id === existingRouterEdge.to && n.executorType === 'router') || null
+            : null;
+        })();
 
-    const newBranchNode: Node = {
-      id: `n${nextId.current++}`,
-      executorType: catalogEntry.executorType,
-      label: catalogEntry.label,
-      x: sourceNode.x + (existingRouter ? 320 : 160),
-      y: existingRouter ? sourceNode.y + 90 : sourceNode.y,
-      config: {},
-    };
+    const newBranchId = `n${nextId.current++}`;
+    // Bug fix: Date.now() alone is not guaranteed unique across two edges
+    // created within the same millisecond — a duplicate id breaks React's
+    // key-based reconciliation and can cause edges to silently fail to
+    // render. Suffixing with the new node's id (always unique) fixes this.
+    const edgeId = `e${Date.now()}-${newBranchId}`;
 
     if (existingRouter) {
+      const branchCount = edges.filter(e => e.from === existingRouter.id).length;
+      const newBranchNode: Node = {
+        id: newBranchId,
+        executorType: catalogEntry.executorType,
+        label: catalogEntry.label,
+        x: existingRouter.x + 160,
+        y: existingRouter.y + 50 + branchCount * 90,
+        config: {},
+      };
       setNodes(ns => [...ns, newBranchNode]);
-      setEdges(es => [...es, { id: `e${Date.now()}`, from: existingRouter.id, to: newBranchNode.id }]);
+      setEdges(es => [...es, { id: edgeId, from: existingRouter.id, to: newBranchNode.id }]);
       toast({ title: "Branch added", description: `New ${catalogEntry.label} branch wired to router.` });
     } else {
+      const routerId = `n${nextId.current++}`;
       const routerNode: Node = {
-        id: `n${nextId.current++}`,
+        id: routerId,
         executorType: 'router',
         label: 'Fan-out Router',
         x: sourceNode.x + 160,
         y: sourceNode.y,
         config: {},
       };
+      const newBranchNode: Node = {
+        id: newBranchId,
+        executorType: catalogEntry.executorType,
+        label: catalogEntry.label,
+        x: sourceNode.x + 320,
+        y: sourceNode.y + 90,
+        config: {},
+      };
       const downstream = edges.filter(e => e.from === sourceNodeId);
       const downstreamIds = new Set(downstream.map(e => e.to));
       setEdges(es => [
         ...es.filter(e => e.from !== sourceNodeId),
-        { id: `e${Date.now()}`,     from: sourceNodeId,   to: routerNode.id },
-        ...downstream.map(e => ({ ...e, from: routerNode.id })),
-        { id: `e${Date.now() + 1}`, from: routerNode.id,  to: newBranchNode.id },
+        { id: `e${Date.now()}-${routerId}`, from: sourceNodeId, to: routerId },
+        ...downstream.map(e => ({ ...e, from: routerId })),
+        { id: edgeId,                       from: routerId,    to: newBranchId },
       ]);
       setNodes(ns => [
         ...ns.map(n => downstreamIds.has(n.id) ? { ...n, y: n.y - 50 } : n),
         routerNode,
-        { ...newBranchNode, y: newBranchNode.y + 50 },
+        newBranchNode,
       ]);
       toast({ title: "Fan-out created", description: `Router + ${catalogEntry.label} branch inserted.` });
     }
+
     setFanoutPickerOpen(false);
     setFanoutSourceNodeId(null);
   };
