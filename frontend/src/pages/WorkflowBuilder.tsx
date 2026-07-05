@@ -1779,7 +1779,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     No glow filter, no traveling animated dots — those are what made the
                     resting/running state look busier and heavier than make.com's flat,
                     quiet connectors. */}
-                <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}>
+                                <svg width={8000} height={8000} style={{ position: "absolute", top: 0, left: 0, overflow: "visible", pointerEvents: "none" }}>
                   {edges.map(e => {
                     const fn = nodes.find(n => n.id === e.from);
                     const tn = nodes.find(n => n.id === e.to);
@@ -1854,17 +1854,19 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // Delete badge stays at the true connector midpoint.
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
-                    // Part 4 "+" — matching make.com's actual placement: small, sitting
-                    // directly ON the connector line (not dropped below it), with just a
-                    // small gap after the source node's edge so it clearly isn't part of
-                    // the node but also isn't floating out in open space. Kept small (r=7,
-                    // matches make.com's compact circle) rather than the earlier oversized
-                    // r=9 version. The bigger invisible tap ring below (r=15) is what
-                    // actually solves "hard to tap without hitting the node" — visually it
-                    // stays tight and small like the reference.
-                    const gapMid = (x1 + x2) / 2;
-                    const plusX = Math.min(x1 + 20, gapMid);
-                    const plusY = y1;
+                    // Part 4 "+" — real cause of "still glued to the node": node boxes are
+                    // ~58px tall (nodeH) centered on y1, meaning the box extends ~29px both
+                    // above AND below y1. The previous y1+22 offset was still INSIDE that
+                    // box's vertical span, not below it — so the button sat on top of the
+                    // node visually and was still getting swallowed by the node's click
+                    // area. Horizontally, adjacent nodes are only ~8px apart (160px spacing
+                    // minus 150px width), so there's no usable horizontal gap to place it
+                    // in at all — attempting to squeeze it between the nodes will always
+                    // fail at this spacing. Fix: drop it clearly below both node boxes
+                    // (nodeH/2 + real clearance) so it renders in genuinely empty canvas
+                    // space, with a short connector stub linking it back to the line.
+                    const plusX = (x1 + x2) / 2;
+                    const plusY = y1 + nodeH / 2 + 20;
 
                     return (
                       <g key={e.id}>
@@ -1949,6 +1951,13 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             delete badge above so the two click targets never overlap.
                             Always visible (not hover-only) for the same touch-device
                             reason as the delete badge above. */}
+                        {/* Short stub connecting the dropped-down "+" back up to the
+                            connector line — without this it looks like a floating button
+                            unrelated to the connection it actually edits. */}
+                        <line
+                          x1={plusX} y1={(y1 + y2) / 2} x2={plusX} y2={plusY - 9}
+                          stroke="rgba(0,200,150,0.4)" strokeWidth={1} strokeDasharray="2 3"
+                        />
                         <g
                           style={{ cursor: "pointer", pointerEvents: "all" }}
                           onClick={ev => {
