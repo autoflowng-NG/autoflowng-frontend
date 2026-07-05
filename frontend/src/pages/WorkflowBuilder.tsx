@@ -5,7 +5,7 @@ import {
   useWorkflowRuns, useWorkflowRun,
 } from "../hooks/useWorkflows";
 import { useConnections } from "../hooks/useConnections";
-import { workflowsAPI, platformPausesAPI } from "../lib/api";
+import api, { workflowsAPI } from "../lib/api";
 import { useExecutionStream } from "../hooks/useExecutionStream";
 import { PageTransition } from "../components/PageTransition";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ import {
   Clock, CheckCircle2, XCircle, RefreshCw, Zap, GitBranch, Bot,
   Globe, Filter, Code, Database, Mail, MessageSquare, Send,
   MessageCircle, Search, Radio, X, RotateCcw, Lock, AlertTriangle, PauseCircle, PlayCircle, Plus,
+  Copy, Pencil, Eye, StopCircle, ChevronUp,
 } from "lucide-react";
 
 interface WorkflowBuilderProps { id: string; }
@@ -25,6 +26,8 @@ interface CatalogNode {
   icon: React.ComponentType<{ size?: number | string; color?: string }>;
   color: string;
   category: "AI" | "Messaging" | "Social" | "Logic" | "Data" | "Utility";
+  /** Second-level action-type grouping within a category (e.g. "Send", "Reply", "Post") */
+  subGroup?: string;
   description: string;
   requiredPlatform?: string;
 }
@@ -32,39 +35,41 @@ interface CatalogNode {
 const NODE_CATALOG: CatalogNode[] = [
   // AI
   { executorType: "ai_generate",   label: "AI Generate",     icon: Bot,           color: "#A78BFA", category: "AI",        description: "Run a prompt through the AI engine" },
-  // Messaging
-  { executorType: "gmail_send",    label: "Gmail Send",       icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Send a new email via Gmail",            requiredPlatform: "gmail" },
-  { executorType: "gmail_reply",   label: "Gmail Reply",      icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Reply to a Gmail thread",               requiredPlatform: "gmail" },
-  { executorType: "slack_post",         label: "Slack Post",           icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Post a message to a Slack channel",                    requiredPlatform: "slack" },
-  { executorType: "slack_thread_reply",  label: "Slack Thread Reply",   icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Reply in-thread to the triggering Slack message",     requiredPlatform: "slack" },
-  { executorType: "telegram_send",       label: "Telegram Send",        icon: Send,          color: "#38BDF8", category: "Messaging", description: "Send a Telegram message",                              requiredPlatform: "telegram" },
-  { executorType: "telegram_reply",      label: "Telegram Reply",       icon: Send,          color: "#38BDF8", category: "Messaging", description: "Reply to the chat that triggered this workflow",        requiredPlatform: "telegram" },
-  { executorType: "whatsapp_send",       label: "WhatsApp Send",        icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Send a WhatsApp message",                              requiredPlatform: "whatsapp" },
-  { executorType: "whatsapp_reply",      label: "WhatsApp Reply",       icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Reply to the WhatsApp sender (reads from from context)", requiredPlatform: "whatsapp" },
-  // Social
-  { executorType: "twitter_post",         label: "Twitter Post",          icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post a tweet (max 280 chars)",                      requiredPlatform: "twitter" },
-  { executorType: "twitter_comment_reply",label: "Twitter Reply",         icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to a tweet",                                  requiredPlatform: "twitter" },
-  { executorType: "twitter_dm_reply",     label: "Twitter DM Reply",      icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to a Twitter/X DM (reads sender from context)", requiredPlatform: "twitter" },
-  { executorType: "linkedin_post",        label: "LinkedIn Post",         icon: Globe,         color: "#38BDF8", category: "Social",    description: "Publish to your LinkedIn profile",                  requiredPlatform: "linkedin" },
-  { executorType: "facebook_post",        label: "Facebook Post",         icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post to your Facebook page",                        requiredPlatform: "facebook" },
-  { executorType: "facebook_comment_reply", label: "Facebook Comment Reply", icon: Globe,      color: "#38BDF8", category: "Social",    description: "Reply to a Facebook page comment",                  requiredPlatform: "facebook" },
-  { executorType: "facebook_dm_reply",    label: "Facebook Messenger Reply", icon: Globe,      color: "#38BDF8", category: "Social",    description: "Reply to a Facebook Messenger DM (reads sender from context)", requiredPlatform: "facebook" },
-  { executorType: "instagram_comment_reply", label: "Instagram Comment Reply", icon: Globe,    color: "#38BDF8", category: "Social",    description: "Reply to an Instagram comment",                     requiredPlatform: "instagram" },
-  { executorType: "instagram_dm_reply",   label: "Instagram DM Reply",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to an Instagram DM (24-hour window applies)", requiredPlatform: "instagram" },
-  { executorType: "youtube_comment_reply",label: "YouTube Comment Reply", icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to a YouTube comment",                        requiredPlatform: "youtube" },
+  // Messaging — Send subgroup
+  { executorType: "gmail_send",    label: "Gmail Send",       icon: Mail,          color: "#38BDF8", category: "Messaging", subGroup: "Send",  description: "Send a new email via Gmail",                                     requiredPlatform: "gmail" },
+  { executorType: "slack_post",    label: "Slack Post",       icon: MessageSquare, color: "#38BDF8", category: "Messaging", subGroup: "Send",  description: "Post a message to a Slack channel",                              requiredPlatform: "slack" },
+  { executorType: "telegram_send", label: "Telegram Send",    icon: Send,          color: "#38BDF8", category: "Messaging", subGroup: "Send",  description: "Send a Telegram message",                                        requiredPlatform: "telegram" },
+  { executorType: "whatsapp_send", label: "WhatsApp Send",    icon: MessageCircle, color: "#38BDF8", category: "Messaging", subGroup: "Send",  description: "Send a WhatsApp message",                                        requiredPlatform: "whatsapp" },
+  // Messaging — Reply subgroup
+  { executorType: "gmail_reply",         label: "Gmail Reply",        icon: Mail,          color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to a Gmail thread",                                  requiredPlatform: "gmail" },
+  { executorType: "slack_thread_reply",  label: "Slack Thread Reply", icon: MessageSquare, color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply in-thread to the triggering Slack message",          requiredPlatform: "slack" },
+  { executorType: "telegram_reply",      label: "Telegram Reply",     icon: Send,          color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to the chat that triggered this workflow",           requiredPlatform: "telegram" },
+  { executorType: "whatsapp_reply",      label: "WhatsApp Reply",     icon: MessageCircle, color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to the WhatsApp sender",                            requiredPlatform: "whatsapp" },
+  // Social — Post subgroup
+  { executorType: "twitter_post",  label: "Twitter Post",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Post",          description: "Post a tweet (max 280 chars)",              requiredPlatform: "twitter" },
+  { executorType: "linkedin_post", label: "LinkedIn Post",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Post",          description: "Publish to your LinkedIn profile",          requiredPlatform: "linkedin" },
+  { executorType: "facebook_post", label: "Facebook Post",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Post",          description: "Post to your Facebook page",                requiredPlatform: "facebook" },
+  // Social — Comment Reply subgroup
+  { executorType: "twitter_comment_reply",   label: "Twitter Reply",           icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a tweet",                                 requiredPlatform: "twitter" },
+  { executorType: "facebook_comment_reply",  label: "Facebook Comment Reply",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a Facebook page comment",                 requiredPlatform: "facebook" },
+  { executorType: "instagram_comment_reply", label: "Instagram Comment Reply", icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to an Instagram comment",                    requiredPlatform: "instagram" },
+  { executorType: "youtube_comment_reply",   label: "YouTube Comment Reply",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a YouTube comment",                       requiredPlatform: "youtube" },
+  // Social — DM Reply subgroup
+  { executorType: "twitter_dm_reply",   label: "Twitter DM Reply",           icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to a Twitter/X DM",                     requiredPlatform: "twitter" },
+  { executorType: "facebook_dm_reply",  label: "Facebook Messenger Reply",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to a Facebook Messenger DM",            requiredPlatform: "facebook" },
+  { executorType: "instagram_dm_reply", label: "Instagram DM Reply",         icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to an Instagram DM (24-hour window)",   requiredPlatform: "instagram" },
   // Logic
-  { executorType: "condition",     label: "Condition",        icon: GitBranch,     color: "#FBBF24", category: "Logic",     description: "Branch based on a field value" },
-  { executorType: "filter",        label: "Filter",           icon: Filter,        color: "#FBBF24", category: "Logic",     description: "Stop execution if condition not met" },
-  { executorType: "delay",         label: "Delay",            icon: Clock,         color: "#FBBF24", category: "Logic",     description: "Wait before continuing" },
+  { executorType: "condition", label: "Condition", icon: GitBranch, color: "#FBBF24", category: "Logic",   description: "Branch based on a field value" },
+  { executorType: "filter",    label: "Filter",    icon: Filter,    color: "#FBBF24", category: "Logic",   description: "Stop execution if condition not met" },
+  { executorType: "delay",     label: "Delay",     icon: Clock,     color: "#FBBF24", category: "Logic",   description: "Wait before continuing" },
+  { executorType: "router",    label: "Router",    icon: GitBranch, color: "#FBBF24", category: "Logic",   description: "Fan out to multiple branches simultaneously (like make.com)" },
   // Data
-  { executorType: "database",      label: "Database",         icon: Database,      color: "#00C896", category: "Data",      description: "Read or write database records" },
-  { executorType: "webhook",       label: "Webhook",          icon: Globe,         color: "#00C896", category: "Data",      description: "Call an external HTTP endpoint" },
-  { executorType: "http_request",  label: "HTTP Request",     icon: Globe,         color: "#00C896", category: "Data",      description: "Make a generic HTTP request" },
+  { executorType: "database",     label: "Database",         icon: Database, color: "#00C896", category: "Data",    description: "Read or write database records" },
+  { executorType: "webhook",      label: "Webhook",          icon: Globe,    color: "#00C896", category: "Data",    description: "Call an external HTTP endpoint" },
+  { executorType: "http_request", label: "HTTP Request",     icon: Globe,    color: "#00C896", category: "Data",    description: "Make a generic HTTP request" },
   // Utility
-  { executorType: "code",          label: "Code / Transform", icon: Code,          color: "#A78BFA", category: "Utility",   description: "Transform text or run a code operation" },
-  { executorType: "set_variable",  label: "Set Variable",     icon: Settings2,     color: "#A78BFA", category: "Utility",   description: "Store a value in workflow context" },
-  // Logic — multi-branch
-  { executorType: "router",        label: "Router",           icon: GitBranch,     color: "#FBBF24", category: "Logic",     description: "Fan out to multiple branches simultaneously (like make.com)" },
+  { executorType: "code",         label: "Code / Transform", icon: Code,     color: "#A78BFA", category: "Utility", description: "Transform text or run a code operation" },
+  { executorType: "set_variable", label: "Set Variable",     icon: Settings2,color: "#A78BFA", category: "Utility", description: "Store a value in workflow context" },
 ];
 
 const CATEGORY_ORDER: CatalogNode["category"][] = ["AI", "Messaging", "Social", "Logic", "Data", "Utility"];
@@ -106,17 +111,20 @@ interface Node {
   x: number;
   y: number;
   config: Record<string, any>;
+  paused?: boolean;   // node-level pause flag (persisted in config.paused)
+  disabled?: boolean; // node-level disable flag
 }
 
 interface Edge { from: string; to: string; id: string; }
 
 // FIX #7: backend sets status "completed" not "success". Handle both.
-type StepStatus = "pending" | "running" | "success" | "completed" | "failed" | "skipped" | "filtered" | "cancelled";
+type StepStatus = "pending" | "running" | "success" | "completed" | "failed" | "skipped" | "filtered" | "cancelled" | "paused";
 
 // Normalise backend status strings to display status
 function normaliseStatus(s: string): StepStatus {
   if (s === "completed") return "success";
   if (s === "filtered" || s === "cancelled") return "skipped";
+  if (s === "paused") return "paused";
   return s as StepStatus;
 }
 
@@ -668,6 +676,7 @@ const TRACE_COLORS: Record<string, string> = {
   skipped:   "#FBBF24",
   filtered:  "#FBBF24",
   cancelled: "#FBBF24",
+  paused:    "#FBBF24",
 };
 
 function TraceStatusIcon({ status }: { status: string }) {
@@ -675,6 +684,7 @@ function TraceStatusIcon({ status }: { status: string }) {
   if (n === "success")  return <CheckCircle2 size={11} color="#00C896" />;
   if (n === "failed")   return <XCircle size={11} color="#FB7185" />;
   if (n === "skipped")  return <XCircle size={11} color="#FBBF24" />;
+  if (n === "paused")   return <PauseCircle size={11} color="#FBBF24" />;
   if (n === "running")  return <RefreshCw size={11} color="#38BDF8" style={{ animation: "spin-slow 1s linear infinite" }} />;
   return <Clock size={11} color="rgba(232,238,255,0.25)" />;
 }
@@ -682,7 +692,7 @@ function TraceStatusIcon({ status }: { status: string }) {
 // ─── NodeBox ──────────────────────────────────────────────────────────────────
 function NodeBox({
   node, selected, connecting, traceStatus, onSelect, onDelete, onConnectorClick,
-  isPaused, onPauseToggle, onFanout,
+  onPauseToggle, onFanout, onContextMenu,
 }: {
   node: Node;
   selected: boolean;
@@ -691,15 +701,21 @@ function NodeBox({
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onConnectorClick: (id: string, e: React.MouseEvent) => void;
-  isPaused?: boolean;
   onPauseToggle?: () => void;
   onFanout?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const entry = NODE_CATALOG.find(n => n.executorType === node.executorType) || NODE_CATALOG[0];
   const Icon = entry.icon;
   const traceColor = traceStatus ? (TRACE_COLORS[traceStatus] || TRACE_COLORS.pending) : null;
+  const isPaused = !!node.config?.paused;
+  const isDisabled = !!node.config?.disabled;
 
-  const borderColor = traceColor ?? (selected ? entry.color : "rgba(255,255,255,0.09)");
+  const borderColor = isPaused
+    ? "rgba(251,191,36,0.55)"
+    : isDisabled
+    ? "rgba(255,255,255,0.05)"
+    : traceColor ?? (selected ? entry.color : "rgba(255,255,255,0.09)");
 
   const boxShadow = traceStatus === "running"
     ? "0 0 0 3px rgba(56,189,248,0.25), 0 0 20px rgba(56,189,248,0.15)"
@@ -707,27 +723,52 @@ function NodeBox({
     ? "0 0 0 2px rgba(0,200,150,0.2), 0 0 12px rgba(0,200,150,0.12)"
     : traceStatus === "failed"
     ? "0 0 0 2px rgba(251,113,133,0.25), 0 0 12px rgba(251,113,133,0.12)"
+    : isPaused
+    ? "0 0 0 2px rgba(251,191,36,0.2), 0 0 10px rgba(251,191,36,0.1)"
     : selected
     ? `0 0 20px ${entry.color}30`
     : undefined;
+
+  // Long-press for mobile context menu
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    longPressTimer.current = setTimeout(() => {
+      if (onContextMenu) {
+        const touch = e.touches[0];
+        onContextMenu({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {}, stopPropagation: () => {} } as any);
+      }
+    }, 500);
+  };
+  const onTouchEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
 
   return (
     <div
       data-testid={`node-${node.id}`}
       onClick={() => onSelect(node.id)}
+      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e); }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       style={{
         position: "absolute", left: node.x, top: node.y,
-        width: 150, background: "rgba(8,11,22,0.97)",
+        width: 150, background: isDisabled ? "rgba(8,11,22,0.7)" : "rgba(8,11,22,0.97)",
         border: `1.5px solid ${borderColor}`,
         borderRadius: 12, padding: "10px 12px", cursor: "pointer", userSelect: "none",
         boxShadow: boxShadow ?? "0 2px 16px rgba(0,0,0,0.35)",
         transition: "border-color 0.25s, box-shadow 0.25s",
         zIndex: selected ? 10 : 1,
+        opacity: isDisabled ? 0.5 : 1,
       }}
     >
-      {/* Feature 3: top accent bar removed — Running shimmer */}
+      {/* Running shimmer */}
       {traceStatus === "running" && (
         <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.06) 50%, transparent 100%)", animation: "trace-shimmer 1.4s ease-in-out infinite", pointerEvents: "none" }} />
+      )}
+
+      {/* Paused overlay tint */}
+      {isPaused && (
+        <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "rgba(251,191,36,0.04)", pointerEvents: "none" }} />
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -748,47 +789,69 @@ function NodeBox({
         onClick={e => { e.stopPropagation(); onConnectorClick(node.id, e); }}
         style={{
           position: "absolute", top: "50%", right: -6, width: 14, height: 14, borderRadius: "50%",
-          background: connecting ? "#00C896" : isPaused ? "rgba(251,113,133,0.6)" : entry.color,
+          background: connecting ? "#00C896" : isPaused ? "rgba(251,191,36,0.7)" : entry.color,
           border: `2px solid ${connecting ? "#00C896" : "rgba(8,11,22,0.8)"}`,
           transform: "translateY(-50%)",
           cursor: "pointer",
-          boxShadow: connecting ? "0 0 10px #00C896, 0 0 0 3px rgba(0,200,150,0.2)" : isPaused ? "0 0 6px rgba(251,113,133,0.5)" : `0 0 6px ${entry.color}60`,
+          boxShadow: connecting ? "0 0 10px #00C896, 0 0 0 3px rgba(0,200,150,0.2)" : isPaused ? "0 0 6px rgba(251,191,36,0.5)" : `0 0 6px ${entry.color}60`,
           animation: connecting ? "pulse-dot 1s ease-in-out infinite" : undefined,
           zIndex: 30,
           transition: "background 0.15s, box-shadow 0.15s",
         }}
       />
 
-      {/* Feature 1: Fan-out "+" — only on platform-send nodes, not while connecting */}
-      {PLATFORM_SEND_TYPES[node.executorType] && onFanout && !connecting && (
+      {/* Fan-out "+" — available on ALL nodes, positioned bottom-right with clear separation from output dot */}
+      {onFanout && !connecting && (
+        /* 44×44 transparent tap target, centered on the same visual position as
+           the previous 22×22 circle. The inner div carries all the visual styles
+           so the large transparent hit area is invisible to the user. */
         <button
           onClick={e => { e.stopPropagation(); onFanout(); }}
-          title="Add fan-out branch"
+          title="Add fan-out branch (Router → new node)"
+          aria-label="Add fan-out branch"
           style={{
-            position: "absolute", top: "50%", right: -32, width: 20, height: 20,
-            borderRadius: "50%", background: "rgba(167,139,250,0.15)",
-            border: "1.5px solid rgba(167,139,250,0.5)",
+            position: "absolute",
+            bottom: -25, right: -7,   // keeps visual center identical to bottom:-14 right:4 at 22px
+            width: 44, height: 44,     // full 44×44 accessible tap target
+            borderRadius: "50%",
+            background: "transparent", border: "none",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", zIndex: 31,
-            transform: "translateY(-50%)",
-            transition: "background 0.15s",
+            cursor: "pointer", zIndex: 31, padding: 0,
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.3)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.15)"; }}
+          onMouseEnter={e => {
+            const v = (e.currentTarget as HTMLButtonElement).querySelector('.fanout-visual') as HTMLElement | null;
+            if (v) { v.style.background = "rgba(0,200,150,0.28)"; v.style.borderColor = "rgba(0,200,150,0.8)"; }
+          }}
+          onMouseLeave={e => {
+            const v = (e.currentTarget as HTMLButtonElement).querySelector('.fanout-visual') as HTMLElement | null;
+            if (v) { v.style.background = "rgba(0,200,150,0.12)"; v.style.borderColor = "rgba(0,200,150,0.45)"; }
+          }}
         >
-          <Plus size={10} color="#A78BFA" />
+          <div
+            className="fanout-visual"
+            style={{
+              width: 22, height: 22, borderRadius: "50%",
+              background: "rgba(0,200,150,0.12)",
+              border: "1.5px solid rgba(0,200,150,0.45)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background 0.15s, border-color 0.15s",
+              pointerEvents: "none",
+            }}
+          >
+            <Plus size={11} color="#00C896" />
+          </div>
         </button>
       )}
 
-      {/* Feature 2: Pause/resume toggle — only on platform-send nodes */}
-      {PLATFORM_SEND_TYPES[node.executorType] && onPauseToggle && (
+      {/* Node-level pause/resume pill — visible on ALL nodes */}
+      {onPauseToggle && (
         <button
           onClick={e => { e.stopPropagation(); onPauseToggle(); }}
-          title={isPaused ? "Resume platform" : "Pause platform (24 h)"}
+          title={isPaused ? "Resume this node" : "Pause this node"}
           style={{
-            position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)",
-            background: isPaused ? "rgba(251,113,133,0.15)" : "rgba(255,255,255,0.04)",
-            border: isPaused ? "1.5px solid rgba(251,113,133,0.4)" : "1.5px solid rgba(255,255,255,0.09)",
+            position: "absolute", bottom: -8, left: 8,
+            background: isPaused ? "rgba(251,191,36,0.18)" : "rgba(255,255,255,0.04)",
+            border: isPaused ? "1.5px solid rgba(251,191,36,0.5)" : "1.5px solid rgba(255,255,255,0.09)",
             borderRadius: 10, padding: "2px 6px",
             display: "flex", alignItems: "center", gap: 3,
             cursor: "pointer", zIndex: 31,
@@ -796,7 +859,7 @@ function NodeBox({
           }}
         >
           {isPaused
-            ? <><PauseCircle size={8} color="#FB7185" /><span style={{ fontSize: 7, color: "#FB7185", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>PAUSED</span></>
+            ? <><PauseCircle size={8} color="#FBBF24" /><span style={{ fontSize: 7, color: "#FBBF24", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>PAUSED</span></>
             : <><PlayCircle size={8} color="rgba(232,238,255,0.3)" /><span style={{ fontSize: 7, color: "rgba(232,238,255,0.25)", fontFamily: "'DM Mono',monospace" }}>ACTIVE</span></>}
         </button>
       )}
@@ -1033,10 +1096,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [retrying, setRetrying] = useState(false);
   const [warnDismissed, setWarnDismissed] = useState(false);
 
-  // Feature 2: Platform-level pause state
-  const [pausedPlatforms, setPausedPlatforms] = useState<Set<string>>(new Set());
+  // Context menu for right-click / long-press on nodes
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
 
-  // Feature 1: Fan-out picker state
+  // Fan-out picker state
   const [fanoutPickerOpen, setFanoutPickerOpen] = useState(false);
   const [fanoutSourceNodeId, setFanoutSourceNodeId] = useState<string | null>(null);
 
@@ -1279,37 +1342,73 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     if (ns.length > 0) nextId.current = ns.length + 1;
   }, [data]);
 
-  // Feature 2: load paused platforms on mount
-  useEffect(() => {
-    platformPausesAPI.list()
-      .then(d => setPausedPlatforms(new Set((d.paused || []).map((p: any) => p.platform))))
-      .catch(() => {}); // fail open — non-critical
-  }, []);
-
-  const togglePlatformPause = async (platform: string) => {
-    const wasPaused = pausedPlatforms.has(platform);
+  // ── Node-level pause toggle (per-node, stored in node.config.paused) ────────
+  const toggleNodePause = async (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const wasPaused = !!node.config?.paused;
+    // Optimistic local update
+    setNodes(ns => ns.map(n =>
+      n.id === nodeId
+        ? { ...n, config: { ...n.config, paused: !wasPaused, paused_at: wasPaused ? null : new Date().toISOString() } }
+        : n
+    ));
+    // Persist to backend (best-effort — non-blocking; also saved on next full Save)
     try {
-      await (wasPaused ? platformPausesAPI.resume(platform) : platformPausesAPI.pause(platform));
-      setPausedPlatforms(prev => {
-        const next = new Set(prev);
-        wasPaused ? next.delete(platform) : next.add(platform);
-        return next;
-      });
-      toast({
-        title: wasPaused ? `${platform} resumed` : `${platform} paused`,
-        description: wasPaused
-          ? `Workflows using ${platform} will resume.`
-          : `All ${platform} triggers paused for 24 h.`,
-      });
-    } catch { /* swallow — UI will reflect stale state */ }
+      await api.patch(`/workflows/${id}/steps/${nodeId}/${wasPaused ? 'resume' : 'pause'}`);
+    } catch {
+      // If endpoint not available, state is still reflected locally and saved on next Save press
+    }
+    toast({
+      title: wasPaused ? "Node resumed" : "Node paused",
+      description: wasPaused
+        ? `${node.label} will execute normally.`
+        : `${node.label} will be skipped during execution.`,
+    });
   };
 
-  // Feature 1: insert a router node + new branch from a platform-send node
-  const insertFanoutBranch = (sourceNodeId: string, targetPlatform: string) => {
+  // ── Node-level disable toggle ───────────────────────────────────────────────
+  const toggleNodeDisable = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const wasDisabled = !!node.config?.disabled;
+    setNodes(ns => ns.map(n =>
+      n.id === nodeId
+        ? { ...n, config: { ...n.config, disabled: !wasDisabled } }
+        : n
+    ));
+    toast({ title: wasDisabled ? "Node enabled" : "Node disabled", description: wasDisabled ? `${node.label} is now active.` : `${node.label} will be skipped.` });
+  };
+
+  // ── Duplicate node ─────────────────────────────────────────────────────────
+  const duplicateNode = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const dup: Node = {
+      ...node,
+      id: `n${nextId.current++}`,
+      x: node.x + 20,
+      y: node.y + 80,
+      config: { ...node.config, paused: false, disabled: false },
+    };
+    setNodes(ns => [...ns, dup]);
+    toast({ title: "Duplicated", description: `${node.label} copied to canvas.` });
+  };
+
+  // ── Rename node ────────────────────────────────────────────────────────────
+  const renameNode = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const newLabel = window.prompt("Rename node:", node.label);
+    if (newLabel && newLabel.trim()) {
+      setNodes(ns => ns.map(n => n.id === nodeId ? { ...n, label: newLabel.trim() } : n));
+    }
+  };
+
+  // ── Fan-out: insert router + new branch from any node ─────────────────────
+  const insertFanoutBranch = (sourceNodeId: string, catalogEntry: CatalogNode) => {
     const sourceNode = nodes.find(n => n.id === sourceNodeId);
     if (!sourceNode) return;
-    const catalogEntry = NODE_CATALOG.find(c => PLATFORM_SEND_TYPES[c.executorType] === targetPlatform);
-    if (!catalogEntry) return;
 
     const existingRouterEdge = edges.find(e => e.from === sourceNodeId);
     const existingRouter = existingRouterEdge
@@ -1672,6 +1771,17 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
               {(q ? [null] : CATEGORY_ORDER).map(cat => {
                 const items = cat ? filtered.filter(n => n.category === cat) : filtered;
                 if (items.length === 0) return null;
+
+                // Build subgroup buckets — items without a subGroup appear in a leading undefined bucket
+                const subGroupOrder: (string | undefined)[] = [];
+                const subGroupBuckets = new Map<string | undefined, CatalogNode[]>();
+                for (const item of items) {
+                  const sg = item.subGroup;
+                  if (!subGroupBuckets.has(sg)) { subGroupBuckets.set(sg, []); subGroupOrder.push(sg); }
+                  subGroupBuckets.get(sg)!.push(item);
+                }
+                const hasSubGroups = subGroupOrder.some(sg => sg !== undefined);
+
                 return (
                   <div key={cat || "results"} style={{ marginBottom: 4 }}>
                     {cat && (
@@ -1679,35 +1789,54 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         {cat}
                       </div>
                     )}
-                    {items.map(entry => {
-                      const Icon = entry.icon;
-                      const isLocked = !!(entry.requiredPlatform && !connectedPlatforms.has(entry.requiredPlatform));
+                    {subGroupOrder.map((sg, sgIdx) => {
+                      const sgItems = subGroupBuckets.get(sg)!;
                       return (
-                        <button
-                          key={entry.executorType}
-                          data-testid={`add-node-${entry.executorType}`}
-                          onClick={() => addNode(entry)}
-                          style={{ display: "flex", alignItems: "flex-start", gap: 8, width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: "7px 8px", cursor: "pointer", marginBottom: 2, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", textAlign: "left", transition: "all 0.13s", opacity: isLocked ? 0.65 : 1 }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${entry.color}12`; (e.currentTarget as HTMLElement).style.borderColor = `${entry.color}30`; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
-                        >
-                          <div style={{ width: 28, height: 28, borderRadius: 7, background: `${entry.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1, position: "relative" }}>
-                            <Icon size={13} color={entry.color} />
-                            {isLocked && (
-                              <div style={{ position: "absolute", bottom: -3, right: -3, width: 12, height: 12, borderRadius: "50%", background: "#080B12", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <Lock size={7} color="#FBBF24" />
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EEFF", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 4 }}>
-                              {entry.label}
+                        <div key={sg ?? "__none__"}>
+                          {hasSubGroups && sg && (
+                            <div style={{
+                              fontSize: 8, fontWeight: 700, color: "rgba(232,238,255,0.18)",
+                              fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em",
+                              padding: sgIdx === 0 ? "2px 6px 3px" : "6px 6px 3px",
+                              textTransform: "uppercase",
+                              borderTop: sgIdx > 0 ? "1px solid rgba(255,255,255,0.04)" : undefined,
+                              marginTop: sgIdx > 0 ? 4 : 0,
+                            }}>
+                              — {sg}
                             </div>
-                            <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", lineHeight: 1.4, marginTop: 1 }}>
-                              {isLocked ? `Connect ${entry.requiredPlatform} to use` : entry.description}
-                            </div>
-                          </div>
-                        </button>
+                          )}
+                          {sgItems.map(entry => {
+                            const Icon = entry.icon;
+                            const isLocked = !!(entry.requiredPlatform && !connectedPlatforms.has(entry.requiredPlatform));
+                            return (
+                              <button
+                                key={entry.executorType}
+                                data-testid={`add-node-${entry.executorType}`}
+                                onClick={() => addNode(entry)}
+                                style={{ display: "flex", alignItems: "flex-start", gap: 8, width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: "7px 8px", cursor: "pointer", marginBottom: 2, color: "#E8EEFF", fontFamily: "'DM Sans',sans-serif", textAlign: "left", transition: "all 0.13s", opacity: isLocked ? 0.65 : 1 }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${entry.color}12`; (e.currentTarget as HTMLElement).style.borderColor = `${entry.color}30`; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.04)"; }}
+                              >
+                                <div style={{ width: 28, height: 28, borderRadius: 7, background: `${entry.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1, position: "relative" }}>
+                                  <Icon size={13} color={entry.color} />
+                                  {isLocked && (
+                                    <div style={{ position: "absolute", bottom: -3, right: -3, width: 12, height: 12, borderRadius: "50%", background: "#080B12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                      <Lock size={7} color="#FBBF24" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EEFF", lineHeight: 1.3 }}>
+                                    {entry.label}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", lineHeight: 1.4, marginTop: 1 }}>
+                                    {isLocked ? `Connect ${entry.requiredPlatform} to use` : entry.description}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       );
                     })}
                   </div>
@@ -1776,10 +1905,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 }}
               >
                 {/* SVG edges — make.com-style smooth curves with circular junction dots.
-                    No glow filter, no traveling animated dots — those are what made the
-                    resting/running state look busier and heavier than make.com's flat,
-                    quiet connectors. */}
-                                <svg width={8000} height={8000} style={{ position: "absolute", top: 0, left: 0, overflow: "visible", pointerEvents: "none" }}>
+                    Idle/resting connectors stay flat and quiet (no glow, no motion).
+                    A glowing traveling pulse is intentionally added only while an edge's
+                    source step is actively running, so live data-flow is visible at a
+                    glance without making the resting canvas look busy. See the
+                    "Live data-flow pulse" block below for that animation. */}
+                <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}>
                   {edges.map(e => {
                     const fn = nodes.find(n => n.id === e.from);
                     const tn = nodes.find(n => n.id === e.to);
@@ -1814,35 +1945,29 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     const bothDone = fromDone && toDone;
                     const isRunningEdge = isTracing && stepStatuses[fi] === "running";
 
-                    // Feature 3: paused-platform edge — dimmed only when the source
-                    // platform is actually paused right now (checked against live state)
+                    // Feature 3: node-level paused edge — dimmed when the source node is paused
                     const fromNode = fi >= 0 ? nodes[fi] : null;
-                    const fromPlatform = fromNode ? (PLATFORM_SEND_TYPES[fromNode.executorType] ?? null) : null;
-                    const isPausedEdge = fromPlatform ? pausedPlatforms.has(fromPlatform) : false;
+                    const isPausedEdge = !!(fromNode?.config?.paused);
 
-                    // make.com's idle connectors are a neutral gray-white, but that
-                    // reference renders on a WHITE canvas. This app's canvas is near-black
-                    // (#04060F), so the same light-gray-at-low-alpha combination that reads
-                    // clearly on white becomes nearly invisible here — confirmed by an
-                    // actual on-device screenshot showing no visible line at all. Raised
-                    // brightness and opacity substantially so the idle connector is
-                    // reliably visible against a dark background while still reading as
-                    // quieter/neutral rather than a saturated brand color.
+                    // Edge color logic:
+                    //  - Paused (idle):   dim red-ish to signal "this path is blocked"
+                    //  - Running NOW:     bright cyan — the data-flow animation reads on top
+                    //  - Both steps done: saturated green — this path ran successfully
+                    //  - Otherwise tracing (steps not yet reached): very dim white
+                    //  - Idle (no run):   neutral gray, readable against dark canvas
                     const edgeColor = isPausedEdge && !isTracing
                       ? "rgba(251,113,133,0.25)"
+                      : isRunningEdge
+                      ? "rgba(56,189,248,0.5)"   // brighter for the active connector
                       : bothDone
                       ? "#00C896"
                       : isTracing
-                      ? "rgba(255,255,255,0.16)"
+                      ? "rgba(255,255,255,0.14)"
                       : "rgba(180,190,210,0.75)";
-                    // Dashed only in the idle/resting state, matching make.com's dotted
-                    // connectors — solid once a run actually touches this edge (paused,
-                    // tracing, or completed all read as "something happened here").
+
                     const isIdleEdge = !isPausedEdge && !isTracing && !bothDone;
                     const edgeDash = isIdleEdge ? "4 4" : undefined;
-
-                    // Thinner, quieter line weight to match make.com's understated connectors.
-                    const edgeWidth = bothDone ? 1.5 : isRunningEdge ? 1.5 : 1;
+                    const edgeWidth = bothDone ? 1.5 : isRunningEdge ? 2 : 1;
                     // Endpoint dots — previous pass shrank these to r=2 at 0.6 opacity in
                     // the new neutral gray, which read as literally invisible on an actual
                     // phone screen rather than merely "subtle." Bumped back up slightly so
@@ -1854,11 +1979,26 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // Delete badge stays at the true connector midpoint.
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
+                    // Part 4 "+" sits just past the source node's right edge rather than
+                    // glued to the connector's midpoint — sitting mid-line made it easy to
+                    // miss-tap into the node body next to it (which opens node config, not
+                    // this picker) on short connectors. Clamped to the actual gap between
+                    // the two nodes so it can't overshoot into the target node's body when
+                    // nodes sit close together at the standard 160px spacing.
+                    // Small fixed gap from the source node's edge — enough visual
+                    // separation that the button doesn't look glued to the node, while
+                    // staying clamped so it can't overshoot into the target node's body
+                    // at the standard ~10-16px gap between nodes.
+                    const gapMid = (x1 + x2) / 2;
+                    const plusX = Math.min(x1 + 12, gapMid);
+                    const plusY = y1 + 10;
 
                     return (
                       <g key={e.id}>
-                        {/* Main edge — clean rounded line, no arrowhead marker, no glow.
-                            make.com's connectors are plain thin lines. */}
+                        {/* Main edge — clean rounded line, no arrowhead marker. The path
+                            itself never glows; the glow effect lives on the separate
+                            traveling pulse circles rendered below while this edge is
+                            actively running (see "Live data-flow pulse"). */}
                         <path
                           d={pathD}
                           stroke={edgeColor}
@@ -1874,27 +2014,23 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         <circle cx={x1} cy={y1} r={3.5} fill={dotColor} opacity={dotOpacity} />
                         <circle cx={x2} cy={y2} r={3.5} fill={dotColor} opacity={dotOpacity} />
 
-                        {/* Traveling flow dot. Previously this only appeared while a live
-                            trace run was actively on this edge, which is why it looked
-                            "not displaying" most of the time — on a canvas that isn't
-                            running a trace, no dot ever showed. make.com's canvas animates
-                            a dot along EVERY connected edge continuously, not just during
-                            an active run, so this now always renders on any edge that has
-                            two real connected nodes. Speed/color still communicate state:
-                            faster + blue while a run is actively on this edge, slower +
-                            green once the run has completed it, and a slow neutral drift
-                            at rest so the canvas doesn't look static. */}
-                        <circle r="2.5" fill={isRunningEdge ? "#38BDF8" : bothDone ? "#00C896" : "rgba(180,190,210,0.85)"}>
-                          <animateMotion
-                            dur={isRunningEdge ? "1.1s" : bothDone ? "1.6s" : "2.2s"}
-                            repeatCount="indefinite"
-                            path={pathD}
-                          />
-                        </circle>
+                        {/* Live data-flow pulse — visible only while this edge's source
+                            step is actively running. Uses two concentric animated circles:
+                            an outer soft halo (large, low-opacity) + an inner bright core,
+                            so the moving pulse reads clearly as "data is flowing here right now"
+                            even at a glance and on small mobile viewports. The paused-edge
+                            dim treatment (isPausedEdge) is intentionally left static/unchanged. */}
                         {isRunningEdge && (
-                          <circle r="4.5" fill="#38BDF8" opacity={0.35}>
-                            <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
-                          </circle>
+                          <g>
+                            {/* Outer glow halo */}
+                            <circle r="7" fill="rgba(56,189,248,0.22)">
+                              <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
+                            </circle>
+                            {/* Inner bright core */}
+                            <circle r="4" fill="#38BDF8">
+                              <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
+                            </circle>
+                          </g>
                         )}
 
                         {/* Invisible fat hit-area for tap-to-delete */}
@@ -1933,33 +2069,47 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                           </text>
                         </g>
 
+                        {/* Part 4: generic "+" on the connector — inserts a new node at
+                            this edge's midpoint, splitting it into two. Offset from the
+                            delete badge above so the two click targets never overlap.
+                            Always visible (not hover-only) for the same touch-device
+                            reason as the delete badge above. */}
+                        <g
+                          style={{ cursor: "pointer", pointerEvents: "all" }}
+                          onClick={ev => {
+                            ev.stopPropagation();
+                            setEdgeInsertTargetId(e.id);
+                            setEdgeInsertPickerOpen(true);
+                          }}
+                        >
+                          <circle cx={plusX} cy={plusY} r={9} fill="rgba(8,11,22,0.9)" stroke="rgba(0,200,150,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-insert-btn" />
+                          <g pointerEvents="none" opacity={0.9}>
+                            <line x1={plusX - 4} y1={plusY} x2={plusX + 4} y2={plusY} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round" />
+                            <line x1={plusX} y1={plusY - 4} x2={plusX} y2={plusY + 4} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round" />
+                          </g>
+                        </g>
                       </g>
                     );
                   })}
                 </svg>
 
 
-                {nodes.map((n, idx) => {
-                  const nodePlatform = PLATFORM_SEND_TYPES[n.executorType] ?? null;
-                  const nodeIsPaused = nodePlatform ? pausedPlatforms.has(nodePlatform) : false;
-                  return (
-                    <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
-                      <NodeBox
-                        node={n}
-                        selected={selected === n.id}
-                        connecting={connecting?.fromId === n.id}
-                        // FIX #2: pass status by node index
-                        traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
-                        onSelect={setSelected}
-                        onDelete={deleteNode}
-                        onConnectorClick={onConnectorClick}
-                        isPaused={nodeIsPaused}
-                        onPauseToggle={nodePlatform ? () => togglePlatformPause(nodePlatform) : undefined}
-                        onFanout={nodePlatform ? () => { setFanoutSourceNodeId(n.id); setFanoutPickerOpen(true); } : undefined}
-                      />
-                    </div>
-                  );
-                })}
+                {nodes.map((n, idx) => (
+                  <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
+                    <NodeBox
+                      node={n}
+                      selected={selected === n.id}
+                      connecting={connecting?.fromId === n.id}
+                      traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
+                      onSelect={setSelected}
+                      onDelete={deleteNode}
+                      onConnectorClick={onConnectorClick}
+                      onPauseToggle={() => toggleNodePause(n.id)}
+                      onFanout={() => { setFanoutSourceNodeId(n.id); setFanoutPickerOpen(true); }}
+                      onContextMenu={e => setContextMenu({ nodeId: n.id, x: e.clientX, y: e.clientY })}
+                    />
+                  </div>
+                ))}
               </div>
 
               {nodes.length > 0 && !isTracing && (
@@ -1970,50 +2120,93 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 </div>
               )}
 
-              {/* Feature 1: Fan-out platform picker modal */}
+              {/* Fan-out node picker — full categorized catalog, available from any node */}
               {fanoutPickerOpen && (
                 <div
                   style={{ position: "absolute", inset: 0, zIndex: 200, background: "rgba(4,6,15,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onClick={() => { setFanoutPickerOpen(false); setFanoutSourceNodeId(null); }}
                 >
                   <div
-                    style={{ background: "rgba(8,11,22,0.98)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 16, padding: 24, width: 280, maxWidth: "90vw" }}
+                    style={{ background: "rgba(8,11,22,0.98)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 16, padding: 24, width: 340, maxWidth: "92vw", maxHeight: "78vh", overflowY: "auto" }}
                     onClick={e => e.stopPropagation()}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 4 }}>Add Fan-out Branch</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif", marginBottom: 4 }}>Add Fan-out Branch</div>
                     <div style={{ fontSize: 11, color: "rgba(232,238,255,0.4)", fontFamily: "'DM Mono',monospace", marginBottom: 16 }}>
-                      A Router node will be inserted. Pick a platform for the new branch:
+                      A Router node will be inserted. Pick any node type for the new branch:
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {Object.entries(PLATFORM_SEND_TYPES)
-                        .filter(([type]) => type !== 'gmail_reply')
-                        .map(([type, platform]) => {
-                          const entry = NODE_CATALOG.find(c => c.executorType === type);
-                          if (!entry) return null;
-                          const Icon = entry.icon;
-                          const isConn = connectedPlatforms.has(platform);
-                          return (
-                            <button
-                              key={type}
-                              onClick={() => fanoutSourceNodeId && insertFanoutBranch(fanoutSourceNodeId, platform)}
-                              style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${isConn ? "rgba(0,200,150,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", transition: "background 0.15s" }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = `${entry.color}12`; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.03)"; }}
-                            >
-                              <div style={{ width: 28, height: 28, borderRadius: 8, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <Icon size={13} color={entry.color} />
+
+                    {CATEGORY_ORDER.map(cat => {
+                      const items = NODE_CATALOG.filter(c => c.category === cat);
+                      if (items.length === 0) return null;
+
+                      // Build subgroup buckets within this category
+                      const sgOrder: (string | undefined)[] = [];
+                      const sgBuckets = new Map<string | undefined, CatalogNode[]>();
+                      for (const item of items) {
+                        const sg = item.subGroup;
+                        if (!sgBuckets.has(sg)) { sgBuckets.set(sg, []); sgOrder.push(sg); }
+                        sgBuckets.get(sg)!.push(item);
+                      }
+                      const hasSub = sgOrder.some(sg => sg !== undefined);
+
+                      return (
+                        <div key={cat} style={{ marginBottom: 16 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", marginBottom: 6, textTransform: "uppercase" }}>
+                            {cat}
+                          </div>
+                          {sgOrder.map((sg, sgIdx) => (
+                            <div key={sg ?? "__none__"}>
+                              {hasSub && sg && (
+                                <div style={{
+                                  fontSize: 8, fontWeight: 700, color: "rgba(232,238,255,0.2)",
+                                  fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em",
+                                  padding: sgIdx === 0 ? "0 0 4px" : "8px 0 4px",
+                                  textTransform: "uppercase",
+                                  borderTop: sgIdx > 0 ? "1px solid rgba(255,255,255,0.05)" : undefined,
+                                  marginTop: sgIdx > 0 ? 4 : 0,
+                                }}>
+                                  — {sg}
+                                </div>
+                              )}
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                {sgBuckets.get(sg)!.map(entry => {
+                                  const Icon = entry.icon;
+                                  const isLocked = !!(entry.requiredPlatform && !connectedPlatforms.has(entry.requiredPlatform));
+                                  return (
+                                    <button
+                                      key={entry.executorType}
+                                      onClick={() => fanoutSourceNodeId && insertFanoutBranch(fanoutSourceNodeId, entry)}
+                                      style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${isLocked ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", transition: "background 0.15s", opacity: isLocked ? 0.6 : 1, textAlign: "left", width: "100%" }}
+                                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = `${entry.color}12`; }}
+                                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.03)"; }}
+                                    >
+                                      <div style={{ width: 28, height: 28, borderRadius: 8, background: `${entry.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
+                                        <Icon size={13} color={entry.color} />
+                                        {isLocked && (
+                                          <div style={{ position: "absolute", bottom: -3, right: -3, width: 12, height: 12, borderRadius: "50%", background: "#080B12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            <Lock size={7} color="#FBBF24" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF" }}>{entry.label}</div>
+                                        <div style={{ fontSize: 10, color: isLocked ? "#FBBF24" : "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace" }}>
+                                          {isLocked ? `Connect ${entry.requiredPlatform} to use` : entry.description}
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
                               </div>
-                              <div style={{ flex: 1, textAlign: "left" }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF" }}>{entry.label}</div>
-                                <div style={{ fontSize: 10, color: isConn ? "#00C896" : "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace" }}>{isConn ? "connected" : "not connected"}</div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+
                     <button
                       onClick={() => { setFanoutPickerOpen(false); setFanoutSourceNodeId(null); }}
-                      style={{ width: "100%", marginTop: 14, background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px", color: "rgba(232,238,255,0.4)", fontSize: 12, cursor: "pointer" }}
+                      style={{ width: "100%", marginTop: 8, background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px", color: "rgba(232,238,255,0.4)", fontSize: 12, cursor: "pointer" }}
                     >Cancel</button>
                   </div>
                 </div>
@@ -2063,6 +2256,107 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                   </div>
                 </div>
               )}
+
+              {/* Right-click / long-press context menu */}
+              {contextMenu && (() => {
+                const cmNode = nodes.find(n => n.id === contextMenu.nodeId);
+                if (!cmNode) return null;
+                const isPaused = !!cmNode.config?.paused;
+                const isDisabled = !!cmNode.config?.disabled;
+                const cmIdx = nodes.findIndex(n => n.id === contextMenu.nodeId);
+                const menuItems: Array<{ label: string; icon: React.ReactNode; action: () => void; danger?: boolean; color?: string }> = [
+                  {
+                    label: isPaused ? "Resume node" : "Pause node",
+                    icon: isPaused ? <PlayCircle size={13} /> : <PauseCircle size={13} />,
+                    action: () => { toggleNodePause(contextMenu.nodeId); setContextMenu(null); },
+                    color: isPaused ? "#00C896" : "#FBBF24",
+                  },
+                  {
+                    label: isDisabled ? "Enable node" : "Disable node",
+                    icon: isDisabled ? <PlayCircle size={13} /> : <StopCircle size={13} />,
+                    action: () => { toggleNodeDisable(contextMenu.nodeId); setContextMenu(null); },
+                    color: isDisabled ? "#00C896" : "rgba(232,238,255,0.5)",
+                  },
+                  {
+                    label: "Duplicate",
+                    icon: <Copy size={13} />,
+                    action: () => { duplicateNode(contextMenu.nodeId); setContextMenu(null); },
+                  },
+                  {
+                    label: "Rename",
+                    icon: <Pencil size={13} />,
+                    action: () => { renameNode(contextMenu.nodeId); setContextMenu(null); },
+                  },
+                  {
+                    label: "Edit / Configure",
+                    icon: <Settings2 size={13} />,
+                    action: () => { setSelected(contextMenu.nodeId); setContextMenu(null); },
+                  },
+                  {
+                    label: "Inspect last run",
+                    icon: <Eye size={13} />,
+                    action: () => { setTab("runs"); setContextMenu(null); },
+                  },
+                  {
+                    label: "Retry from here",
+                    icon: <RefreshCw size={13} />,
+                    action: () => { retryFromNode(cmIdx); setContextMenu(null); },
+                  },
+                  {
+                    label: "Delete node",
+                    icon: <Trash2 size={13} />,
+                    action: () => { deleteNode(contextMenu.nodeId); setContextMenu(null); },
+                    danger: true,
+                  },
+                ];
+                return (
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 500 }}
+                    onClick={() => setContextMenu(null)}
+                    onContextMenu={e => { e.preventDefault(); setContextMenu(null); }}
+                  >
+                    <div
+                      style={{
+                        position: "fixed",
+                        left: Math.min(contextMenu.x, window.innerWidth - 200),
+                        top: Math.min(contextMenu.y, window.innerHeight - (menuItems.length * 38 + 16)),
+                        width: 196,
+                        background: "rgba(8,11,22,0.97)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 12,
+                        padding: "6px 0",
+                        boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+                        backdropFilter: "blur(12px)",
+                        zIndex: 501,
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div style={{ padding: "6px 12px 4px", fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: 4 }}>
+                        {cmNode.label.toUpperCase()}
+                      </div>
+                      {menuItems.map((item, i) => (
+                        <button
+                          key={i}
+                          onClick={item.action}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            width: "100%", background: "none", border: "none",
+                            padding: "8px 12px", cursor: "pointer", textAlign: "left",
+                            color: item.danger ? "#FB7185" : item.color ?? "rgba(232,238,255,0.8)",
+                            fontSize: 12, fontFamily: "'DM Sans',sans-serif",
+                            transition: "background 0.1s",
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = item.danger ? "rgba(251,113,133,0.1)" : "rgba(255,255,255,0.05)"; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                        >
+                          {item.icon}
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* FIX: use WS run data when available, fall back to polled run */}
               {isTracing && (wsIsActive || wsIsDone || traceRun) && (
