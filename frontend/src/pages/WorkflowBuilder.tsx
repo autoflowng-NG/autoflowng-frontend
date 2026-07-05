@@ -1820,19 +1820,21 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     const fromPlatform = fromNode ? (PLATFORM_SEND_TYPES[fromNode.executorType] ?? null) : null;
                     const isPausedEdge = fromPlatform ? pausedPlatforms.has(fromPlatform) : false;
 
-                    // make.com's idle connectors are a neutral dashed gray-white, not a
-                    // tinted-down brand color — turning teal's opacity down alone still
-                    // reads as "a teal line" against the dark canvas. Resting state now
-                    // uses a true neutral gray and a dash pattern to match; the completed
-                    // (bothDone) state stays solid bright teal so success still reads
-                    // clearly, and paused/tracing states are unchanged.
+                    // make.com's idle connectors are a neutral gray-white, but that
+                    // reference renders on a WHITE canvas. This app's canvas is near-black
+                    // (#04060F), so the same light-gray-at-low-alpha combination that reads
+                    // clearly on white becomes nearly invisible here — confirmed by an
+                    // actual on-device screenshot showing no visible line at all. Raised
+                    // brightness and opacity substantially so the idle connector is
+                    // reliably visible against a dark background while still reading as
+                    // quieter/neutral rather than a saturated brand color.
                     const edgeColor = isPausedEdge && !isTracing
                       ? "rgba(251,113,133,0.25)"
                       : bothDone
                       ? "#00C896"
                       : isTracing
                       ? "rgba(255,255,255,0.16)"
-                      : "rgba(200,205,220,0.35)";
+                      : "rgba(180,190,210,0.75)";
                     // Dashed only in the idle/resting state, matching make.com's dotted
                     // connectors — solid once a run actually touches this edge (paused,
                     // tracing, or completed all read as "something happened here").
@@ -1847,7 +1849,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // they're reliably visible while still reading as quieter than the
                     // original r=3 full-saturation version.
                     const dotColor = bothDone ? "#00C896" : edgeColor;
-                    const dotOpacity = bothDone ? 1 : 0.85;
+                    const dotOpacity = 1;
 
                     // Delete badge stays at the true connector midpoint.
                     const midX = (x1 + x2) / 2;
@@ -1858,8 +1860,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // this picker) on short connectors. Clamped to the actual gap between
                     // the two nodes so it can't overshoot into the target node's body when
                     // nodes sit close together at the standard 160px spacing.
+                    // Small fixed gap from the source node's edge — enough visual
+                    // separation that the button doesn't look glued to the node, while
+                    // staying clamped so it can't overshoot into the target node's body
+                    // at the standard ~10-16px gap between nodes.
                     const gapMid = (x1 + x2) / 2;
-                    const plusX = Math.min(x1 + 22, gapMid);
+                    const plusX = Math.min(x1 + 12, gapMid);
                     const plusY = y1 + 10;
 
                     return (
