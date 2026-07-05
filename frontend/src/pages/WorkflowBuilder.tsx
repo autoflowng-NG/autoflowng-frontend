@@ -35,13 +35,23 @@ const NODE_CATALOG: CatalogNode[] = [
   // Messaging
   { executorType: "gmail_send",    label: "Gmail Send",       icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Send a new email via Gmail",            requiredPlatform: "gmail" },
   { executorType: "gmail_reply",   label: "Gmail Reply",      icon: Mail,          color: "#38BDF8", category: "Messaging", description: "Reply to a Gmail thread",               requiredPlatform: "gmail" },
-  { executorType: "slack_post",    label: "Slack Post",       icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Post a message to a Slack channel",     requiredPlatform: "slack" },
-  { executorType: "telegram_send", label: "Telegram Send",    icon: Send,          color: "#38BDF8", category: "Messaging", description: "Send a Telegram message",               requiredPlatform: "telegram" },
-  { executorType: "whatsapp_send", label: "WhatsApp Send",    icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Send a WhatsApp message",               requiredPlatform: "whatsapp" },
+  { executorType: "slack_post",         label: "Slack Post",           icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Post a message to a Slack channel",                    requiredPlatform: "slack" },
+  { executorType: "slack_thread_reply",  label: "Slack Thread Reply",   icon: MessageSquare, color: "#38BDF8", category: "Messaging", description: "Reply in-thread to the triggering Slack message",     requiredPlatform: "slack" },
+  { executorType: "telegram_send",       label: "Telegram Send",        icon: Send,          color: "#38BDF8", category: "Messaging", description: "Send a Telegram message",                              requiredPlatform: "telegram" },
+  { executorType: "telegram_reply",      label: "Telegram Reply",       icon: Send,          color: "#38BDF8", category: "Messaging", description: "Reply to the chat that triggered this workflow",        requiredPlatform: "telegram" },
+  { executorType: "whatsapp_send",       label: "WhatsApp Send",        icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Send a WhatsApp message",                              requiredPlatform: "whatsapp" },
+  { executorType: "whatsapp_reply",      label: "WhatsApp Reply",       icon: MessageCircle, color: "#38BDF8", category: "Messaging", description: "Reply to the WhatsApp sender (reads from from context)", requiredPlatform: "whatsapp" },
   // Social
-  { executorType: "twitter_post",  label: "Twitter Post",     icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post a tweet (max 280 chars)",          requiredPlatform: "twitter" },
-  { executorType: "linkedin_post", label: "LinkedIn Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Publish to your LinkedIn profile",      requiredPlatform: "linkedin" },
-  { executorType: "facebook_post", label: "Facebook Post",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post to your Facebook page",            requiredPlatform: "facebook" },
+  { executorType: "twitter_post",         label: "Twitter Post",          icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post a tweet (max 280 chars)",                      requiredPlatform: "twitter" },
+  { executorType: "twitter_comment_reply",label: "Twitter Reply",         icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to a tweet",                                  requiredPlatform: "twitter" },
+  { executorType: "twitter_dm_reply",     label: "Twitter DM Reply",      icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to a Twitter/X DM (reads sender from context)", requiredPlatform: "twitter" },
+  { executorType: "linkedin_post",        label: "LinkedIn Post",         icon: Globe,         color: "#38BDF8", category: "Social",    description: "Publish to your LinkedIn profile",                  requiredPlatform: "linkedin" },
+  { executorType: "facebook_post",        label: "Facebook Post",         icon: Globe,         color: "#38BDF8", category: "Social",    description: "Post to your Facebook page",                        requiredPlatform: "facebook" },
+  { executorType: "facebook_comment_reply", label: "Facebook Comment Reply", icon: Globe,      color: "#38BDF8", category: "Social",    description: "Reply to a Facebook page comment",                  requiredPlatform: "facebook" },
+  { executorType: "facebook_dm_reply",    label: "Facebook Messenger Reply", icon: Globe,      color: "#38BDF8", category: "Social",    description: "Reply to a Facebook Messenger DM (reads sender from context)", requiredPlatform: "facebook" },
+  { executorType: "instagram_comment_reply", label: "Instagram Comment Reply", icon: Globe,    color: "#38BDF8", category: "Social",    description: "Reply to an Instagram comment",                     requiredPlatform: "instagram" },
+  { executorType: "instagram_dm_reply",   label: "Instagram DM Reply",    icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to an Instagram DM (24-hour window applies)", requiredPlatform: "instagram" },
+  { executorType: "youtube_comment_reply",label: "YouTube Comment Reply", icon: Globe,         color: "#38BDF8", category: "Social",    description: "Reply to a YouTube comment",                        requiredPlatform: "youtube" },
   // Logic
   { executorType: "condition",     label: "Condition",        icon: GitBranch,     color: "#FBBF24", category: "Logic",     description: "Branch based on a field value" },
   { executorType: "filter",        label: "Filter",           icon: Filter,        color: "#FBBF24", category: "Logic",     description: "Stop execution if condition not met" },
@@ -84,6 +94,8 @@ const TRIGGER_TYPES = [
   { value: "twitter_new_dm",           label: "Twitter/X — New DM" },
   { value: "linkedin_new_comment",     label: "LinkedIn — New Comment" },
   { value: "linkedin_new_connection",  label: "LinkedIn — New Connection" },
+  { value: "youtube_new_comment",      label: "YouTube — New Comment" },
+  { value: "instagram_new_dm",         label: "Instagram — New DM" },
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -193,6 +205,30 @@ function TriggerConfigFields({
         <label style={labelStyle}>POLL INTERVAL (seconds, min 60)</label>
         <input type="number" min={60} style={inputStyle} value={triggerConfig.poll_interval_seconds || 120} onChange={e => set("poll_interval_seconds", Math.max(60, Number(e.target.value)))} />
         <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>Twitter enforces strict rate limits — intervals under 60s will be clamped.</div>
+      </div>
+    );
+  }
+
+  if (triggerType === "youtube_new_comment") {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <label style={labelStyle}>CHANNEL ID (required — leave blank to auto-detect from your connected account)</label>
+        <input style={inputStyle} value={triggerConfig.channel_id || ""} placeholder="e.g. UCxxxxxx" onChange={e => set("channel_id", e.target.value)} />
+        <label style={labelStyle}>VIDEO ID (optional — scope to one video)</label>
+        <input style={inputStyle} value={triggerConfig.video_id || ""} placeholder="e.g. dQw4w9WgXcQ (leave blank for all videos)" onChange={e => set("video_id", e.target.value)} />
+        <label style={labelStyle}>POLL INTERVAL (seconds, min 120)</label>
+        <input type="number" min={120} style={inputStyle} value={triggerConfig.poll_interval_seconds || 120} onChange={e => set("poll_interval_seconds", Math.max(120, Number(e.target.value)))} />
+        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>YouTube Data API has strict quotas — keep intervals at 120s or more.</div>
+      </div>
+    );
+  }
+
+  if (triggerType === "instagram_new_dm") {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <label style={labelStyle}>POLL INTERVAL (seconds, min 60)</label>
+        <input type="number" min={60} style={inputStyle} value={triggerConfig.poll_interval_seconds || 60} onChange={e => set("poll_interval_seconds", Math.max(60, Number(e.target.value)))} />
+        <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", marginTop: 6, fontFamily: "'DM Mono',monospace" }}>Requires instagram_manage_messages permission. 24-hour reply window applies for instagram_dm_reply steps.</div>
       </div>
     );
   }
@@ -315,6 +351,100 @@ function NodeConfigFields({ node, setNodes }: { node: Node; setNodes: React.Disp
         <div>
           <label style={labelStyle}>POST TEXT</label>
           <textarea rows={4} style={taStyle} value={cfg.text || ""} placeholder="Leave blank to use AI output. Posts to your first connected Facebook page." onChange={e => setNodeConfig("text", e.target.value)} />
+        </div>
+      );
+
+    case "facebook_comment_reply":
+      return (
+        <div>
+          <label style={labelStyle}>COMMENT ID (leave blank to use trigger context)</label>
+          <input style={inputStyle} value={cfg.comment_id || ""} placeholder="{{commentId}} or leave blank" onChange={e => setNodeConfig("comment_id", e.target.value)} />
+          <label style={labelStyle}>REPLY MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+        </div>
+      );
+
+    case "facebook_dm_reply":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Replies to the Messenger DM sender — no recipient ID needed when triggered by facebook.new_message.</div>
+        </div>
+      );
+
+    case "instagram_comment_reply":
+      return (
+        <div>
+          <label style={labelStyle}>COMMENT ID (leave blank to use trigger context)</label>
+          <input style={inputStyle} value={cfg.comment_id || ""} placeholder="{{commentId}} or leave blank" onChange={e => setNodeConfig("comment_id", e.target.value)} />
+          <label style={labelStyle}>REPLY MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+        </div>
+      );
+
+    case "instagram_dm_reply":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Replies to the Instagram DM sender — 24-hour reply window applies. Trigger must fire within 24h of the inbound DM.</div>
+        </div>
+      );
+
+    case "youtube_comment_reply":
+      return (
+        <div>
+          <label style={labelStyle}>COMMENT ID (leave blank to use trigger context)</label>
+          <input style={inputStyle} value={cfg.comment_id || ""} placeholder="{{commentId}} or leave blank" onChange={e => setNodeConfig("comment_id", e.target.value)} />
+          <label style={labelStyle}>REPLY MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+        </div>
+      );
+
+    case "slack_thread_reply":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Replies in-thread to the Slack message that triggered this workflow (uses slack_ts from context).</div>
+        </div>
+      );
+
+    case "telegram_reply":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Replies to the chat that triggered this workflow (uses chatId from context).</div>
+        </div>
+      );
+
+    case "whatsapp_reply":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Replies to the WhatsApp sender (reads phone from context.from, set by whatsapp.incoming_message trigger).</div>
+        </div>
+      );
+
+    case "twitter_comment_reply":
+      return (
+        <div>
+          <label style={labelStyle}>TWEET ID TO REPLY TO</label>
+          <input style={inputStyle} value={cfg.tweet_id || ""} placeholder="{{tweet_id}} or hardcoded tweet ID" onChange={e => setNodeConfig("tweet_id", e.target.value)} />
+          <label style={labelStyle}>REPLY TEXT (max 280 chars)</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} maxLength={280} placeholder="Leave blank to use AI output." onChange={e => setNodeConfig("message", e.target.value)} />
+        </div>
+      );
+
+    case "twitter_dm_reply":
+      return (
+        <div>
+          <label style={labelStyle}>MESSAGE</label>
+          <textarea rows={3} style={taStyle} value={cfg.message || ""} placeholder="Leave blank to use AI output ({{ai_output}})" onChange={e => setNodeConfig("message", e.target.value)} />
+          <div style={{ fontSize: 10, color: "rgba(232,238,255,0.35)", marginTop: 6, fontFamily: "'DM Mono',monospace", fontStyle: "italic" }}>Replies to the Twitter/X DM sender (reads dm_sender_id from context, set by twitter_new_dm trigger).</div>
         </div>
       );
 
