@@ -1779,7 +1779,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     No glow filter, no traveling animated dots — those are what made the
                     resting/running state look busier and heavier than make.com's flat,
                     quiet connectors. */}
-                <svg style={{ position: "absolute", overflow: "visible", pointerEvents: "none" }}>
+                <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}>
                   {edges.map(e => {
                     const fn = nodes.find(n => n.id === e.from);
                     const tn = nodes.find(n => n.id === e.to);
@@ -1849,13 +1849,18 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     const dotColor = bothDone ? "#00C896" : edgeColor;
                     const dotOpacity = bothDone ? 1 : 0.85;
 
-                    // Midpoint for delete + insert buttons
+                    // Delete badge stays at the true connector midpoint.
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
-                    // Offset the two midpoint controls slightly apart so the delete
-                    // badge and the new generic "+" don't overlap each other.
-                    const plusX = midX - 16;
-                    const plusY = midY;
+                    // Part 4 "+" sits just past the source node's right edge rather than
+                    // glued to the connector's midpoint — sitting mid-line made it easy to
+                    // miss-tap into the node body next to it (which opens node config, not
+                    // this picker) on short connectors. Clamped to the actual gap between
+                    // the two nodes so it can't overshoot into the target node's body when
+                    // nodes sit close together at the standard 160px spacing.
+                    const gapMid = (x1 + x2) / 2;
+                    const plusX = Math.min(x1 + 22, gapMid);
+                    const plusY = y1 + 10;
 
                     return (
                       <g key={e.id}>
@@ -1919,8 +1924,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             setEdges(es => es.filter(ed => ed.id !== e.id));
                           }}
                         >
-                          <circle cx={midX} cy={midY} r={10} fill="rgba(8,11,22,0.9)" stroke="rgba(251,113,133,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-delete-btn" />
-                          <text x={midX} y={midY + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0.9}>
+                          <circle cx={midX} cy={midY - 10} r={10} fill="rgba(8,11,22,0.9)" stroke="rgba(251,113,133,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-delete-btn" />
+                          <text x={midX} y={midY - 10 + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0.9}>
                             ×
                           </text>
                         </g>
