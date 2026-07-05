@@ -1841,10 +1841,13 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
                     // Thinner, quieter line weight to match make.com's understated connectors.
                     const edgeWidth = bothDone ? 1.5 : isRunningEdge ? 1.5 : 1;
-                    // Endpoint dots read as small and muted against the background rather
-                    // than popping at the edge's full saturation.
+                    // Endpoint dots — previous pass shrank these to r=2 at 0.6 opacity in
+                    // the new neutral gray, which read as literally invisible on an actual
+                    // phone screen rather than merely "subtle." Bumped back up slightly so
+                    // they're reliably visible while still reading as quieter than the
+                    // original r=3 full-saturation version.
                     const dotColor = bothDone ? "#00C896" : edgeColor;
-                    const dotOpacity = bothDone ? 1 : 0.6;
+                    const dotOpacity = bothDone ? 1 : 0.85;
 
                     // Midpoint for delete + insert buttons
                     const midX = (x1 + x2) / 2;
@@ -1870,8 +1873,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
                         {/* Endpoint dots — small, muted circles exactly on the output/input
                             ports, matching make.com's quiet junction markers. Only these two. */}
-                        <circle cx={x1} cy={y1} r={2} fill={dotColor} opacity={dotOpacity} />
-                        <circle cx={x2} cy={y2} r={2} fill={dotColor} opacity={dotOpacity} />
+                        <circle cx={x1} cy={y1} r={3.5} fill={dotColor} opacity={dotOpacity} />
+                        <circle cx={x2} cy={y2} r={3.5} fill={dotColor} opacity={dotOpacity} />
 
                         {/* Single traveling dot — only while THIS edge's source step is
                             actively running. Deliberately just one small, unglowed dot
@@ -1903,7 +1906,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                           onMouseLeave={ev => { (ev.target as SVGPathElement).setAttribute("stroke", "transparent"); }}
                         />
 
-                        {/* Mid-point delete badge */}
+                        {/* Mid-point delete badge — always visible at low opacity rather than
+                            hover-triggered. SVG <animate begin="mouseover"> never fires on
+                            touch devices, which made this button invisible and effectively
+                            untappable on mobile. Always-on and subtle at rest, same as
+                            make.com's own connector controls, which don't require a hover
+                            state either. */}
                         <g
                           style={{ cursor: "pointer", pointerEvents: "all" }}
                           onClick={ev => {
@@ -1911,20 +1919,17 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             setEdges(es => es.filter(ed => ed.id !== e.id));
                           }}
                         >
-                          <circle cx={midX} cy={midY} r={10} fill="rgba(8,11,22,0.97)" stroke="rgba(251,113,133,0.45)" strokeWidth={1.5} opacity={0} className="edge-delete-btn">
-                            <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                            <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
-                          </circle>
-                          <text x={midX} y={midY + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0}>
+                          <circle cx={midX} cy={midY} r={10} fill="rgba(8,11,22,0.9)" stroke="rgba(251,113,133,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-delete-btn" />
+                          <text x={midX} y={midY + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0.9}>
                             ×
-                            <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                            <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
                           </text>
                         </g>
 
                         {/* Part 4: generic "+" on the connector — inserts a new node at
                             this edge's midpoint, splitting it into two. Offset from the
-                            delete badge above so the two click targets never overlap. */}
+                            delete badge above so the two click targets never overlap.
+                            Always visible (not hover-only) for the same touch-device
+                            reason as the delete badge above. */}
                         <g
                           style={{ cursor: "pointer", pointerEvents: "all" }}
                           onClick={ev => {
@@ -1933,25 +1938,17 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             setEdgeInsertPickerOpen(true);
                           }}
                         >
-                          <circle cx={plusX} cy={plusY} r={9} fill="rgba(8,11,22,0.97)" stroke="rgba(0,200,150,0.45)" strokeWidth={1.5} opacity={0} className="edge-insert-btn">
-                            <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                            <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
-                          </circle>
-                          <g pointerEvents="none" opacity={0}>
-                            <line x1={plusX - 4} y1={plusY} x2={plusX + 4} y2={plusY} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round">
-                              <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                              <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
-                            </line>
-                            <line x1={plusX} y1={plusY - 4} x2={plusX} y2={plusY + 4} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round">
-                              <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.8;1" dur="0.1s" begin="mouseover" fill="freeze" />
-                              <animate attributeName="opacity" values="1;0" dur="0.15s" begin="mouseout" fill="freeze" />
-                            </line>
+                          <circle cx={plusX} cy={plusY} r={9} fill="rgba(8,11,22,0.9)" stroke="rgba(0,200,150,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-insert-btn" />
+                          <g pointerEvents="none" opacity={0.9}>
+                            <line x1={plusX - 4} y1={plusY} x2={plusX + 4} y2={plusY} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round" />
+                            <line x1={plusX} y1={plusY - 4} x2={plusX} y2={plusY + 4} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round" />
                           </g>
                         </g>
                       </g>
                     );
                   })}
                 </svg>
+
 
                 {nodes.map((n, idx) => {
                   const nodePlatform = PLATFORM_SEND_TYPES[n.executorType] ?? null;
