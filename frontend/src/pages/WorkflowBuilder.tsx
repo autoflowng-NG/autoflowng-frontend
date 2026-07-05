@@ -1854,19 +1854,17 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // Delete badge stays at the true connector midpoint.
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
-                    // Part 4 "+" sits just past the source node's right edge rather than
-                    // glued to the connector's midpoint — sitting mid-line made it easy to
-                    // miss-tap into the node body next to it (which opens node config, not
-                    // this picker) on short connectors. Clamped to the actual gap between
-                    // the two nodes so it can't overshoot into the target node's body when
-                    // nodes sit close together at the standard 160px spacing.
-                    // Small fixed gap from the source node's edge — enough visual
-                    // separation that the button doesn't look glued to the node, while
-                    // staying clamped so it can't overshoot into the target node's body
-                    // at the standard ~10-16px gap between nodes.
+                    // Part 4 "+" — matching make.com's actual placement: small, sitting
+                    // directly ON the connector line (not dropped below it), with just a
+                    // small gap after the source node's edge so it clearly isn't part of
+                    // the node but also isn't floating out in open space. Kept small (r=7,
+                    // matches make.com's compact circle) rather than the earlier oversized
+                    // r=9 version. The bigger invisible tap ring below (r=15) is what
+                    // actually solves "hard to tap without hitting the node" — visually it
+                    // stays tight and small like the reference.
                     const gapMid = (x1 + x2) / 2;
-                    const plusX = Math.min(x1 + 12, gapMid);
-                    const plusY = y1 + 10;
+                    const plusX = Math.min(x1 + 20, gapMid);
+                    const plusY = y1;
 
                     return (
                       <g key={e.id}>
@@ -1887,15 +1885,25 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         <circle cx={x1} cy={y1} r={3.5} fill={dotColor} opacity={dotOpacity} />
                         <circle cx={x2} cy={y2} r={3.5} fill={dotColor} opacity={dotOpacity} />
 
-                        {/* Single traveling dot — only while THIS edge's source step is
-                            actively running. Deliberately just one small, unglowed dot
-                            (not the old dual glowing-dot pair) so it reads as a quiet
-                            in-progress signal rather than a decorative flourish. The
-                            make.com reference is a static screenshot so it can't show
-                            this motion, but make.com's own canvas does animate a moving
-                            dot along the active connector during a live run. */}
+                        {/* Traveling flow dot. Previously this only appeared while a live
+                            trace run was actively on this edge, which is why it looked
+                            "not displaying" most of the time — on a canvas that isn't
+                            running a trace, no dot ever showed. make.com's canvas animates
+                            a dot along EVERY connected edge continuously, not just during
+                            an active run, so this now always renders on any edge that has
+                            two real connected nodes. Speed/color still communicate state:
+                            faster + blue while a run is actively on this edge, slower +
+                            green once the run has completed it, and a slow neutral drift
+                            at rest so the canvas doesn't look static. */}
+                        <circle r="2.5" fill={isRunningEdge ? "#38BDF8" : bothDone ? "#00C896" : "rgba(180,190,210,0.85)"}>
+                          <animateMotion
+                            dur={isRunningEdge ? "1.1s" : bothDone ? "1.6s" : "2.2s"}
+                            repeatCount="indefinite"
+                            path={pathD}
+                          />
+                        </circle>
                         {isRunningEdge && (
-                          <circle r="2.5" fill="#38BDF8">
+                          <circle r="4.5" fill="#38BDF8" opacity={0.35}>
                             <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
                           </circle>
                         )}
@@ -1949,10 +1957,16 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             setEdgeInsertPickerOpen(true);
                           }}
                         >
-                          <circle cx={plusX} cy={plusY} r={9} fill="rgba(8,11,22,0.9)" stroke="rgba(0,200,150,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-insert-btn" />
-                          <g pointerEvents="none" opacity={0.9}>
-                            <line x1={plusX - 4} y1={plusY} x2={plusX + 4} y2={plusY} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round" />
-                            <line x1={plusX} y1={plusY - 4} x2={plusX} y2={plusY + 4} stroke="#00C896" strokeWidth={1.5} strokeLinecap="round" />
+                          {/* Invisible larger tap zone (r=15) around the small visible
+                              circle — gives touch input the extra margin it needs without
+                              making the button itself look big. This is the real fix for
+                              "hard to tap without hitting the node": the tappable area is
+                              much bigger than what's drawn, but visually stays compact. */}
+                          <circle cx={plusX} cy={plusY} r={15} fill="transparent" />
+                          <circle cx={plusX} cy={plusY} r={7} fill="rgba(8,11,22,0.95)" stroke="rgba(0,200,150,0.7)" strokeWidth={1.25} opacity={0.95} className="edge-insert-btn" />
+                          <g pointerEvents="none" opacity={0.95}>
+                            <line x1={plusX - 3} y1={plusY} x2={plusX + 3} y2={plusY} stroke="#00C896" strokeWidth={1.25} strokeLinecap="round" />
+                            <line x1={plusX} y1={plusY - 3} x2={plusX} y2={plusY + 3} stroke="#00C896" strokeWidth={1.25} strokeLinecap="round" />
                           </g>
                         </g>
                       </g>
