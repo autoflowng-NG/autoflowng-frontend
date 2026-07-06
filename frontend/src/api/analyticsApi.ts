@@ -304,6 +304,14 @@ function useAnalyticsQuery<T>(
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetch_(); }, [fetch_]);
+
+  // Poll every 30 s so the Analytics page reflects new completed jobs
+  // without needing a manual refresh — matches the always-on workflow model.
+  useEffect(() => {
+    const id = setInterval(() => fetch_(), 30_000);
+    return () => clearInterval(id);
+  }, [fetch_]);
+
   return { data, loading, error, refetch: fetch_ };
 }
 
