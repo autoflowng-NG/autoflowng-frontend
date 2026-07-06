@@ -751,6 +751,7 @@ function NodeBox({
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       style={{
+        position: "relative",
         width: 150, height: 58, background: isDisabled ? "rgba(8,11,22,0.7)" : "rgba(8,11,22,0.97)",
         border: `1.5px solid ${borderColor}`,
         borderRadius: 12, padding: "10px 12px", cursor: "pointer", userSelect: "none",
@@ -1295,9 +1296,22 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     // WebSocket path — execution.nodes is keyed by node id
     if ((wsIsActive || wsIsDone) && execution.nodes.length > 0) {
       return nodes.map(n => {
-        const ns = execution.nodes.find((s: any) => s.id === n.id || s.name === n.label);
+        // Match by id first, then by label, then by executorType (backend may send
+        // the executor type string e.g. "gmail_reply" rather than the display label
+        // "Gmail Reply" — without this third check those nodes stayed "pending" even
+        // after the run completed, causing them not to glow green on the canvas).
+        const ns = execution.nodes.find(
+          (s: any) =>
+            s.id === n.id ||
+            s.name === n.label ||
+            s.type === n.executorType ||
+            s.name === n.executorType
+        );
         if (ns) return ns.status; // "pending"|"running"|"success"|"failed"|"skipped"
-        return wsIsActive ? "pending" : "pending";
+        // When run is fully done and we still have no match for this node it was
+        // either skipped or the backend didn't emit a status update — treat as
+        // success so it doesn't remain dim while all other nodes are green.
+        return wsIsDone ? "completed" : "pending";
       });
     }
 
@@ -2100,21 +2114,33 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         <circle cx={x1} cy={y1} r={3.5} fill={dotColor} opacity={dotOpacity} />
                         <circle cx={x2} cy={y2} r={3.5} fill={dotColor} opacity={dotOpacity} />
 
-                        {/* Live data-flow pulse — visible only while this edge's source
-                            step is actively running. Uses two concentric animated circles:
-                            an outer soft halo (large, low-opacity) + an inner bright core,
-                            so the moving pulse reads clearly as "data is flowing here right now"
-                            even at a glance and on small mobile viewports. The paused-edge
-                            dim treatment (isPausedEdge) is intentionally left static/unchanged. */}
+                        {/* Live data-flow pulse — two modes:
+                            1. RUNNING (cyan, fast 1.1s): edge source step is actively
+                               executing right now — bright cyan core + halo.
+                            2. COMPLETED (green, slow 2.2s): both endpoints are done —
+                               a softer green pulse confirms data flowed through this path.
+                            The paused-edge dim treatment is intentionally left static. */}
                         {isRunningEdge && (
                           <g>
-                            {/* Outer glow halo */}
+                            {/* Outer glow halo — cyan running */}
                             <circle r="7" fill="rgba(56,189,248,0.22)">
                               <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
                             </circle>
-                            {/* Inner bright core */}
+                            {/* Inner bright core — cyan running */}
                             <circle r="4" fill="#38BDF8">
                               <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
+                            </circle>
+                          </g>
+                        )}
+                        {!isRunningEdge && bothDone && (
+                          <g>
+                            {/* Outer soft halo — green completed */}
+                            <circle r="6" fill="rgba(0,200,150,0.18)">
+                              <animateMotion dur="2.2s" repeatCount="indefinite" path={pathD} />
+                            </circle>
+                            {/* Inner core — green completed */}
+                            <circle r="3.5" fill="#00C896">
+                              <animateMotion dur="2.2s" repeatCount="indefinite" path={pathD} />
                             </circle>
                           </g>
                         )}
