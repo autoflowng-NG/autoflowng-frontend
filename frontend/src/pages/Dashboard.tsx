@@ -370,7 +370,7 @@ function RecentRunsTable({ runs, loading, onRowClick }: {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-          {runs.slice(0, 10).map((run: any, i: number) => {
+          {runs.map((run: any, i: number) => {
             const st = (run.status || "pending").toLowerCase();
             const sc = STATUS_C[st] ?? "rgba(226,232,255,0.3)";
             return (
@@ -823,7 +823,8 @@ export default function Dashboard() {
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: queryKeys.analytics("7d"),
     queryFn:  () => analyticsAPI.get("7d"),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 10 * 1000,
+    refetchInterval: 10 * 1000,   // new completed jobs appear within 10 s
   });
   const { data: wfData, isLoading: loadingWF } = useQuery({
     queryKey: queryKeys.workflows,

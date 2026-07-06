@@ -669,9 +669,9 @@ function ContextVariables() {
 // FIX #7: map all backend status variants to display colors
 const TRACE_COLORS: Record<string, string> = {
   pending:   "rgba(232,238,255,0.2)",
-  running:   "#38BDF8",
-  success:   "#00C896",
-  completed: "#00C896",
+  running:   "__NODE_COLOR__",   // replaced per-node in NodeBox
+  success:   "__NODE_COLOR__",   // replaced per-node in NodeBox
+  completed: "__NODE_COLOR__",   // replaced per-node in NodeBox
   failed:    "#FB7185",
   skipped:   "#FBBF24",
   filtered:  "#FBBF24",
@@ -707,7 +707,8 @@ function NodeBox({
 }) {
   const entry = NODE_CATALOG.find(n => n.executorType === node.executorType) || NODE_CATALOG[0];
   const Icon = entry.icon;
-  const traceColor = traceStatus ? (TRACE_COLORS[traceStatus] || TRACE_COLORS.pending) : null;
+  const rawTraceColor = traceStatus ? (TRACE_COLORS[traceStatus] || TRACE_COLORS.pending) : null;
+  const traceColor = rawTraceColor === "__NODE_COLOR__" ? entry.color : rawTraceColor;
   const isPaused = !!node.config?.paused;
   const isDisabled = !!node.config?.disabled;
 
@@ -718,9 +719,9 @@ function NodeBox({
     : traceColor ?? (selected ? entry.color : "rgba(255,255,255,0.09)");
 
   const boxShadow = traceStatus === "running"
-    ? "0 0 0 3px rgba(56,189,248,0.25), 0 0 20px rgba(56,189,248,0.15)"
+    ? `0 0 0 3px ${entry.color}40, 0 0 22px ${entry.color}25`
     : (traceStatus === "success" || traceStatus === "completed")
-    ? "0 0 0 2px rgba(0,200,150,0.2), 0 0 12px rgba(0,200,150,0.12)"
+    ? `0 0 0 2px ${entry.color}35, 0 0 16px ${entry.color}20`
     : traceStatus === "failed"
     ? "0 0 0 2px rgba(251,113,133,0.25), 0 0 12px rgba(251,113,133,0.12)"
     : isPaused
@@ -945,8 +946,15 @@ function TraceStatusBar({
 
 // ─── RunsPanel ────────────────────────────────────────────────────────────────
 function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (runId: string) => void }) {
-  const { data: runs = [], isLoading } = useWorkflowRuns(workflowId);
+  const { data: runs = [], isLoading, refetch } = useWorkflowRuns(workflowId);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Always-on workflows complete new jobs continuously — poll every 10 s so
+  // RUNS tab stays current and shows the latest email reply jobs as they land.
+  useEffect(() => {
+    const id = setInterval(() => refetch(), 10_000);
+    return () => clearInterval(id);
+  }, [refetch]);
 
   // FIX #7: handle "completed" as success colour
   const statusColor = (s: string) => {
@@ -968,7 +976,7 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
       {isLoading ? <div className="af-shimmer" style={{ height: 120, borderRadius: 8 }} /> :
        runs.length === 0 ? <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(232,238,255,0.2)", fontSize: 12 }}>No runs yet</div> :
        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-         {(runs as any[]).slice(0, 20).map((r: any) => {
+         {(runs as any[]).map((r: any) => {
            const isOpen = expandedId === r.id;
            const sc = statusColor(r.status);
            // FIX #5: logs is the actual field, shape: [{step, type, name, logs:[]}]
@@ -1111,6 +1119,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [saving, setSaving]     = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOff, setDragOff]   = useState({ x: 0, y: 0 });
+  // Drag-vs-tap detection: only open config panel on a genuine tap (< 6px movement)
+  const hasDragged    = useRef(false);
+  const dragStartPos  = useRef<{ x: number; y: number } | null>(null);
   const [search, setSearch]     = useState("");
   const [connecting, setConnecting]               = useState<{ fromId: string } | null>(null);
   // (autoConnectPrompt removed — connecting nodes now happens instantly on add, no dialog needed)
@@ -1239,6 +1250,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     } else if (e.touches.length === 1 && dragging) {
       // Node drag — move the dragged node, don't pan the canvas
       e.preventDefault();
+      // Mark as a real drag if finger moved > 6px from touch-start
+      if (dragStartPos.current && !hasDragged.current) {
+        const dx = e.touches[0].clientX - dragStartPos.current.x;
+        const dy = e.touches[0].clientY - dragStartPos.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 6) hasDragged.current = true;
+      }
       const world = screenToWorld(e.touches[0].clientX, e.touches[0].clientY);
       setNodes(ns => ns.map(n => n.id === dragging ? { ...n, x: world.x - dragOff.x, y: world.y - dragOff.y } : n));
     } else if (e.touches.length === 1 && isPanning) {
@@ -1285,6 +1302,20 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const { execution } = useExecutionStream(id);
   const wsIsActive = execution.phase === "running" || execution.phase === "starting";
   const wsIsDone   = execution.phase === "completed" || execution.phase === "failed";
+
+  // Always-on workflow canvas reset: after a run finishes, briefly show the
+  // completed state (4 s so the user can see it), then auto-reset the execution
+  // stream back to idle so the canvas is ready for the next incoming job.
+  // This means nodes never stay frozen green — the workflow is perpetually live.
+  const [canvasResetKey, setCanvasResetKey] = useState(0);
+  useEffect(() => {
+    if (!wsIsDone) return;
+    const t = setTimeout(() => {
+      reset();                     // clears execution stream back to idle phase
+      setCanvasResetKey(k => k + 1);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [wsIsDone, reset]);
 
   // FALLBACK: HTTP poll via useWorkflowRun when WS has no data yet
   const { data: traceRun } = useWorkflowRun(id, traceRunId ?? "");
@@ -1708,7 +1739,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       setConnecting(null);
       return;
     }
-    setSelected(nodeId);
+    // Don't call setSelected yet — wait for mouseup. If mouse barely moved
+    // (tap), we select; if it moved significantly (drag), we don't.
+    hasDragged.current = false;
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
     const node = nodes.find(n => n.id === nodeId)!;
     const world = screenToWorld(e.clientX, e.clientY);
     setDragging(nodeId);
@@ -1717,11 +1751,24 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragging) return;
+    // Mark as a real drag if moved more than 6px from press point
+    if (dragStartPos.current && !hasDragged.current) {
+      const dx = e.clientX - dragStartPos.current.x;
+      const dy = e.clientY - dragStartPos.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 6) hasDragged.current = true;
+    }
     const world = screenToWorld(e.clientX, e.clientY);
     setNodes(ns => ns.map(n => n.id === dragging ? { ...n, x: world.x - dragOff.x, y: world.y - dragOff.y } : n));
   }, [dragging, dragOff, screenToWorld]);
 
-  const onMouseUp = useCallback(() => setDragging(null), []);
+  const onMouseUp = useCallback((e: MouseEvent) => {
+    if (dragging && !hasDragged.current) {
+      // Genuine tap — open config panel
+      setSelected(dragging);
+    }
+    setDragging(null);
+    dragStartPos.current = null;
+  }, [dragging]);
 
   useEffect(() => {
     window.addEventListener("mousemove", onMouseMove);
@@ -1794,6 +1841,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         @keyframes spin-slow {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
+        }
+        @keyframes flow-dash {
+          to { stroke-dashoffset: -28; }
+        }
+        @keyframes flow-dash-slow {
+          to { stroke-dashoffset: -28; }
         }
       `}</style>
 
@@ -2049,18 +2102,22 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     const fromNode = fi >= 0 ? nodes[fi] : null;
                     const isPausedEdge = !!(fromNode?.config?.paused);
 
+                    // Per-source-node color — each edge inherits its source node's catalog color
+                    const srcCatalog = NODE_CATALOG.find(c => c.executorType === fn.executorType) || NODE_CATALOG[0];
+                    const nodeColor = srcCatalog.color;
+
                     // Edge color logic:
                     //  - Paused (idle):   dim red-ish to signal "this path is blocked"
-                    //  - Running NOW:     bright cyan — the data-flow animation reads on top
-                    //  - Both steps done: saturated green — this path ran successfully
+                    //  - Running NOW:     source node's color at 60% — pulse animation sits on top
+                    //  - Both steps done: source node's color — this path ran successfully
                     //  - Otherwise tracing (steps not yet reached): very dim white
                     //  - Idle (no run):   neutral gray, readable against dark canvas
                     const edgeColor = isPausedEdge && !isTracing
                       ? "rgba(251,113,133,0.25)"
                       : isRunningEdge
-                      ? "rgba(56,189,248,0.5)"   // brighter for the active connector
+                      ? `${nodeColor}99`          // 60% opacity of node color while running
                       : bothDone
-                      ? "#00C896"
+                      ? nodeColor                 // full node color when completed
                       : isTracing
                       ? "rgba(255,255,255,0.14)"
                       : "rgba(200,210,230,0.9)";
@@ -2073,7 +2130,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     // phone screen rather than merely "subtle." Bumped back up slightly so
                     // they're reliably visible while still reading as quieter than the
                     // original r=3 full-saturation version.
-                    const dotColor = bothDone ? "#00C896" : edgeColor;
+                    const dotColor = bothDone ? nodeColor : edgeColor;
                     const dotOpacity = 1;
 
                     // Delete badge stays at the true connector midpoint.
@@ -2114,35 +2171,66 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                         <circle cx={x1} cy={y1} r={3.5} fill={dotColor} opacity={dotOpacity} />
                         <circle cx={x2} cy={y2} r={3.5} fill={dotColor} opacity={dotOpacity} />
 
-                        {/* Live data-flow pulse — two modes:
-                            1. RUNNING (cyan, fast 1.1s): edge source step is actively
-                               executing right now — bright cyan core + halo.
-                            2. COMPLETED (green, slow 2.2s): both endpoints are done —
-                               a softer green pulse confirms data flowed through this path.
-                            The paused-edge dim treatment is intentionally left static. */}
+                        {/* Live data-flow pulse — marching-ants stroke-dashoffset technique.
+                            This is how n8n/make.com do it: animated dashes flow along the
+                            path giving a clear "data is moving through this connector" signal.
+                            1. RUNNING (fast 0.55s): bright node-color dashes racing along.
+                            2. COMPLETED (slow 1.6s): same color, slower — confirms data flowed. */}
                         {isRunningEdge && (
-                          <g>
-                            {/* Outer glow halo — cyan running */}
-                            <circle r="7" fill="rgba(56,189,248,0.22)">
-                              <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
-                            </circle>
-                            {/* Inner bright core — cyan running */}
-                            <circle r="4" fill="#38BDF8">
-                              <animateMotion dur="1.1s" repeatCount="indefinite" path={pathD} />
-                            </circle>
-                          </g>
+                          <>
+                            {/* Glow layer — slightly wider, low opacity for the halo */}
+                            <path
+                              d={pathD}
+                              stroke={nodeColor}
+                              strokeWidth={5}
+                              strokeLinecap="round"
+                              strokeDasharray="10 18"
+                              strokeDashoffset={0}
+                              fill="none"
+                              opacity={0.22}
+                              style={{ animation: "flow-dash 0.55s linear infinite" }}
+                            />
+                            {/* Core dash — sharp, bright, fast */}
+                            <path
+                              d={pathD}
+                              stroke={nodeColor}
+                              strokeWidth={2.5}
+                              strokeLinecap="round"
+                              strokeDasharray="10 18"
+                              strokeDashoffset={0}
+                              fill="none"
+                              opacity={0.95}
+                              style={{ animation: "flow-dash 0.55s linear infinite" }}
+                            />
+                          </>
                         )}
                         {!isRunningEdge && bothDone && (
-                          <g>
-                            {/* Outer soft halo — green completed */}
-                            <circle r="6" fill="rgba(0,200,150,0.18)">
-                              <animateMotion dur="2.2s" repeatCount="indefinite" path={pathD} />
-                            </circle>
-                            {/* Inner core — green completed */}
-                            <circle r="3.5" fill="#00C896">
-                              <animateMotion dur="2.2s" repeatCount="indefinite" path={pathD} />
-                            </circle>
-                          </g>
+                          <>
+                            {/* Glow layer — wider, low opacity halo */}
+                            <path
+                              d={pathD}
+                              stroke={nodeColor}
+                              strokeWidth={4}
+                              strokeLinecap="round"
+                              strokeDasharray="8 20"
+                              strokeDashoffset={0}
+                              fill="none"
+                              opacity={0.18}
+                              style={{ animation: "flow-dash-slow 1.6s linear infinite" }}
+                            />
+                            {/* Core dash — softer, slower */}
+                            <path
+                              d={pathD}
+                              stroke={nodeColor}
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeDasharray="8 20"
+                              strokeDashoffset={0}
+                              fill="none"
+                              opacity={0.85}
+                              style={{ animation: "flow-dash-slow 1.6s linear infinite" }}
+                            />
+                          </>
                         )}
 
                         {/* Invisible fat hit-area for tap-to-delete */}
@@ -2233,10 +2321,19 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                           setConnecting(null);
                           return;
                         }
-                        setSelected(n.id);
+                        // Don't select on touch-start — wait for touch-end.
+                        // If the user dragged, hasDragged will be true and we skip selection.
+                        hasDragged.current = false;
+                        dragStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                         const world = screenToWorld(e.touches[0].clientX, e.touches[0].clientY);
                         setDragging(n.id);
                         setDragOff({ x: world.x - n.x, y: world.y - n.y });
+                      }
+                    }}
+                    onTouchEnd={e => {
+                      if (!hasDragged.current && dragging === n.id) {
+                        // Genuine tap — open config panel
+                        setSelected(n.id);
                       }
                     }}
                   >
@@ -2601,7 +2698,10 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
               {/* FIX #2: trace step result uses stepStatuses[selIdx] */}
               {isTracing && selIdx >= 0 && stepStatuses[selIdx] && stepStatuses[selIdx] !== "pending" && (() => {
                 const status = stepStatuses[selIdx];
-                const color = TRACE_COLORS[status] || TRACE_COLORS.pending;
+                const selNode = selIdx >= 0 ? nodes[selIdx] : null;
+                const selEntry = selNode ? (NODE_CATALOG.find(c => c.executorType === selNode.executorType) || NODE_CATALOG[0]) : NODE_CATALOG[0];
+                const rawColor = TRACE_COLORS[status] || TRACE_COLORS.pending;
+                const color = rawColor === "__NODE_COLOR__" ? selEntry.color : rawColor;
                 // Find the log entry for this step index
                 const logEntry = (traceRun?.logs || []).find((l: any) => l.step === selIdx);
                 const stepLogs: any[] = logEntry?.logs || [];
