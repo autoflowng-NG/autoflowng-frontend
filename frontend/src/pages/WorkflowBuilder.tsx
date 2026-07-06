@@ -751,8 +751,7 @@ function NodeBox({
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       style={{
-        position: "absolute", left: node.x, top: node.y,
-        width: 150, background: isDisabled ? "rgba(8,11,22,0.7)" : "rgba(8,11,22,0.97)",
+        width: 150, height: 58, background: isDisabled ? "rgba(8,11,22,0.7)" : "rgba(8,11,22,0.97)",
         border: `1.5px solid ${borderColor}`,
         borderRadius: 12, padding: "10px 12px", cursor: "pointer", userSelect: "none",
         boxShadow: boxShadow ?? "0 2px 16px rgba(0,0,0,0.35)",
