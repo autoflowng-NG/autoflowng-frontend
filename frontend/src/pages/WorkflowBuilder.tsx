@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  useWorkflow, useUpdateWorkflow, useTriggerWorkflow,
+  useWorkflow, useUpdateWorkflow, useTriggerWorkflow, useToggleWorkflow,
   useWorkflowRuns, useWorkflowRun,
 } from "../hooks/useWorkflows";
 import { useConnections } from "../hooks/useConnections";
@@ -691,13 +691,16 @@ function TraceStatusIcon({ status }: { status: string }) {
 
 // ─── NodeBox ──────────────────────────────────────────────────────────────────
 function NodeBox({
-  node, selected, connecting, traceStatus, onSelect, onDelete, onConnectorClick,
+  node, selected, connecting, traceStatus, isLive, onSelect, onDelete, onConnectorClick,
   onPauseToggle, onFanout, onContextMenu,
 }: {
   node: Node;
   selected: boolean;
   connecting: boolean;
   traceStatus: string | null;
+  // Whether the parent workflow is deployed/armed (workflow.is_active). Drives
+  // the ambient "listening" glow independent of any single run's traceStatus.
+  isLive?: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onConnectorClick: (id: string, e: React.MouseEvent) => void;
@@ -728,6 +731,12 @@ function NodeBox({
     ? "0 0 0 2px rgba(251,191,36,0.2), 0 0 10px rgba(251,191,36,0.1)"
     : selected
     ? `0 0 20px ${entry.color}30`
+    // Ambient "deployed & listening" glow — shown whenever the workflow is
+    // armed (is_active) but no run is currently executing on this node.
+    // Deliberately dimmer/slower than the "running" glow above so the two
+    // states read as visually distinct: this is "alive", not "working".
+    : isLive
+    ? `0 0 0 1.5px ${entry.color}25, 0 0 14px ${entry.color}15`
     : undefined;
 
   // Long-press for mobile context menu
@@ -765,6 +774,14 @@ function NodeBox({
       {/* Running shimmer */}
       {traceStatus === "running" && (
         <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.06) 50%, transparent 100%)", animation: "trace-shimmer 1.4s ease-in-out infinite", pointerEvents: "none" }} />
+      )}
+
+      {/* Ambient "deployed & listening" breathing glow — only while the workflow
+          is armed (is_active) and this node isn't mid-execution or paused. Slow
+          (3.2s) so it reads as "alive/idle", never confused with the faster
+          "running" shimmer above. */}
+      {isLive && traceStatus !== "running" && !isPaused && !isDisabled && (
+        <div style={{ position: "absolute", inset: 0, borderRadius: 12, boxShadow: `0 0 0 1.5px ${entry.color}25, 0 0 14px ${entry.color}15`, animation: "ambient-breathe 3.2s ease-in-out infinite", pointerEvents: "none" }} />
       )}
 
       {/* Paused overlay tint */}
@@ -1108,8 +1125,13 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const { data, isLoading } = useWorkflow(id);
   const updateWF   = useUpdateWorkflow(id);
   const triggerWF  = useTriggerWorkflow();
+  const toggleWF   = useToggleWorkflow();
   const { toast }  = useToast();
   const { data: connections = [] } = useConnections();
+
+  // Persistent "armed/listening" state — distinct from any single run's
+  // transient status. Drives the ambient glow/pulse on the canvas.
+  const isWorkflowLive = !!(data as any)?.is_active;
 
   const [nodes, setNodes]       = useState<Node[]>([]);
   const [edges, setEdges]       = useState<Edge[]>([]);
@@ -1303,16 +1325,18 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const wsIsActive = execution.phase === "running" || execution.phase === "starting";
   const wsIsDone   = execution.phase === "completed" || execution.phase === "failed";
 
-  // Always-on workflow canvas reset: after a run finishes, briefly show the
-  // completed state (4 s so the user can see it), then auto-reset the execution
-  // stream back to idle so the canvas is ready for the next incoming job.
-  // This means nodes never stay frozen green — the workflow is perpetually live.
-  const [canvasResetKey, setCanvasResetKey] = useState(0);
+  // Deployment (is_active) and execution (this run) are independent states.
+  // Previously this effect force-reset the canvas to a dark/idle state 4s
+  // after any run finished, which made a deployed/listening workflow look
+  // "off" between events. Now: once a run completes, we just clear the
+  // transient execution stream so stepStatuses/traceStatus stop reporting
+  // per-run state — the canvas then falls back to the ambient "LIVE" glow
+  // (driven by isWorkflowLive/workflow.is_active) if still deployed, or to
+  // a genuinely idle look only when the workflow has actually been stopped.
   useEffect(() => {
     if (!wsIsDone) return;
     const t = setTimeout(() => {
-      reset();                     // clears execution stream back to idle phase
-      setCanvasResetKey(k => k + 1);
+      reset(); // clears execution stream back to idle phase — canvas falls back to ambient live state, not dark
     }, 4000);
     return () => clearTimeout(t);
   }, [wsIsDone, reset]);
@@ -1705,8 +1729,31 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     }
   };
 
-  // ── Trigger ────────────────────────────────────────────────────────────────
-  const trigger = async () => {
+  // ── Deploy / Stop ──────────────────────────────────────────────────────────
+  // Primary action: arm the workflow as a persistent listener (is_active = true)
+  // via the toggle endpoint — this is what should stay "live" indefinitely,
+  // not a one-off test execution. Calling it again while already live stops it.
+  const deployToggle = async () => {
+    if (!isWorkflowLive && nodes.length === 0) {
+      toast({ title: "No nodes", description: "Add at least one node to the canvas before deploying.", variant: "destructive" });
+      return;
+    }
+    try {
+      await toggleWF.mutateAsync(id);
+      toast(
+        isWorkflowLive
+          ? { title: "Workflow stopped", description: "No longer listening for events." }
+          : { title: "Workflow deployed!", description: "Now listening for events…" }
+      );
+    } catch (e: any) {
+      toast({ title: "Deploy failed", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  // Secondary action: fire a single one-off manual test run without changing
+  // the deployment state. This is the old "Run" behavior, kept available for
+  // testing but no longer the primary/default button.
+  const runOnce = async () => {
     if (nodes.length === 0) {
       toast({ title: "No nodes", description: "Add at least one node to the canvas before running.", variant: "destructive" });
       return;
@@ -1715,7 +1762,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     setTraceRunId(null);
     try {
       await triggerWF.mutateAsync({ id });
-      toast({ title: "Workflow triggered!", description: "Watching for live updates…" });
+      toast({ title: "Test run started!", description: "Watching for live updates…" });
       // Poll /runs to get the run id for HTTP fallback (WS may already be firing)
       await startTrace();
     } catch (e: any) {
@@ -1849,6 +1896,14 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           from { stroke-dashoffset: 0; }
           to   { stroke-dashoffset: -28; }
         }
+        @keyframes flow-dash-idle {
+          from { stroke-dashoffset: 0; }
+          to   { stroke-dashoffset: -40; }
+        }
+        @keyframes ambient-breathe {
+          0%, 100% { opacity: 0.55; }
+          50%      { opacity: 1; }
+        }
       `}</style>
 
       <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#04060F", overflow: "hidden" }}>
@@ -1861,13 +1916,21 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.08)" }} />
           <input value={name} onChange={e => setName(e.target.value)} data-testid="input-workflow-name" style={{ flex: 1, background: "none", border: "none", color: "#E8EEFF", fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", outline: "none" }} />
 
-          {/* Live trace badge */}
-          {isTracing && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: traceIsLive ? "rgba(56,189,248,0.1)" : "rgba(0,200,150,0.1)", border: `1px solid ${traceIsLive ? "rgba(56,189,248,0.3)" : "rgba(0,200,150,0.3)"}`, borderRadius: 20, padding: "4px 10px", flexShrink: 0 }}>
-              <Radio size={11} color={traceIsLive ? "#38BDF8" : "#00C896"} style={{ animation: traceIsLive ? "pulse-dot 1s ease-in-out infinite" : undefined }} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: traceIsLive ? "#38BDF8" : "#00C896", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>
-                {traceIsLive ? "LIVE"
-                  : wsIsDone ? execution.phase.toUpperCase()
+          {/* Top-level status pill — sourced from workflow.is_active (persistent
+              deployment state), NOT from the last run's status. Per-run outcomes
+              ("completed"/"failed") live only in the Runs tab / TraceStatusBar. */}
+          {isWorkflowLive ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.3)", borderRadius: 20, padding: "4px 10px", flexShrink: 0 }}>
+              <Radio size={11} color="#38BDF8" style={{ animation: "pulse-dot 1s ease-in-out infinite" }} />
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#38BDF8", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>
+                {wsIsActive ? "RUNNING" : "LIVE"}
+              </span>
+            </div>
+          ) : isTracing && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(0,200,150,0.1)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: 20, padding: "4px 10px", flexShrink: 0 }}>
+              <Radio size={11} color="#00C896" />
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#00C896", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>
+                {wsIsDone ? execution.phase.toUpperCase()
                   : (traceRun?.status === "completed" ? "COMPLETED" : (traceRun?.status?.toUpperCase() || "TRACE"))}
               </span>
             </div>
@@ -1881,8 +1944,21 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
             ))}
           </div>
           <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.08)" }} />
-          <button onClick={trigger} disabled={triggerWF.isPending} data-testid="button-trigger" style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.25)", borderRadius: 8, padding: "6px 14px", color: "#38BDF8", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", opacity: triggerWF.isPending ? 0.6 : 1 }}>
-            <Zap size={13} /> {triggerWF.isPending ? "Running…" : "Run"}
+          {/* Secondary: fire a single one-off test run without changing deployment state */}
+          <button onClick={runOnce} disabled={triggerWF.isPending} data-testid="button-run-once" title="Run a one-off test without deploying" style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid rgba(232,238,255,0.12)", borderRadius: 8, padding: "6px 12px", color: "rgba(232,238,255,0.55)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", opacity: triggerWF.isPending ? 0.6 : 1 }}>
+            <Zap size={12} /> {triggerWF.isPending ? "Running…" : "Test run"}
+          </button>
+          {/* Primary: deploy (arm the workflow to listen indefinitely) / stop */}
+          <button onClick={deployToggle} disabled={toggleWF.isPending} data-testid="button-trigger" style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: isWorkflowLive ? "rgba(251,113,133,0.1)" : "rgba(56,189,248,0.1)",
+            border: `1px solid ${isWorkflowLive ? "rgba(251,113,133,0.3)" : "rgba(56,189,248,0.25)"}`,
+            borderRadius: 8, padding: "6px 14px",
+            color: isWorkflowLive ? "#FB7185" : "#38BDF8",
+            fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+            opacity: toggleWF.isPending ? 0.6 : 1,
+          }}>
+            <Zap size={13} /> {toggleWF.isPending ? "…" : isWorkflowLive ? "Stop" : "Run"}
           </button>
           <button onClick={save} disabled={saving} data-testid="button-save" style={{ display: "flex", alignItems: "center", gap: 6, background: "#00C896", border: "none", borderRadius: 8, padding: "6px 16px", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
             <Save size={13} /> {saving ? "Saving…" : "Save"}
@@ -2112,6 +2188,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                     //  - Running NOW:     source node's color at 60% — pulse animation sits on top
                     //  - Both steps done: source node's color — this path ran successfully
                     //  - Otherwise tracing (steps not yet reached): very dim white
+                    //  - Deployed & idle: node color at low opacity — "the pipe is live"
                     //  - Idle (no run):   neutral gray, readable against dark canvas
                     const edgeColor = isPausedEdge && !isTracing
                       ? "rgba(251,113,133,0.25)"
@@ -2121,9 +2198,16 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                       ? nodeColor                 // full node color when completed
                       : isTracing
                       ? "rgba(255,255,255,0.14)"
+                      : isWorkflowLive
+                      ? `${nodeColor}55`
                       : "rgba(200,210,230,0.9)";
 
-                    const isIdleEdge = !isPausedEdge && !isTracing && !bothDone;
+                    // Ambient "workflow is deployed and listening" connector state —
+                    // independent of any single run's traceStatus. Every edge shows a
+                    // slow flowing-dash animation the entire time the workflow is armed,
+                    // separate from (and dimmer/slower than) the execution pulse below.
+                    const isAmbientLiveEdge = isWorkflowLive && !isPausedEdge && !isRunningEdge;
+                    const isIdleEdge = !isPausedEdge && !isTracing && !bothDone && !isWorkflowLive;
                     const edgeDash = undefined; // solid line always — dashed was too faint/broken-looking on mobile
                     const edgeWidth = bothDone ? 2 : isRunningEdge ? 2.5 : 1.5;
                     // Endpoint dots — previous pass shrank these to r=2 at 0.6 opacity in
@@ -2202,6 +2286,23 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                               style={{ strokeDashoffset: 0, animation: "flow-dash 0.55s linear infinite" }}
                             />
                           </>
+                        )}
+                        {/* Ambient "deployed & listening" flow — plays continuously the
+                            entire time the workflow is armed, independent of any single
+                            run. Deliberately slower/dimmer than both the active-execution
+                            pulse above and the "just completed" pulse below, so the three
+                            states read as distinct at a glance. */}
+                        {isAmbientLiveEdge && !bothDone && (
+                          <path
+                            d={pathD}
+                            stroke={nodeColor}
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            strokeDasharray="6 14"
+                            fill="none"
+                            opacity={0.4}
+                            style={{ strokeDashoffset: 0, animation: "flow-dash-idle 3.6s linear infinite" }}
+                          />
                         )}
                         {!isRunningEdge && bothDone && (
                           <>
@@ -2339,6 +2440,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                       selected={selected === n.id}
                       connecting={connecting?.fromId === n.id}
                       traceStatus={isTracing ? (stepStatuses[idx] ?? "pending") : null}
+                      isLive={isWorkflowLive}
                       onSelect={setSelected}
                       onDelete={deleteNode}
                       onConnectorClick={onConnectorClick}
