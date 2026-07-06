@@ -1813,6 +1813,23 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           <button onClick={save} disabled={saving} data-testid="button-save" style={{ display: "flex", alignItems: "center", gap: 6, background: "#00C896", border: "none", borderRadius: 8, padding: "6px 16px", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
             <Save size={13} /> {saving ? "Saving…" : "Save"}
           </button>
+          {/* TEMP DEBUG — remove once the missing-connector-line issue is resolved.
+              Dumps live nodes/edges state as plain text via alert() so it can be
+              read and screenshotted on a phone with no dev tools access. */}
+          <button
+            onClick={() => {
+              const summary = {
+                nodeCount: nodes.length,
+                edgeCount: edges.length,
+                nodes: nodes.map(n => ({ id: n.id, type: n.executorType, x: n.x, y: n.y })),
+                edges: edges.map(e => ({ id: e.id, from: e.from, to: e.to })),
+              };
+              alert(JSON.stringify(summary, null, 2));
+            }}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 8, padding: "6px 12px", color: "#FBBF24", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}
+          >
+            DEBUG
+          </button>
         </div>
 
         {/* ── Pre-activation warning banner ── */}
