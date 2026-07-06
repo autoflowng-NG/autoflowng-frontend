@@ -169,6 +169,31 @@ export function useExecutionStream(workflowId?: string) {
     /* Filter by workflowId if provided */
     if (workflowId && raw.workflow_id && raw.workflow_id !== workflowId) return;
 
+    // step_started / step_completed — executor sends stepIndex (not node_id).
+    // Build a synthetic NodeState keyed by "step:<index>" so the canvas lights up
+    // in real time without the backend needing to emit node_id on every step event.
+    if (ev === "step_started" || ev === "step_completed") {
+      const stepIdx = raw.stepIndex ?? raw.step_index;
+      if (stepIdx !== undefined && stepIdx !== null) {
+        const syntheticId = `step:${stepIdx}`;
+        setState(prev => {
+          const nodes = [...prev.nodes];
+          const ni = nodes.findIndex(n => n.id === syntheticId);
+          const updated: NodeState = {
+            id:         syntheticId,
+            name:       raw.stepName || raw.stepType || syntheticId,
+            status:     ev === "step_started" ? "running" : "success",
+            startedAt:  ev === "step_started"   ? Date.now() : undefined,
+            finishedAt: ev === "step_completed" ? Date.now() : undefined,
+          };
+          if (ni >= 0) nodes[ni] = { ...nodes[ni], ...updated };
+          else nodes.push(updated);
+          return { ...prev, nodes };
+        });
+      }
+      // Fall through so the workflow phase (running/completed) is also updated
+    }
+
     // step_paused and step_skipped are node-level events — handle them directly
     if (ev === "step_paused") {
       setState(prev => {
