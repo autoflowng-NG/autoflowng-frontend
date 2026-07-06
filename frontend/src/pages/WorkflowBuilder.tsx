@@ -1818,13 +1818,13 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
               read and screenshotted on a phone with no dev tools access. */}
           <button
             onClick={() => {
-              const summary = {
-                nodeCount: nodes.length,
-                edgeCount: edges.length,
-                nodes: nodes.map(n => ({ id: n.id, type: n.executorType, x: n.x, y: n.y })),
-                edges: edges.map(e => ({ id: e.id, from: e.from, to: e.to })),
-              };
-              alert(JSON.stringify(summary, null, 2));
+              const nodeLines = nodes.map(n => `${n.id}(${n.executorType}) @${n.x},${n.y}`).join("\n");
+              const edgeLines = edges.length > 0
+                ? edges.map(e => `${e.from} -> ${e.to}  [id:${e.id}]`).join("\n")
+                : "(none)";
+              alert(
+                `NODES (${nodes.length}):\n${nodeLines}\n\nEDGES (${edges.length}):\n${edgeLines}`
+              );
             }}
             style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 8, padding: "6px 12px", color: "#FBBF24", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}
           >
