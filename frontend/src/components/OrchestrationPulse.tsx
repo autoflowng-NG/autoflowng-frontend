@@ -25,6 +25,13 @@ export type PulseEventKind =
   | "error"
   | "generic";
 
+// Fix: the executor (engines/workflow/executor.js) actually broadcasts events
+// named `run_started`, `step_completed`, `run_completed`, `run_failed` — none
+// of which matched this map's old keys (`workflow_run`, `workflow_run_start`,
+// `workflow_run_end`, `automation_trigger`, `status_change`, `error`). Every
+// real event fell through to the "generic" gray pulse instead of the intended
+// color-coded start/end/error distinction.
+
 const KIND_COLOR: Record<PulseEventKind, string> = {
   workflow_run:       "#00C896",
   workflow_run_start: "#38BDF8",
@@ -63,6 +70,12 @@ export function OrchestrationPulse({
 
   useEffect(() => {
     const map: Record<string, PulseEventKind> = {
+      // Real event names broadcast by engines/workflow/executor.js.
+      run_started:         "workflow_run_start",
+      step_completed:      "workflow_run",
+      run_completed:       "workflow_run_end",
+      run_failed:          "error",
+      // Kept for forward-compat in case other emitters ever use these names.
       workflow_run:        "workflow_run",
       "workflow_run_start":"workflow_run_start",
       "workflow_run_end":  "workflow_run_end",
