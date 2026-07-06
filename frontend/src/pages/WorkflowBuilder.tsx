@@ -1325,11 +1325,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     const ns = (data as any).nodes || [];
     const es = (data as any).edges || [];
     const hydrated = ns.map((n: any, i: number) => {
-      let x = n.x ?? 60 + i * 160;
+      let x = n.x ?? 60 + i * 220;
       let y = n.y ?? 150;
       if (!Number.isFinite(x) || x < SANE_COORD_MIN || x > SANE_COORD_MAX) {
         console.warn(`[WorkflowBuilder] node ${n.id || i} had an out-of-range x (${n.x}); resetting to a safe default so it can't render a stray floating connector.`);
-        x = 60 + i * 160;
+        x = 60 + i * 220;
       }
       if (!Number.isFinite(y) || y < SANE_COORD_MIN || y > SANE_COORD_MAX) {
         console.warn(`[WorkflowBuilder] node ${n.id || i} had an out-of-range y (${n.y}); resetting to a safe default so it can't render a stray floating connector.`);
@@ -1462,7 +1462,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: newBranchId,
         executorType: catalogEntry.executorType,
         label: catalogEntry.label,
-        x: existingRouter.x + 160,
+        x: existingRouter.x + 220,
         y: existingRouter.y + 50 + branchCount * 90,
         config: {},
       };
@@ -1475,7 +1475,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: routerId,
         executorType: 'router',
         label: 'Fan-out Router',
-        x: sourceNode.x + 160,
+        x: sourceNode.x + 220,
         y: sourceNode.y,
         config: {},
       };
@@ -1483,7 +1483,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: newBranchId,
         executorType: catalogEntry.executorType,
         label: catalogEntry.label,
-        x: sourceNode.x + 320,
+        x: sourceNode.x + 440,
         y: sourceNode.y + 90,
         config: {},
       };
@@ -1529,7 +1529,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         // make.com-style horizontal flow — tight 150px-wide cards sit on a
         // 160px pitch, a clean ~10px gap, matching how make.com packs its
         // modules close together with just enough room for the connector line.
-        x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 160,
+        x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 220,
         y: 140,
         config: {},
       };
@@ -2135,16 +2135,29 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                             touch devices, which made this button invisible and effectively
                             untappable on mobile. Always-on and subtle at rest, same as
                             make.com's own connector controls, which don't require a hover
-                            state either. */}
+                            state either.
+                            Bug fix: this previously deleted the edge immediately on click
+                            with no confirmation, inconsistent with the invisible fat
+                            hit-area path right above it (which does confirm via
+                            window.confirm). On workflows with closely-spaced nodes (the
+                            default 220px pitch minus 150px node width leaves ~70px
+                            of visible line), this small opaque circle sitting at a fixed
+                            10px vertical offset from the midpoint was easy to mistake for
+                            an unrelated floating UI artifact — since the connector line
+                            it belongs to is nearly invisible at that length, and one
+                            careless tap silently deleted a real, correct connection with
+                            no way to notice or undo it. Now confirms like its sibling. */}
                         <g
                           style={{ cursor: "pointer", pointerEvents: "all" }}
                           onClick={ev => {
                             ev.stopPropagation();
-                            setEdges(es => es.filter(ed => ed.id !== e.id));
+                            if (window.confirm("Remove this connection?")) {
+                              setEdges(es => es.filter(ed => ed.id !== e.id));
+                            }
                           }}
                         >
-                          <circle cx={midX} cy={midY - 10} r={10} fill="rgba(8,11,22,0.9)" stroke="rgba(251,113,133,0.55)" strokeWidth={1.5} opacity={0.85} className="edge-delete-btn" />
-                          <text x={midX} y={midY - 10 + 4.5} textAnchor="middle" fontSize="13" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0.9}>
+                          <circle cx={midX} cy={midY - 10} r={8} fill="rgba(8,11,22,0.85)" stroke="rgba(251,113,133,0.4)" strokeWidth={1} opacity={0.65} className="edge-delete-btn" />
+                          <text x={midX} y={midY - 10 + 4} textAnchor="middle" fontSize="11" fill="#FB7185" fontWeight="bold" pointerEvents="none" opacity={0.75}>
                             ×
                           </text>
                         </g>
