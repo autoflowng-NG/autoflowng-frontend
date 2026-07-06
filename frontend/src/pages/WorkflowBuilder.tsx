@@ -689,10 +689,61 @@ function TraceStatusIcon({ status }: { status: string }) {
   return <Clock size={11} color="rgba(232,238,255,0.25)" />;
 }
 
+// ─── FanoutButton ─────────────────────────────────────────────────────────────
+// Rendered in a single top-level overlay layer (after ALL node boxes in the
+// DOM, positioned via each node's own world x/y) instead of nested inside
+// each node's own div. This guarantees the button is never occluded by a
+// sibling node's box, regardless of canvas layout — see the note left in
+// NodeBox where this used to live for the full root-cause explanation.
+function FanoutButton({ x, y, onClick }: { x: number; y: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      title="Add fan-out branch (Router → new node)"
+      aria-label="Add fan-out branch"
+      style={{
+        position: "absolute",
+        // Matches the node box's own bottom-right placement: node is 150×58,
+        // button was bottom:-25 right:-7 relative to the box, i.e. left =
+        // nodeRight + 7 - 44, top = nodeBottom + 25 - 44.
+        left: x + 150 + 7 - 44,
+        top: y + 58 + 25 - 44,
+        width: 44, height: 44,
+        borderRadius: "50%",
+        background: "transparent", border: "none",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer", zIndex: 40, padding: 0,
+      }}
+      onMouseEnter={e => {
+        const v = (e.currentTarget as HTMLButtonElement).querySelector('.fanout-visual') as HTMLElement | null;
+        if (v) { v.style.background = "rgba(0,200,150,0.28)"; v.style.borderColor = "rgba(0,200,150,0.8)"; }
+      }}
+      onMouseLeave={e => {
+        const v = (e.currentTarget as HTMLButtonElement).querySelector('.fanout-visual') as HTMLElement | null;
+        if (v) { v.style.background = "rgba(0,200,150,0.12)"; v.style.borderColor = "rgba(0,200,150,0.45)"; }
+      }}
+    >
+      <div
+        className="fanout-visual"
+        style={{
+          width: 22, height: 22, borderRadius: "50%",
+          background: "rgba(0,200,150,0.12)",
+          border: "1.5px solid rgba(0,200,150,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "background 0.15s, border-color 0.15s",
+          pointerEvents: "none",
+        }}
+      >
+        <Plus size={11} color="#00C896" />
+      </div>
+    </button>
+  );
+}
+
 // ─── NodeBox ──────────────────────────────────────────────────────────────────
 function NodeBox({
   node, selected, connecting, traceStatus, isLive, onSelect, onDelete, onConnectorClick,
-  onPauseToggle, onFanout, onContextMenu,
+  onPauseToggle, onContextMenu,
 }: {
   node: Node;
   selected: boolean;
@@ -705,7 +756,6 @@ function NodeBox({
   onDelete: (id: string) => void;
   onConnectorClick: (id: string, e: React.MouseEvent) => void;
   onPauseToggle?: () => void;
-  onFanout?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const entry = NODE_CATALOG.find(n => n.executorType === node.executorType) || NODE_CATALOG[0];
@@ -818,48 +868,19 @@ function NodeBox({
         }}
       />
 
-      {/* Fan-out "+" — available on ALL nodes, positioned bottom-right with clear separation from output dot */}
-      {onFanout && !connecting && (
-        /* 44×44 transparent tap target, centered on the same visual position as
-           the previous 22×22 circle. The inner div carries all the visual styles
-           so the large transparent hit area is invisible to the user. */
-        <button
-          onClick={e => { e.stopPropagation(); onFanout(); }}
-          title="Add fan-out branch (Router → new node)"
-          aria-label="Add fan-out branch"
-          style={{
-            position: "absolute",
-            bottom: -25, right: -7,   // keeps visual center identical to bottom:-14 right:4 at 22px
-            width: 44, height: 44,     // full 44×44 accessible tap target
-            borderRadius: "50%",
-            background: "transparent", border: "none",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", zIndex: 31, padding: 0,
-          }}
-          onMouseEnter={e => {
-            const v = (e.currentTarget as HTMLButtonElement).querySelector('.fanout-visual') as HTMLElement | null;
-            if (v) { v.style.background = "rgba(0,200,150,0.28)"; v.style.borderColor = "rgba(0,200,150,0.8)"; }
-          }}
-          onMouseLeave={e => {
-            const v = (e.currentTarget as HTMLButtonElement).querySelector('.fanout-visual') as HTMLElement | null;
-            if (v) { v.style.background = "rgba(0,200,150,0.12)"; v.style.borderColor = "rgba(0,200,150,0.45)"; }
-          }}
-        >
-          <div
-            className="fanout-visual"
-            style={{
-              width: 22, height: 22, borderRadius: "50%",
-              background: "rgba(0,200,150,0.12)",
-              border: "1.5px solid rgba(0,200,150,0.45)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "background 0.15s, border-color 0.15s",
-              pointerEvents: "none",
-            }}
-          >
-            <Plus size={11} color="#00C896" />
-          </div>
-        </button>
-      )}
+      {/* Fan-out "+" — moved OUT of this node's own stacking context. It used to
+          render here with zIndex:31, but that z-index only applied within this
+          node's own local stacking context (its root div sets an explicit
+          zIndex above). Sibling node wrappers have no z-index of their own, so
+          paint order fell back to DOM order — any node rendered later in the
+          `nodes` array that happened to visually sit over this button's 44×44
+          hit region (which extends past this node's own box) would silently
+          intercept the click before it ever reached this button, even though
+          it looked like empty canvas space. It's now rendered in a single
+          top-level overlay layer (see `nodes.map(... FanoutButton ...)` after
+          the node boxes) positioned via each node's world coordinates, so it's
+          never nested inside — and never occluded by — a sibling node's box,
+          regardless of layout. See FanoutButton below. */}
 
       {/* Node-level pause/resume pill — visible on ALL nodes */}
       {onPauseToggle && (
@@ -2445,10 +2466,23 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                       onDelete={deleteNode}
                       onConnectorClick={onConnectorClick}
                       onPauseToggle={() => toggleNodePause(n.id)}
-                      onFanout={() => { setFanoutSourceNodeId(n.id); setFanoutPickerOpen(true); }}
                       onContextMenu={e => setContextMenu({ nodeId: n.id, x: e.clientX, y: e.clientY })}
                     />
                   </div>
+                ))}
+
+                {/* Fan-out "+" buttons — deliberately rendered in their own
+                    top-level layer AFTER every node box, rather than nested
+                    inside each node's div. See FanoutButton's comment for why:
+                    in short, a per-node z-index can't win against a sibling
+                    node that simply paints later in DOM order. */}
+                {!connecting && nodes.map(n => (
+                  <FanoutButton
+                    key={`fanout-${n.id}`}
+                    x={n.x}
+                    y={n.y}
+                    onClick={() => { setFanoutSourceNodeId(n.id); setFanoutPickerOpen(true); }}
+                  />
                 ))}
               </div>
 

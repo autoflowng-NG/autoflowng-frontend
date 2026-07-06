@@ -725,6 +725,11 @@ export default function AnalyticsCenter() {
       await Promise.all([
         analyticsApi.computeForecasts(),
         analyticsApi.computeIntelligence(),
+        // Fix: "Refresh Intelligence" previously never recomputed the
+        // workflow_performance_scores snapshot, so the Performance Rankings
+        // table (including "Last Run") stayed frozen at whatever it was on
+        // first load, no matter how many times this button was pressed.
+        analyticsApi.computeWorkflowRankings(),
       ]);
       window.location.reload();
     } finally {
