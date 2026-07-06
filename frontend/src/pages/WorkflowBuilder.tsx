@@ -1813,23 +1813,6 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           <button onClick={save} disabled={saving} data-testid="button-save" style={{ display: "flex", alignItems: "center", gap: 6, background: "#00C896", border: "none", borderRadius: 8, padding: "6px 16px", color: "#04060F", fontSize: 13, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
             <Save size={13} /> {saving ? "Saving…" : "Save"}
           </button>
-          {/* TEMP DEBUG — remove once the missing-connector-line issue is resolved.
-              Dumps live nodes/edges state as plain text via alert() so it can be
-              read and screenshotted on a phone with no dev tools access. */}
-          <button
-            onClick={() => {
-              const nodeLines = nodes.map(n => `${n.id}(${n.executorType}) @${n.x},${n.y}`).join("\n");
-              const edgeLines = edges.length > 0
-                ? edges.map(e => `${e.from} -> ${e.to}  [id:${e.id}]`).join("\n")
-                : "(none)";
-              alert(
-                `NODES (${nodes.length}):\n${nodeLines}\n\nEDGES (${edges.length}):\n${edgeLines}`
-              );
-            }}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 8, padding: "6px 12px", color: "#FBBF24", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}
-          >
-            DEBUG
-          </button>
         </div>
 
         {/* ── Pre-activation warning banner ── */}
@@ -1979,12 +1962,24 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
               {/* World layer — every node and edge lives inside this single transformed
                   layer, so panning/zooming the camera moves them together as one rigid
-                  scene. This is the piece that was missing before: nodes and edges were
-                  drawn directly in screen space with no shared transform, which is why
-                  the connector line in the bug report floated independently of the nodes. */}
+                  scene.
+                  Bug fix: this div previously had no explicit width/height. As an
+                  absolutely-positioned element with no intrinsic size, it collapsed
+                  to 0×0 — node boxes still rendered fine because each one sets its
+                  own explicit left/top pixel position directly, but the SVG's
+                  width:"100%"/height:"100%" (used for the connector <path> elements)
+                  resolved against that zero-sized parent, so the lines never had a
+                  usable coordinate space to paint into. This is the actual root
+                  cause of the missing connector lines — confirmed by dumping live
+                  nodes/edges state and finding the edge data itself was always
+                  correct (matching node ids, valid coordinates); the bug was purely
+                  a rendering/layout issue in this container, not in edge creation.
+                  A large fixed size (generously covering the pannable canvas area)
+                  gives the SVG a real coordinate space to draw into. */}
               <div
                 style={{
                   position: "absolute", top: 0, left: 0,
+                  width: 8000, height: 8000,
                   transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
                   transformOrigin: "0 0",
                 }}
