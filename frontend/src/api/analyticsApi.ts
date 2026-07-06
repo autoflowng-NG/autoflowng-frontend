@@ -185,6 +185,14 @@ export const analyticsApi = {
   getWorkflowRankings: (sortBy = 'health_score', limit = 20) =>
     apiFetch<WorkflowRanking[]>(`/analytics/workflows/rankings?sortBy=${sortBy}&limit=${limit}`),
 
+  // Recompute the workflow_performance_scores snapshot on demand. This is the
+  // endpoint the hourly cron would otherwise be the only thing calling — the
+  // "Refresh Intelligence" button needs to hit this directly, or the
+  // Performance Rankings table (incl. "Last Run") stays frozen at whatever it
+  // was on first load.
+  computeWorkflowRankings: () =>
+    apiFetch<{ ok: boolean; message: string }>(`/analytics/workflows/compute-scores`, { method: 'POST' }),
+
   getBottlenecks: () =>
     apiFetch<BottleneckWorkflow[]>(`/analytics/workflows/bottlenecks`),
 
