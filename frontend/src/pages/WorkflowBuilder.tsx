@@ -1324,24 +1324,22 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const stepStatuses = useMemo<string[]>(() => {
     if (!nodes.length) return [];
 
-    // WebSocket path — execution.nodes is keyed by node id
+    // WebSocket path — execution.nodes populated by step_started/step_completed WS events.
+    // The executor sends stepIndex (not node_id), so useExecutionStream builds synthetic
+    // NodeState entries keyed "step:<index>". Match here by that synthetic id first,
+    // then fall back to name/executorType matching for any future events that do carry ids.
     if ((wsIsActive || wsIsDone) && execution.nodes.length > 0) {
-      return nodes.map(n => {
-        // Match by id first, then by label, then by executorType (backend may send
-        // the executor type string e.g. "gmail_reply" rather than the display label
-        // "Gmail Reply" — without this third check those nodes stayed "pending" even
-        // after the run completed, causing them not to glow green on the canvas).
+      return nodes.map((n, idx) => {
+        const syntheticId = `step:${idx}`;
         const ns = execution.nodes.find(
           (s: any) =>
-            s.id === n.id ||
-            s.name === n.label ||
-            s.type === n.executorType ||
-            s.name === n.executorType
+            s.id === syntheticId ||      // synthetic step:<index> match (primary)
+            s.id === n.id ||             // exact node id match
+            s.name === n.label ||        // display label match
+            s.name === n.executorType    // executorType string match (e.g. "gmail_reply")
         );
         if (ns) return ns.status; // "pending"|"running"|"success"|"failed"|"skipped"
-        // When run is fully done and we still have no match for this node it was
-        // either skipped or the backend didn't emit a status update — treat as
-        // success so it doesn't remain dim while all other nodes are green.
+        // Run fully done but no status for this node — treat as completed so it glows.
         return wsIsDone ? "completed" : "pending";
       });
     }
@@ -1349,13 +1347,14 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     // HTTP poll fallback — use logs array from run row
     if (!traceRun) return [];
     const logs: any[]          = traceRun.logs || [];
-    const stepsCompleted: number = traceRun.step_count ?? traceRun.steps_completed ?? 0;
+    const stepsCompleted: number = traceRun.steps_completed ?? 0;
     const isStillRunning        = traceRun.status === "running";
 
     return nodes.map((_n, idx) => {
       const logEntry = logs.find((l: any) => l.step === idx);
       if (logEntry) {
-        const hasError = (logEntry.logs || []).some((l: any) => l.level === "error");
+        // Executor stores step logs as { status: "error"|"ok"|"warn" }, not { level: "error" }
+        const hasError = (logEntry.logs || []).some((l: any) => l.status === "error");
         return hasError ? "failed" : "success";
       }
       if (idx < stepsCompleted) return "success";
