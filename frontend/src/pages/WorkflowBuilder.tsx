@@ -1235,6 +1235,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       const targetZoom = clampZoom(pinchStart.current.zoom * factor);
       zoomAt(midX, midY, targetZoom / camera.zoom);
+    } else if (e.touches.length === 1 && dragging) {
+      // Node drag — move the dragged node, don't pan the canvas
+      e.preventDefault();
+      const world = screenToWorld(e.touches[0].clientX, e.touches[0].clientY);
+      setNodes(ns => ns.map(n => n.id === dragging ? { ...n, x: world.x - dragOff.x, y: world.y - dragOff.y } : n));
     } else if (e.touches.length === 1 && isPanning) {
       const dx = e.touches[0].clientX - panStart.current.x;
       const dy = e.touches[0].clientY - panStart.current.y;
@@ -1245,6 +1250,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const onCanvasTouchEnd = (e: React.TouchEvent) => {
     if (e.touches.length === 0) {
       setIsPanning(false);
+      setDragging(null);
       pinchStart.current = null;
     }
   };
@@ -1331,11 +1337,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     const ns = (data as any).nodes || [];
     const es = (data as any).edges || [];
     const hydrated = ns.map((n: any, i: number) => {
-      let x = n.x ?? 60 + i * 220;
+      let x = n.x ?? 60 + i * 175;
       let y = n.y ?? 150;
       if (!Number.isFinite(x) || x < SANE_COORD_MIN || x > SANE_COORD_MAX) {
         console.warn(`[WorkflowBuilder] node ${n.id || i} had an out-of-range x (${n.x}); resetting to a safe default so it can't render a stray floating connector.`);
-        x = 60 + i * 220;
+        x = 60 + i * 175;
       }
       if (!Number.isFinite(y) || y < SANE_COORD_MIN || y > SANE_COORD_MAX) {
         console.warn(`[WorkflowBuilder] node ${n.id || i} had an out-of-range y (${n.y}); resetting to a safe default so it can't render a stray floating connector.`);
@@ -1468,8 +1474,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: newBranchId,
         executorType: catalogEntry.executorType,
         label: catalogEntry.label,
-        x: existingRouter.x + 220,
-        y: existingRouter.y + 50 + branchCount * 90,
+        x: existingRouter.x + 175,
+        y: existingRouter.y + 40 + branchCount * 70,
         config: {},
       };
       setNodes(ns => [...ns, newBranchNode]);
@@ -1481,7 +1487,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: routerId,
         executorType: 'router',
         label: 'Fan-out Router',
-        x: sourceNode.x + 220,
+        x: sourceNode.x + 175,
         y: sourceNode.y,
         config: {},
       };
@@ -1489,8 +1495,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         id: newBranchId,
         executorType: catalogEntry.executorType,
         label: catalogEntry.label,
-        x: sourceNode.x + 440,
-        y: sourceNode.y + 90,
+        x: sourceNode.x + 350,
+        y: sourceNode.y + 70,
         config: {},
       };
       const downstream = edges.filter(e => e.from === sourceNodeId);
@@ -1530,7 +1536,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
       id: `n${nextId.current++}`,
       executorType: entry.executorType,
       label: entry.label,
-      x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 220,
+      x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 175,
       y: 140,
       config: {},
     };
@@ -2188,7 +2194,26 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
 
                 {nodes.map((n, idx) => (
-                  <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }} onMouseDown={e => onMouseDown(e, n.id)}>
+                  <div key={n.id} style={{ position: "absolute", left: n.x, top: n.y }}
+                    onMouseDown={e => onMouseDown(e, n.id)}
+                    onTouchStart={e => {
+                      if (e.touches.length === 1) {
+                        e.stopPropagation(); // prevent canvas pan taking over
+                        if (connecting) {
+                          if (connecting.fromId !== n.id) {
+                            const exists = edges.some(ed => ed.from === connecting.fromId && ed.to === n.id);
+                            if (!exists) setEdges(es => [...es, { id: `e${Date.now()}`, from: connecting.fromId, to: n.id }]);
+                          }
+                          setConnecting(null);
+                          return;
+                        }
+                        setSelected(n.id);
+                        const world = screenToWorld(e.touches[0].clientX, e.touches[0].clientY);
+                        setDragging(n.id);
+                        setDragOff({ x: world.x - n.x, y: world.y - n.y });
+                      }
+                    }}
+                  >
                     <NodeBox
                       node={n}
                       selected={selected === n.id}
