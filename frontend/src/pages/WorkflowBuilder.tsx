@@ -1299,7 +1299,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [triggerConfig, setTriggerConfig] = useState<Record<string, any>>({});
 
   // PRIMARY: WebSocket execution stream — gives real-time node status via WS events
-  const { execution } = useExecutionStream(id);
+  const { execution, reset } = useExecutionStream(id);
   const wsIsActive = execution.phase === "running" || execution.phase === "starting";
   const wsIsDone   = execution.phase === "completed" || execution.phase === "failed";
 
