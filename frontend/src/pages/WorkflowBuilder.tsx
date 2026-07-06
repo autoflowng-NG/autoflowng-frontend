@@ -1349,7 +1349,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     // HTTP poll fallback — use logs array from run row
     if (!traceRun) return [];
     const logs: any[]          = traceRun.logs || [];
-    const stepsCompleted: number = traceRun.steps_completed ?? 0;
+    const stepsCompleted: number = traceRun.step_count ?? traceRun.steps_completed ?? 0;
     const isStillRunning        = traceRun.status === "running";
 
     return nodes.map((_n, idx) => {
@@ -1843,10 +1843,12 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
           to   { transform: rotate(360deg); }
         }
         @keyframes flow-dash {
-          to { stroke-dashoffset: -28; }
+          from { stroke-dashoffset: 0; }
+          to   { stroke-dashoffset: -28; }
         }
         @keyframes flow-dash-slow {
-          to { stroke-dashoffset: -28; }
+          from { stroke-dashoffset: 0; }
+          to   { stroke-dashoffset: -28; }
         }
       `}</style>
 
@@ -2185,10 +2187,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                               strokeWidth={5}
                               strokeLinecap="round"
                               strokeDasharray="10 18"
-                              strokeDashoffset={0}
                               fill="none"
                               opacity={0.22}
-                              style={{ animation: "flow-dash 0.55s linear infinite" }}
+                              style={{ strokeDashoffset: 0, animation: "flow-dash 0.55s linear infinite" }}
                             />
                             {/* Core dash — sharp, bright, fast */}
                             <path
@@ -2197,10 +2198,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                               strokeWidth={2.5}
                               strokeLinecap="round"
                               strokeDasharray="10 18"
-                              strokeDashoffset={0}
                               fill="none"
                               opacity={0.95}
-                              style={{ animation: "flow-dash 0.55s linear infinite" }}
+                              style={{ strokeDashoffset: 0, animation: "flow-dash 0.55s linear infinite" }}
                             />
                           </>
                         )}
@@ -2213,10 +2213,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                               strokeWidth={4}
                               strokeLinecap="round"
                               strokeDasharray="8 20"
-                              strokeDashoffset={0}
                               fill="none"
                               opacity={0.18}
-                              style={{ animation: "flow-dash-slow 1.6s linear infinite" }}
+                              style={{ strokeDashoffset: 0, animation: "flow-dash-slow 1.6s linear infinite" }}
                             />
                             {/* Core dash — softer, slower */}
                             <path
@@ -2225,10 +2224,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                               strokeWidth={2}
                               strokeLinecap="round"
                               strokeDasharray="8 20"
-                              strokeDashoffset={0}
                               fill="none"
                               opacity={0.85}
-                              style={{ animation: "flow-dash-slow 1.6s linear infinite" }}
+                              style={{ strokeDashoffset: 0, animation: "flow-dash-slow 1.6s linear infinite" }}
                             />
                           </>
                         )}
