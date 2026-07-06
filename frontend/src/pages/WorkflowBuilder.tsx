@@ -1136,6 +1136,13 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const nextId    = useRef(1);
+  // Refs that mirror state so addNode can always read the truly-latest
+  // nodes/edges without relying on React's batched closure captures.
+  const nodesRef  = useRef<Node[]>([]);
+  const edgesRef  = useRef<Edge[]>([]);
+  // Keep refs in sync with state so addNode always reads the freshest values.
+  nodesRef.current = nodes;
+  edgesRef.current = edges;
 
   // ── Camera (pan + zoom) ──────────────────────────────────────────────────
   // make.com-style infinite canvas: nodes live in a fixed "world" coordinate
@@ -1509,46 +1516,40 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
 
   // ── Add node ───────────────────────────────────────────────────────────────
   const addNode = (entry: CatalogNode) => {
-    // Bug fix: previously this read `nodes`/`edges` directly from the render
-    // closure to compute the new node's x-position and which node to
-    // auto-connect from. setNodes/setEdges are async and batched, so clicking
-    // multiple sidebar catalog entries in quick succession (before React
-    // commits the first click's state update) meant every click after the
-    // first still saw the pre-click nodes/edges — producing an auto-connect
-    // edge wired to the wrong (stale) "last node," or occasionally no edge
-    // at all. This is the root cause of nodes appearing on canvas with no
-    // visible connector lines between them. Using the functional updater
-    // form for both setNodes and setEdges guarantees each call always
-    // computes against the most recently committed state, even when several
-    // addNode() calls are queued back-to-back in the same tick.
-    setNodes(ns => {
-      const newNode: Node = {
-        id: `n${nextId.current++}`,
-        executorType: entry.executorType,
-        label: entry.label,
-        // make.com-style horizontal flow — tight 150px-wide cards sit on a
-        // 160px pitch, a clean ~10px gap, matching how make.com packs its
-        // modules close together with just enough room for the connector line.
-        x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 220,
-        y: 140,
-        config: {},
-      };
+    // Fix: read the truly-latest nodes/edges from refs (updated synchronously
+    // every render) instead of stale closure values, then commit both state
+    // slices in two sequential top-level calls — never nesting setEdges inside
+    // a setNodes updater. That nesting anti-pattern causes React to re-run the
+    // outer updater and schedule the inner one inconsistently, which drops or
+    // duplicates edges when multiple addNode() calls fire in the same batch
+    // (e.g. tapping the sidebar quickly on mobile — the root cause of nodes
+    // appearing on canvas with no visible connector lines between them).
+    const ns = nodesRef.current;
+    const es = edgesRef.current;
 
-      // Auto-connect: wire to the most recent node immediately, no confirmation needed.
-      // (Previously this only opened a dialog the user could dismiss, leaving nodes
-      // visibly disconnected on the canvas — not how make.com behaves.)
-      if (ns.length >= 1) {
-        const lastNode = ns[ns.length - 1];
-        setEdges(es => {
-          const alreadyLinked = es.some(e => e.from === lastNode.id && e.to === newNode.id);
-          if (alreadyLinked) return es;
-          return [...es, { id: `e${Date.now()}-${newNode.id}`, from: lastNode.id, to: newNode.id }];
-        });
+    const newNode: Node = {
+      id: `n${nextId.current++}`,
+      executorType: entry.executorType,
+      label: entry.label,
+      x: ns.length === 0 ? 60 : Math.max(...ns.map(n => n.x)) + 220,
+      y: 140,
+      config: {},
+    };
+
+    const nextNodes = [...ns, newNode];
+    let nextEdges = es;
+
+    if (ns.length >= 1) {
+      const lastNode = ns[ns.length - 1];
+      const alreadyLinked = es.some(e => e.from === lastNode.id && e.to === newNode.id);
+      if (!alreadyLinked) {
+        nextEdges = [...es, { id: `e${Date.now()}-${newNode.id}`, from: lastNode.id, to: newNode.id }];
         toast({ title: "Connected", description: `${lastNode.label} → ${newNode.label}` });
       }
+    }
 
-      return [...ns, newNode];
-    });
+    setNodes(nextNodes);
+    setEdges(nextEdges);
   };
 
   // Part 4: make.com-style generic "+" on a connector — splits the edge into
@@ -2043,11 +2044,11 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                       ? "#00C896"
                       : isTracing
                       ? "rgba(255,255,255,0.14)"
-                      : "rgba(180,190,210,0.75)";
+                      : "rgba(200,210,230,0.9)";
 
                     const isIdleEdge = !isPausedEdge && !isTracing && !bothDone;
-                    const edgeDash = isIdleEdge ? "4 4" : undefined;
-                    const edgeWidth = bothDone ? 1.5 : isRunningEdge ? 2 : 1;
+                    const edgeDash = undefined; // solid line always — dashed was too faint/broken-looking on mobile
+                    const edgeWidth = bothDone ? 2 : isRunningEdge ? 2.5 : 1.5;
                     // Endpoint dots — previous pass shrank these to r=2 at 0.6 opacity in
                     // the new neutral gray, which read as literally invisible on an actual
                     // phone screen rather than merely "subtle." Bumped back up slightly so
