@@ -241,7 +241,7 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   // pretending to start an OAuth flow or presenting an empty credential form.
   const isCustomNoAuth = integ.authType === "custom" && !isDiscord && !(integ.credentials?.length);
   // TEMP: LinkedIn API keys not provisioned yet — show "Coming Soon" instead of a working Connect button.
-  const isComingSoon = integ.id === "linkedin";
+  const isComingSoon = integ.id === "linkedin" || integ.id === "linkedin_ads";
 
   const hasCredFields = isDiscord || (integ.credentials?.length ?? 0) > 0;
 
