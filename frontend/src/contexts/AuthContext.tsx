@@ -92,8 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("No account found with this email. Please sign up.");
       } else if (status === 429) {
         throw new Error("Too many login attempts. Please wait a few minutes.");
-      } else if (status === 403) {
+      } else if (status === 403 && err?.data?.code === 'ACCOUNT_SUSPENDED') {
         throw new Error("Your account has been suspended. Contact support.");
+      } else if (status === 403 && (err?.data?.code === 'TURNSTILE_FAILED' || err?.data?.code === 'TURNSTILE_REPLAY' || err?.data?.code === 'TURNSTILE_MISSING')) {
+        throw new Error("Security challenge failed. Please refresh the page and try again.");
+      } else if (status === 403) {
+        throw new Error("Access denied. Please refresh the page and try again.");
       } else if (status >= 500) {
         throw new Error("Server error. Please try again in a moment.");
       } else {
