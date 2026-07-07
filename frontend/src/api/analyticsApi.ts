@@ -20,6 +20,15 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401 || res.status === 403 || res.status === 402) {
+      // FIX: previously threw '__auth_error__' and every caller of
+      // useAnalyticsQuery silently swallowed it (see below), so an expired
+      // session just rendered permanently blank cards/charts with no error
+      // and no redirect — instead of the "session expired" flow every other
+      // page gets via lib/api.ts. Dispatch the same global event lib/api.ts
+      // uses so AuthContext can react consistently (e.g. redirect to login),
+      // and clear the stale token here too.
+      localStorage.removeItem('autoflowng_token');
+      window.dispatchEvent(new CustomEvent('autoflowng:unauthorized'));
       throw new Error('__auth_error__');
     }
     throw new Error(body.error || `API error ${res.status}`);
@@ -303,9 +312,13 @@ function useAnalyticsQuery<T>(
       setData(await fetcher());
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
-      if (msg !== '__auth_error__') {
-        setError(msg);
-      }
+      // FIX: previously this branch swallowed __auth_error__ entirely,
+      // leaving both `data` and `error` null — the page just showed blank
+      // dashes forever with no indication of what went wrong. The global
+      // unauthorized event (dispatched in apiFetch) handles redirecting to
+      // login; this message is a visible fallback in case that redirect is
+      // delayed or the user is mid-navigation when the token expires.
+      setError(msg === '__auth_error__' ? 'Session expired — please log in again.' : msg);
     } finally {
       setLoading(false);
     }
@@ -412,7 +425,7 @@ export function usePostAnalytics(jobId: number | null) {
       setData(await apiFetch<PostAnalyticsData>(`/publishing/jobs/${jobId}/analytics`));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
-      if (msg !== '__auth_error__') setError(msg);
+      setError(msg === '__auth_error__' ? 'Session expired — please log in again.' : msg);
     } finally {
       setLoading(false);
     }
