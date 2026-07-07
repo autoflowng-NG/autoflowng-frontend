@@ -30,6 +30,7 @@ interface CatalogNode {
   subGroup?: string;
   description: string;
   requiredPlatform?: string;
+  requiredTrigger?: string[];
 }
 
 const NODE_CATALOG: CatalogNode[] = [
@@ -41,23 +42,23 @@ const NODE_CATALOG: CatalogNode[] = [
   { executorType: "telegram_send", label: "Telegram Send",    icon: Send,          color: "#38BDF8", category: "Messaging", subGroup: "Send",  description: "Send a Telegram message",                                        requiredPlatform: "telegram" },
   { executorType: "whatsapp_send", label: "WhatsApp Send",    icon: MessageCircle, color: "#38BDF8", category: "Messaging", subGroup: "Send",  description: "Send a WhatsApp message",                                        requiredPlatform: "whatsapp" },
   // Messaging — Reply subgroup
-  { executorType: "gmail_reply",         label: "Gmail Reply",        icon: Mail,          color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to a Gmail thread",                                  requiredPlatform: "gmail" },
-  { executorType: "slack_thread_reply",  label: "Slack Thread Reply", icon: MessageSquare, color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply in-thread to the triggering Slack message",          requiredPlatform: "slack" },
-  { executorType: "telegram_reply",      label: "Telegram Reply",     icon: Send,          color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to the chat that triggered this workflow",           requiredPlatform: "telegram" },
-  { executorType: "whatsapp_reply",      label: "WhatsApp Reply",     icon: MessageCircle, color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to the WhatsApp sender",                            requiredPlatform: "whatsapp" },
+  { executorType: "gmail_reply",         label: "Gmail Reply",        icon: Mail,          color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to a Gmail thread",                                  requiredPlatform: "gmail",    requiredTrigger: ["gmail_new_email","gmail_new_email_matching"] },
+  { executorType: "slack_thread_reply",  label: "Slack Thread Reply", icon: MessageSquare, color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply in-thread to the triggering Slack message",          requiredPlatform: "slack",    requiredTrigger: ["slack_new_message","slack_mention"] },
+  { executorType: "telegram_reply",      label: "Telegram Reply",     icon: Send,          color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to the chat that triggered this workflow",           requiredPlatform: "telegram", requiredTrigger: ["telegram_new_message"] },
+  { executorType: "whatsapp_reply",      label: "WhatsApp Reply",     icon: MessageCircle, color: "#38BDF8", category: "Messaging", subGroup: "Reply", description: "Reply to the WhatsApp sender",                            requiredPlatform: "whatsapp", requiredTrigger: ["whatsapp_new_message"] },
   // Social — Post subgroup
   { executorType: "twitter_post",  label: "Twitter Post",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Post",          description: "Post a tweet (max 280 chars)",              requiredPlatform: "twitter" },
   { executorType: "linkedin_post", label: "LinkedIn Post",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Post",          description: "Publish to your LinkedIn profile",          requiredPlatform: "linkedin" },
   { executorType: "facebook_post", label: "Facebook Post",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Post",          description: "Post to your Facebook page",                requiredPlatform: "facebook" },
   // Social — Comment Reply subgroup
-  { executorType: "twitter_comment_reply",   label: "Twitter Reply",           icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a tweet",                                 requiredPlatform: "twitter" },
-  { executorType: "facebook_comment_reply",  label: "Facebook Comment Reply",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a Facebook page comment",                 requiredPlatform: "facebook" },
-  { executorType: "instagram_comment_reply", label: "Instagram Comment Reply", icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to an Instagram comment",                    requiredPlatform: "instagram" },
-  { executorType: "youtube_comment_reply",   label: "YouTube Comment Reply",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a YouTube comment",                       requiredPlatform: "youtube" },
+  { executorType: "twitter_comment_reply",   label: "Twitter Reply",           icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a tweet",                                 requiredPlatform: "twitter",    requiredTrigger: ["twitter_new_mention"] },
+  { executorType: "facebook_comment_reply",  label: "Facebook Comment Reply",  icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a Facebook page comment",                 requiredPlatform: "facebook",   requiredTrigger: ["facebook_new_comment"] },
+  { executorType: "instagram_comment_reply", label: "Instagram Comment Reply", icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to an Instagram comment",                    requiredPlatform: "instagram",  requiredTrigger: ["facebook_new_comment","instagram_new_dm"] },
+  { executorType: "youtube_comment_reply",   label: "YouTube Comment Reply",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "Comment Reply", description: "Reply to a YouTube comment",                       requiredPlatform: "youtube",    requiredTrigger: ["youtube_new_comment"] },
   // Social — DM Reply subgroup
-  { executorType: "twitter_dm_reply",   label: "Twitter DM Reply",           icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to a Twitter/X DM",                     requiredPlatform: "twitter" },
-  { executorType: "facebook_dm_reply",  label: "Facebook Messenger Reply",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to a Facebook Messenger DM",            requiredPlatform: "facebook" },
-  { executorType: "instagram_dm_reply", label: "Instagram DM Reply",         icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to an Instagram DM (24-hour window)",   requiredPlatform: "instagram" },
+  { executorType: "twitter_dm_reply",   label: "Twitter DM Reply",           icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to a Twitter/X DM",                     requiredPlatform: "twitter",    requiredTrigger: ["twitter_new_dm"] },
+  { executorType: "facebook_dm_reply",  label: "Facebook Messenger Reply",   icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to a Facebook Messenger DM",            requiredPlatform: "facebook",   requiredTrigger: ["facebook_new_message"] },
+  { executorType: "instagram_dm_reply", label: "Instagram DM Reply",         icon: Globe, color: "#38BDF8", category: "Social", subGroup: "DM Reply", description: "Reply to an Instagram DM (24-hour window)",   requiredPlatform: "instagram",  requiredTrigger: ["instagram_new_dm"] },
   // Logic
   { executorType: "condition", label: "Condition", icon: GitBranch, color: "#FBBF24", category: "Logic",   description: "Branch based on a field value" },
   { executorType: "filter",    label: "Filter",    icon: Filter,    color: "#FBBF24", category: "Logic",   description: "Stop execution if condition not met" },
@@ -118,7 +119,7 @@ interface Node {
 interface Edge { from: string; to: string; id: string; }
 
 // FIX #7: backend sets status "completed" not "success". Handle both.
-type StepStatus = "pending" | "running" | "success" | "completed" | "failed" | "skipped" | "filtered" | "cancelled" | "paused";
+type StepStatus = "pending" | "running" | "success" | "completed" | "failed" | "skipped" | "filtered" | "cancelled" | "paused" | "trigger_mismatch";
 
 // Normalise backend status strings to display status
 function normaliseStatus(s: string): StepStatus {
@@ -985,7 +986,8 @@ function TraceStatusBar({
 // ─── RunsPanel ────────────────────────────────────────────────────────────────
 function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (runId: string) => void }) {
   const { data: runs = [], isLoading, refetch } = useWorkflowRuns(workflowId);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId]       = useState<string | null>(null);
+  const [runStatusFilter, setRunStatusFilter] = useState<"all" | "trigger_mismatch">("all");
 
   // Always-on workflows complete new jobs continuously — poll every 10 s so
   // RUNS tab stays current and shows the latest email reply jobs as they land.
@@ -999,22 +1001,45 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
     if (s === "success" || s === "completed") return "#00C896";
     if (s === "failed") return "#FB7185";
     if (s === "running") return "#38BDF8";
+    if (s === "trigger_mismatch") return "#F97316";   // orange — distinct from red
     return "#FBBF24";
   };
   const statusIcon = (s: string) => {
     if (s === "success" || s === "completed") return <CheckCircle2 size={13} color="#00C896" />;
     if (s === "failed")  return <XCircle size={13} color="#FB7185" />;
     if (s === "running") return <RefreshCw size={13} color="#38BDF8" style={{ animation: "spin-slow 1s linear infinite" }} />;
+    if (s === "trigger_mismatch") return <AlertTriangle size={13} color="#F97316" />;
     return <Clock size={13} color="#FBBF24" />;
   };
 
   return (
     <div style={{ padding: "16px" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 12 }}>EXECUTION HISTORY</div>
-      {isLoading ? <div className="af-shimmer" style={{ height: 120, borderRadius: 8 }} /> :
-       runs.length === 0 ? <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(232,238,255,0.2)", fontSize: 12 }}>No runs yet</div> :
-       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-         {(runs as any[]).map((r: any) => {
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>EXECUTION HISTORY</div>
+        {/* Filter chips — All | Mismatch only. Failed/completed chips intentionally omitted to not change those displays. */}
+        <div style={{ display: "flex", gap: 4 }}>
+          {(["all", "trigger_mismatch"] as const).map(f => (
+            <button key={f} onClick={() => setRunStatusFilter(f)} style={{
+              fontSize: 9, fontWeight: 700, fontFamily: "'DM Mono',monospace",
+              padding: "3px 8px", borderRadius: 6, cursor: "pointer",
+              border: runStatusFilter === f ? "1px solid #F9731660" : "1px solid rgba(255,255,255,0.08)",
+              background: runStatusFilter === f ? "rgba(249,115,22,0.12)" : "rgba(255,255,255,0.03)",
+              color: runStatusFilter === f ? "#F97316" : "rgba(232,238,255,0.3)",
+              letterSpacing: "0.06em",
+            }}>
+              {f === "all" ? "ALL" : "MISMATCH"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {(() => {
+        const visibleRuns = runStatusFilter === "all"
+          ? (runs as any[])
+          : (runs as any[]).filter((r: any) => r.status === runStatusFilter);
+        return isLoading ? <div className="af-shimmer" style={{ height: 120, borderRadius: 8 }} /> :
+         visibleRuns.length === 0 ? <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(232,238,255,0.2)", fontSize: 12 }}>{runStatusFilter === "trigger_mismatch" ? "No trigger-mismatch runs" : "No runs yet"}</div> :
+         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+         {visibleRuns.map((r: any) => {
            const isOpen = expandedId === r.id;
            const sc = statusColor(r.status);
            // FIX #5: logs is the actual field, shape: [{step, type, name, logs:[]}]
@@ -1027,7 +1052,12 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
                >
                  {statusIcon(r.status)}
                  <div style={{ flex: 1, minWidth: 0 }}>
-                   <div style={{ fontSize: 11, color: "#E8EEFF", fontFamily: "'DM Mono',monospace" }}>Run #{r.id?.slice?.(-6) || r.id}</div>
+                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                     <span style={{ fontSize: 11, color: "#E8EEFF", fontFamily: "'DM Mono',monospace" }}>Run #{r.id?.slice?.(-6) || r.id}</span>
+                     {r.status === "trigger_mismatch" && (
+                       <span style={{ fontSize: 8, fontWeight: 800, color: "#F97316", fontFamily: "'DM Mono',monospace", background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.06em" }}>TRIGGER MISMATCH</span>
+                     )}
+                   </div>
                    {r.duration_ms != null && <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)" }}>{r.duration_ms}ms</div>}
                  </div>
                  <div style={{ fontSize: 10, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>
@@ -1046,7 +1076,11 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
                          // logs entries: { step (index), type, name, logs: [{level,msg,ts}], attempt }
                          const stepLogs: any[] = s.logs || [];
                          const lastLog = stepLogs[stepLogs.length - 1];
-                         const hasError = stepLogs.some((l: any) => l.level === "error");
+                         // GAP FIX: executor.js log entries use `status`, not `level` (see line ~1455
+                         // in this same file, which already correctly reads l.status). This mismatch
+                         // silently prevented step rows from ever showing red/error coloring, even
+                         // though the run-level status (Fix B/D) was computed correctly on the backend.
+                         const hasError = stepLogs.some((l: any) => l.status === "error");
                          const stepSc = hasError ? "#FB7185" : "#00C896";
                          // Bug fix: for a router step, executor.js logs each branch's
                          // actual result (e.g. "[branch-0] Replied to jane@x.com" or
@@ -1070,7 +1104,7 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
                                  branchLogs.map((bl: any, bi: number) => (
                                    <div key={bi} style={{
                                      fontSize: 9, fontFamily: "'DM Mono',monospace", marginTop: 2,
-                                     color: bl.level === "error" ? "#FB7185" : "rgba(232,238,255,0.4)",
+                                     color: bl.status === "error" ? "#FB7185" : "rgba(232,238,255,0.4)",
                                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                                    }}>
                                      {bl.msg}
@@ -1111,7 +1145,7 @@ function RunsPanel({ workflowId, onReplay }: { workflowId: string; onReplay?: (r
            );
          })}
        </div>
-      }
+      })()}
     </div>
   );
 }
@@ -1140,6 +1174,28 @@ function WarningBanner({ missingPlatforms, onDismiss }: { missingPlatforms: stri
   );
 }
 
+// ─── TriggerMismatchBanner ────────────────────────────────────────────────────
+function TriggerMismatchBanner({ nodeLabels, onDismiss }: { nodeLabels: string[]; onDismiss: () => void }) {
+  if (nodeLabels.length === 0) return null;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.28)",
+      borderRadius: 10, padding: "10px 14px", margin: "4px 12px 0",
+      flexWrap: "wrap",
+    }}>
+      <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1, fontSize: 12, color: "rgba(232,238,255,0.75)", fontFamily: "'DM Sans',sans-serif" }}>
+        <strong style={{ color: "#EF4444" }}>{nodeLabels.join(", ")}</strong>
+        {" "}need{nodeLabels.length === 1 ? "s" : ""} a matching trigger type to function — this workflow cannot be deployed with the current trigger. Change the trigger or remove the node.
+      </span>
+      <button onClick={onDismiss} style={{ background: "none", border: "none", color: "rgba(232,238,255,0.3)", cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}>
+        <X size={13} />
+      </button>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const nav = useNavigate();
@@ -1159,7 +1215,8 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [name, setName]         = useState("Workflow");
   const [tab, setTab]           = useState<"canvas" | "runs" | "config">("canvas");
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [triggerWarnDismissed, setTriggerWarnDismissed] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOff, setDragOff]   = useState({ x: 0, y: 0 });
   // Drag-vs-tap detection: only open config panel on a genuine tap (< 6px movement)
@@ -1782,7 +1839,7 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     // Clear old trace first so canvas resets
     setTraceRunId(null);
     try {
-      await triggerWF.mutateAsync({ id });
+      await triggerWF.mutateAsync({ id, data: { __is_test_run: true } });
       toast({ title: "Test run started!", description: "Watching for live updates…" });
       // Poll /runs to get the run id for HTTP fallback (WS may already be firing)
       await startTrace();
@@ -1875,6 +1932,14 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
     );
     return [...required].filter(p => !connectedPlatforms.has(p));
   }, [nodes, connectedPlatforms]);
+
+  const triggerMismatchNodes = useMemo(() => {
+    return nodes
+      .map(n => NODE_CATALOG.find(c => c.executorType === n.executorType))
+      .filter((e): e is typeof NODE_CATALOG[number] => !!e && !!e.requiredTrigger && e.requiredTrigger.length > 0)
+      .filter(e => !e.requiredTrigger!.includes(triggerType))
+      .map(e => e.label);
+  }, [nodes, triggerType]);
 
   // ── Filtered catalog ───────────────────────────────────────────────────────
   const q = search.toLowerCase();
@@ -1989,6 +2054,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
         {/* ── Pre-activation warning banner ── */}
         {tab === "canvas" && !warnDismissed && missingPlatforms.length > 0 && (
           <WarningBanner missingPlatforms={missingPlatforms} onDismiss={() => setWarnDismissed(true)} />
+        )}
+        {tab === "canvas" && !triggerWarnDismissed && triggerMismatchNodes.length > 0 && (
+          <TriggerMismatchBanner nodeLabels={triggerMismatchNodes} onDismiss={() => setTriggerWarnDismissed(true)} />
         )}
 
         {/* ── Body ── */}
@@ -2839,7 +2907,9 @@ export default function WorkflowBuilder({ id }: WorkflowBuilderProps) {
                 const logEntry = (traceRun?.logs || []).find((l: any) => l.step === selIdx);
                 const stepLogs: any[] = logEntry?.logs || [];
                 const lastLog = stepLogs[stepLogs.length - 1];
-                const errorLog = stepLogs.find((l: any) => l.level === "error");
+                // GAP FIX: same level→status field mismatch as the Runs tab list above —
+                // executor.js writes `status`, not `level`, on each log entry.
+                const errorLog = stepLogs.find((l: any) => l.status === "error");
                 return (
                   <div style={{ marginBottom: 14, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 12px", border: `1px solid ${color}30` }}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 6 }}>STEP RESULT</div>
