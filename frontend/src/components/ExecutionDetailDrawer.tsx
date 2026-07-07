@@ -1,15 +1,19 @@
 /**
- * ExecutionDetailDrawer — Phase 3
+ * ExecutionDetailDrawer — Phase 3 (+ historical run support)
  *
- * Cinematic side drawer that renders full execution detail when a live event
- * is clicked. Shows:
+ * Cinematic side drawer that renders full execution detail when a run is
+ * clicked, either a LIVE in-progress run (from the websocket event feed)
+ * or a HISTORICAL completed run (e.g. from Dashboard's Recent Workflow
+ * Runs table). Shows:
  *  - Run metadata (workflow name, trigger, status, duration)
- *  - Node progression timeline
+ *  - Node progression timeline (live runs only — historical runs don't
+ *    persist per-node state, only step counts)
  *  - Ordered execution log stream
  *  - Collapsible runtime diagnostics
  *
- * All data sourced from real websocket events via useExecutionStream.
- * No simulated/fake data.
+ * Live runs are sourced from real websocket events via useExecutionStream.
+ * Historical runs are fetched from GET /api/executions/:runId and mapped
+ * into the same ExecutionState shape. No simulated/fake data either way.
  */
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -19,6 +23,7 @@ import {
   Activity, Radio, Loader,
 } from "lucide-react";
 import { useExecutionStream, formatDuration, type ExecutionState, type NodeState, type ExecutionLogEntry } from "../hooks/useExecutionStream";
+import { fetchExecutionDetail } from "../api/executionsApi";
 import { WorkflowIntelligencePanel, AnomalyFlagList } from "./OrchestrationIntelligence";
 import { ExecutionSummaryPanel } from "./ExecutionSummaryPanel";
 import { RecommendationList } from "./PredictiveInsightsPanel";
@@ -253,8 +258,90 @@ interface ExecutionDetailDrawerProps {
   onClose: () => void;
 }
 
+/** True for events pushed live over the websocket; false for plain DB rows
+ *  (e.g. rows from Dashboard's Recent Workflow Runs table) that were cast
+ *  into the `event` slot but never carry a `raw` websocket payload. */
+function isLiveEvent(event: any): boolean {
+  return !!event?.raw;
+}
+
+/** Convert a historical `workflow_runs` DB row into the same ExecutionState
+ *  shape the live websocket path produces, so the rest of the drawer can
+ *  render both live and historical runs identically. */
+function historicalRunToExecutionState(run: any): ExecutionState {
+  const startedAt   = run.started_at   ? new Date(run.started_at).getTime()   : null;
+  const finishedAt  = run.completed_at ? new Date(run.completed_at).getTime() : null;
+  const durationMs  = run.duration_ms ?? (startedAt && finishedAt ? finishedAt - startedAt : null);
+  const status      = String(run.status || "").toLowerCase();
+  const phase: ExecutionState["phase"] =
+    status === "failed" ? "failed"
+    : status === "cancelled" ? "cancelled"
+    : status === "running" || status === "pending" ? "running"
+    : status === "completed" || status === "success" ? "completed"
+    : "idle";
+
+  const rawLogs = Array.isArray(run.logs) ? run.logs : [];
+  const logs: ExecutionLogEntry[] = rawLogs.map((l: any, i: number) => ({
+    id:         `${run.id}-${i}`,
+    ts:         l.ts || l.timestamp || startedAt || Date.now(),
+    phase:      (l.phase || l.status || phase) as ExecutionState["phase"],
+    nodeId:     l.node_id,
+    nodeName:   l.node_name || l.step_name,
+    message:    l.message || l.text || (typeof l === "string" ? l : JSON.stringify(l)),
+    durationMs: l.duration ?? l.duration_ms,
+    meta:       l,
+  }));
+
+  return {
+    runId:        run.id != null ? String(run.id) : null,
+    workflowId:   run.workflow_id != null ? String(run.workflow_id) : null,
+    workflowName: run.workflow_name || null,
+    phase,
+    startedAt,
+    finishedAt,
+    durationMs,
+    elapsedMs:    durationMs ?? 0,
+    logs,
+    nodes:        [],
+    error:        run.error || null,
+    triggerType:  run.trigger_type || null,
+    stepCount:    run.steps_total ?? null,
+  };
+}
+
 export function ExecutionDetailDrawer({ event, onClose }: ExecutionDetailDrawerProps) {
-  const { execution } = useExecutionStream(event?.raw?.workflow_id);
+  const live = isLiveEvent(event);
+  const { execution: liveExecution } = useExecutionStream(live ? event?.raw?.workflow_id : undefined);
+
+  const [historicalExecution, setHistoricalExecution] = useState<ExecutionState | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  /* For historical (non-live) runs, fetch full detail from the backend
+   * instead of relying on a websocket stream that will never fire. */
+  useEffect(() => {
+    if (!event || live) { setHistoricalExecution(null); return; }
+    const runId = (event as any).id ?? (event as any).run_id;
+    if (!runId) { setHistoricalExecution(null); return; }
+
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetchExecutionDetail(runId).then(run => {
+      if (cancelled) return;
+      setHistoryLoading(false);
+      if (run) setHistoricalExecution(historicalRunToExecutionState(run));
+    });
+    return () => { cancelled = true; };
+  }, [event, live]);
+
+  const execution = live ? liveExecution : (historicalExecution ?? {
+    runId: (event as any)?.id ?? (event as any)?.run_id ?? null,
+    workflowId: (event as any)?.workflow_id ?? null,
+    workflowName: (event as any)?.workflow_name ?? (event as any)?.name ?? null,
+    phase: "idle" as const,
+    startedAt: null, finishedAt: null, durationMs: null, elapsedMs: 0,
+    logs: [], nodes: [], error: null, triggerType: null, stepCount: null,
+  });
+
   const logsEndRef = useRef<HTMLDivElement>(null);
   const phaseColor = PHASE_COLOR[execution.phase] ?? "#94A3B8";
 
@@ -272,8 +359,8 @@ export function ExecutionDetailDrawer({ event, onClose }: ExecutionDetailDrawerP
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const workflowName = execution.workflowName || event?.raw?.workflow_name || event?.title || "Execution";
-  const displayPhase = execution.phase !== "idle" ? execution.phase : (event?.status ?? "pending");
+  const workflowName = execution.workflowName || event?.raw?.workflow_name || (event as any)?.workflow_name || event?.title || "Execution";
+  const displayPhase = execution.phase !== "idle" ? execution.phase : ((event as any)?.status ?? event?.status ?? "pending");
   const displayColor = PHASE_COLOR[displayPhase] ?? phaseColor;
 
   return (
@@ -487,7 +574,9 @@ export function ExecutionDetailDrawer({ event, onClose }: ExecutionDetailDrawerP
                     fontSize: 12, color: "rgba(232,238,255,0.2)",
                     fontFamily: "'DM Sans',sans-serif",
                   }}>
-                    {execution.phase === "running"
+                    {!live && historyLoading
+                      ? "Loading execution history…"
+                      : execution.phase === "running"
                       ? "Awaiting execution events…"
                       : "No log entries captured for this run."}
                   </div>
