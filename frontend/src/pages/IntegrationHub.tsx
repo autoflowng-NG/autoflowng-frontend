@@ -240,6 +240,8 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   // builder — there is nothing to store here. Show the setupNote instead of
   // pretending to start an OAuth flow or presenting an empty credential form.
   const isCustomNoAuth = integ.authType === "custom" && !isDiscord && !(integ.credentials?.length);
+  // TEMP: LinkedIn API keys not provisioned yet — show "Coming Soon" instead of a working Connect button.
+  const isComingSoon = integ.id === "linkedin";
 
   const hasCredFields = isDiscord || (integ.credentials?.length ?? 0) > 0;
 
@@ -356,6 +358,10 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   }, [integ.id, integ.name, toast, onDone]);
 
   const handleConnect = useCallback(() => {
+    if (isComingSoon) {
+      // LinkedIn: not yet provisioned — button is disabled in the UI, this is just a safety net.
+      return;
+    }
     if (isDiscord) {
       setShowForm(true);
       handleDiscordInvite();
@@ -370,7 +376,7 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
     } else {
       handleOAuth();
     }
-  }, [isDiscord, isCustomNoAuth, handleDiscordInvite, hasCredFields, handleOAuth]);
+  }, [isComingSoon, isDiscord, isCustomNoAuth, handleDiscordInvite, hasCredFields, handleOAuth]);
 
   // Discord's form field isn't driven by integ.credentials (it has none —
   // it's not a generic API-key integration), so IntegrationCard renders
@@ -380,7 +386,7 @@ function useConnectFlow(integ: MergedIntegration, onDone: () => void) {
   return {
     loading, showForm, formData, hasCredFields, isDiscord, isCustomNoAuth, discordFields,
     setShowForm, setFormData,
-    handleConnect, handleOAuth, handleCredConnect, handleDisconnect, handleDiscordInvite,
+    handleConnect, handleOAuth, handleCredConnect, handleDisconnect, handleDiscordInvite, isComingSoon,
   };
 }
 
@@ -749,6 +755,23 @@ function IntegrationCard({
               Cancel
             </button>
           </>
+        ) : flow.isComingSoon ? (
+          <button
+            disabled
+            title="LinkedIn integration is coming soon"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: "rgba(255,255,255,0.05)",
+              border: `1px solid ${C.border}`,
+              borderRadius: 8, padding: "7px 14px",
+              color: C.muted, fontSize: 12, fontWeight: 700,
+              cursor: "not-allowed",
+              fontFamily: "'DM Sans',sans-serif",
+            }}
+          >
+            <Clock size={11} />
+            Coming Soon
+          </button>
         ) : (
           <>
             <button
