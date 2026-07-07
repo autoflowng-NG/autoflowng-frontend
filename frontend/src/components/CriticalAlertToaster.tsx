@@ -80,6 +80,12 @@ function toAlert(raw: any): CriticalAlert | null {
     title  = `${name} failed`;
     detail = raw.error || "Trigger did not execute";
     action = { label: "View automations", path: "/automations" };
+  } else if (ev === "step_log" && status === "error") {
+    // FIX C: step_log errors from reply/comment nodes — surface the real message
+    severity  = "critical"; eventType = "workflow";
+    title     = raw.stepType ? `${raw.stepType} failed` : "Step failed";
+    detail    = raw.msg || raw.message || "An error occurred in a workflow step";
+    action    = { label: "View workflows", path: "/workflows" };
   } else if (ev.includes("error") || status.includes("error")) {
     severity = "critical"; eventType = "error";
     title  = raw.message || "An error occurred";
