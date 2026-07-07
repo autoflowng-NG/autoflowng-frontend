@@ -47,11 +47,13 @@ const C = {
 };
 
 /* ── Platform metadata ──────────────────────────────────────────────── */
-const PLATFORM_META: Record<string, { label: string; color: string; icon: string; envHint: string }> = {
+const PLATFORM_META: Record<string, { label: string; color: string; icon: string; envHint: string; comingSoon?: boolean }> = {
   meta_ads:    { label: "Meta Ads",     color: "#1877F2", icon: "M",  envHint: "META_ADS_APP_ID + META_ADS_APP_SECRET" },
   google_ads:  { label: "Google Ads",   color: "#4285F4", icon: "G",  envHint: "GOOGLE_ADS_CLIENT_ID + GOOGLE_ADS_DEVELOPER_TOKEN" },
   tiktok_ads:  { label: "TikTok Ads",   color: "#EE1D52", icon: "T",  envHint: "TIKTOK_ADS_APP_ID + TIKTOK_ADS_APP_SECRET" },
-  linkedin_ads:{ label: "LinkedIn Ads", color: "#0A66C2", icon: "in", envHint: "LINKEDIN_ADS_CLIENT_ID + LINKEDIN_ADS_CLIENT_SECRET" },
+  // LinkedIn Ads: app creation is blocked pending a verified LinkedIn Company Page.
+  // Shown as "Coming Soon" — remove `comingSoon` once LINKEDIN_ADS_CLIENT_ID/SECRET exist.
+  linkedin_ads:{ label: "LinkedIn Ads", color: "#0A66C2", icon: "in", envHint: "LINKEDIN_ADS_CLIENT_ID + LINKEDIN_ADS_CLIENT_SECRET", comingSoon: true },
 };
 const AD_PLATFORM_IDS = Object.keys(PLATFORM_META);
 type DateRange = "last_7d" | "last_30d";
@@ -628,16 +630,25 @@ function ConnectedDashboard() {
                   <PlatformBadge pid={pid} size={30}/>
                   <span style={{ fontSize:15, fontWeight:700, color:C.text, fontFamily:"'DM Sans',sans-serif" }}>{meta.label}</span>
                   {conns.length>0&&<span style={{ fontSize:11, background:"rgba(0,200,150,0.1)", border:"1px solid rgba(0,200,150,0.2)", color:C.green, borderRadius:20, padding:"2px 9px", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{conns.length} connected</span>}
+                  {meta.comingSoon&&<span style={{ fontSize:11, background:"rgba(251,191,36,0.1)", border:"1px solid rgba(251,191,36,0.25)", color:C.amber, borderRadius:20, padding:"2px 9px", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>Coming Soon</span>}
                 </div>
-                <button onClick={()=>startConnect(pid)} style={{ background:"rgba(56,189,248,0.08)", border:`1px solid rgba(56,189,248,0.22)`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, color:C.blue, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>+ Connect</button>
+                {meta.comingSoon
+                  ? <button disabled title="LinkedIn Ads integration is on the way" style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, color:C.faint, cursor:"not-allowed", fontFamily:"'DM Sans',sans-serif" }}>Coming Soon</button>
+                  : <button onClick={()=>startConnect(pid)} style={{ background:"rgba(56,189,248,0.08)", border:`1px solid rgba(56,189,248,0.22)`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, color:C.blue, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>+ Connect</button>
+                }
               </div>
-              {isLoading&&<div style={{ display:"flex", gap:8, color:C.muted, fontSize:13, alignItems:"center", padding:"8px 0" }}><Spinner size={14}/> Loading…</div>}
-              {!isLoading&&conns.length===0&&(
+              {isLoading&&!meta.comingSoon&&<div style={{ display:"flex", gap:8, color:C.muted, fontSize:13, alignItems:"center", padding:"8px 0" }}><Spinner size={14}/> Loading…</div>}
+              {meta.comingSoon&&(
+                <div style={{ background:C.raised, border:`1px dashed ${C.border}`, borderRadius:10, padding:"20px 18px", fontSize:13, color:C.faint, textAlign:"center" }}>
+                  LinkedIn Ads integration is coming very soon — we're finalizing API access.
+                </div>
+              )}
+              {!meta.comingSoon&&!isLoading&&conns.length===0&&(
                 <div style={{ background:C.raised, border:`1px dashed ${C.border}`, borderRadius:10, padding:"20px 18px", fontSize:13, color:C.faint, textAlign:"center" }}>
                   No {meta.label} accounts connected — click <strong style={{ color:C.blue }}>+ Connect</strong> to start OAuth.
                 </div>
               )}
-              {conns.map(conn=>(
+              {!meta.comingSoon&&conns.map(conn=>(
                 <AccountCard key={conn.id} conn={conn} dateRange={dateRange}
                   onRevoke={()=>revokeMut.mutate({ platform:conn.platform, accountId:conn.account_id })}
                   revoking={revokeMut.isPending&&(revokeMut.variables as any)?.accountId===conn.account_id}

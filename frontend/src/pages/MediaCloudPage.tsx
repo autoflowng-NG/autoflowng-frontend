@@ -1582,6 +1582,8 @@ function AuditLogTab() {
 
 function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => void }) {
   const PLATFORMS = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube'];
+  // LinkedIn posting is pending API access (Company Page verification blocked) — show as Coming Soon.
+  const COMING_SOON_PLATFORMS = ['linkedin'];
   const [connected, setConnected] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [caption, setCaption] = useState(asset?.custom_metadata?.copy || '');
@@ -1693,13 +1695,14 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
         <p style={{ color: 'rgba(226,232,255,0.45)', fontSize: 11.5, margin: '0 0 8px' }}>PLATFORMS</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
           {PLATFORMS.map(p => {
-            const isConnected = connected === null || connected.includes(p);
+            const isComingSoon = COMING_SOON_PLATFORMS.includes(p);
+            const isConnected = !isComingSoon && (connected === null || connected.includes(p));
             return (
               <button
                 key={p}
                 onClick={() => isConnected && toggle(p)}
                 disabled={!isConnected}
-                title={isConnected ? undefined : `${p} isn't connected — add it in Settings → Integrations`}
+                title={isComingSoon ? `${p} integration is coming very soon` : (isConnected ? undefined : `${p} isn't connected — add it in Settings → Integrations`)}
                 style={{
                   padding: '5px 13px', borderRadius: 20, border: 'none',
                   cursor: isConnected ? 'pointer' : 'not-allowed',
@@ -1707,8 +1710,9 @@ function SocialComposerModal({ asset, onClose }: { asset: any; onClose: () => vo
                   color: selected.includes(p) ? '#1a1305' : 'rgba(226,232,255,0.6)',
                   fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
                   opacity: isConnected ? 1 : 0.35,
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
                 }}
-              >{p}</button>
+              >{p}{isComingSoon && <span style={{ fontSize: 9, fontWeight: 700, color: '#FBBF24' }}>SOON</span>}</button>
             );
           })}
         </div>
