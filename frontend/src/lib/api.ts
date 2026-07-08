@@ -241,6 +241,12 @@ export const referralsAPI = {
   withdraw: (data: any)    => api.post("/wallet/withdraw", data),
 };
 
+// ── Affiliate Program (opt-in upgrade on top of the flat referral bounty) ──────
+export const affiliatesAPI = {
+  apply: ()      => api.post("/affiliates/apply"),
+  me:    ()      => api.get("/affiliates/me"),
+};
+
 // ── Legacy Admin API (preserved for backward compat — uses x-admin-secret) ────
 export const adminAPI = {
   overview:         ()                   => api.get("/admin/overview"),

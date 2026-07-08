@@ -50,6 +50,7 @@ export const queryKeys = {
   paymentConfig: ["payments", "config"] as const,
   referrals:     ["referrals"] as const,
   referralStats: ["referrals", "stats"] as const,
+  affiliateMe:   ["affiliates", "me"] as const,
   recentRuns:    ["runs", "recent"] as const,
   adminOverview: ["admin", "overview"] as const,
   adminUsers:    (params: any) => ["admin", "users", params] as const,
@@ -65,5 +66,6 @@ export const invalidate = {
   connections: () => queryClient.invalidateQueries({ queryKey: queryKeys.connections }),
   payments:    () => queryClient.invalidateQueries({ queryKey: queryKeys.payments }),
   referrals:   () => queryClient.invalidateQueries({ queryKey: queryKeys.referrals }),
+  affiliates:  () => queryClient.invalidateQueries({ queryKey: queryKeys.affiliateMe }),
   all:         () => queryClient.invalidateQueries(),
 };
