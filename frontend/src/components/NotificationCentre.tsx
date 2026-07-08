@@ -226,7 +226,17 @@ export function NotificationBadge() {
         fetchCount();
       }
     });
-    return unsub;
+
+    const handleReadAll = () => setCount(0);
+    const handleReadOne = () => setCount(c => Math.max(0, c - 1));
+    window.addEventListener("af:notifications:read-all", handleReadAll);
+    window.addEventListener("af:notifications:read-one", handleReadOne);
+
+    return () => {
+      unsub();
+      window.removeEventListener("af:notifications:read-all", handleReadAll);
+      window.removeEventListener("af:notifications:read-one", handleReadOne);
+    };
   }, [isAuthenticated, fetchCount, subscribe]);
 
   if (count === 0) return null;
@@ -299,6 +309,7 @@ export function NotificationCentre() {
     if (!tok) return;
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
     await apiFetch(`/notifications/${id}/read`, tok, { method: "POST" }).catch(() => {});
+    window.dispatchEvent(new CustomEvent("af:notifications:read-one"));
   };
   const archive     = async (id: number) => {
     setNotifs(prev => prev.filter(n => n.id !== id));
@@ -311,6 +322,7 @@ export function NotificationCentre() {
   const markAllRead = async () => {
     setNotifs(prev => prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
     if (tok) await apiFetch("/notifications/read-all", tok, { method: "POST" }).catch(() => {});
+    window.dispatchEvent(new CustomEvent("af:notifications:read-all"));
   };
 
   const unreadCount = notifs.filter(n => !n.read_at).length;

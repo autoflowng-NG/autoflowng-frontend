@@ -40,11 +40,13 @@ export default function TrialCompletionSurvey() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone]     = useState(false);
 
+  const DISMISS_KEY = `autoflowng_trial_survey_dismissed_${user?.id ?? "anon"}`;
+
   useEffect(() => {
     if (!localStorage.getItem(TOKEN_KEY)) return;
     // Never show to admin/staff accounts
     if (isPlatformAdmin(user?.role)) return;
-    if (sessionStorage.getItem("autoflowng_trial_survey_dismissed") === "1") return;
+    if (localStorage.getItem(DISMISS_KEY) === "1") return;
 
     authFetch("/surveys/pending")
       .then(r => r.ok ? r.json() : null)
@@ -53,7 +55,7 @@ export default function TrialCompletionSurvey() {
   }, []);
 
   function dismiss() {
-    sessionStorage.setItem("autoflowng_trial_survey_dismissed", "1");
+    localStorage.setItem(DISMISS_KEY, "1");
     setOpen(false);
   }
 
