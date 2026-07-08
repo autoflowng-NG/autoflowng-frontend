@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { isPlatformAdmin } from '../lib/rbac';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -1484,11 +1485,11 @@ function BudgetRiskTab({ orgId }: { orgId: string }) {
 ══════════════════════════════════════════════════════════════════════ */
 
 /* ── Ad Accounts platform metadata ──────────────────────────────────── */
-const PLATFORM_META_AA: Record<string, { label: string; color: string; envHint: string }> = {
+const PLATFORM_META_AA: Record<string, { label: string; color: string; envHint: string; comingSoon?: boolean }> = {
   meta_ads:    { label: "Meta Ads",     color: "#1877F2", envHint: "META_ADS_APP_ID + META_ADS_APP_SECRET" },
   google_ads:  { label: "Google Ads",   color: "#4285F4", envHint: "GOOGLE_ADS_CLIENT_ID + GOOGLE_ADS_DEVELOPER_TOKEN" },
   tiktok_ads:  { label: "TikTok Ads",   color: "#EE1D52", envHint: "TIKTOK_ADS_APP_ID + TIKTOK_ADS_APP_SECRET" },
-  linkedin_ads:{ label: "LinkedIn Ads", color: "#0A66C2", envHint: "LINKEDIN_ADS_CLIENT_ID + LINKEDIN_ADS_CLIENT_SECRET" },
+  linkedin_ads:{ label: "LinkedIn Ads", color: "#0A66C2", envHint: "LINKEDIN_ADS_CLIENT_ID + LINKEDIN_ADS_CLIENT_SECRET", comingSoon: true },
 };
 const AD_PLATFORM_IDS_AA = Object.keys(PLATFORM_META_AA);
 type DateRange = "last_7d" | "last_30d";
@@ -1794,6 +1795,7 @@ function AccountCardAA({ conn, dateRange, onRevoke, revoking }: { conn: any; dat
 
 function AdAccountsTab() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const qc = useQueryClient(); const { toast } = useToast();
   const [dateRange, setDateRange] = useState<DateRange>("last_7d");
 
@@ -1845,7 +1847,13 @@ function AdAccountsTab() {
                 <span style={{ fontSize:15, fontWeight:700, color:C.text, fontFamily:FONT_BODY }}>{meta.label}</span>
                 {conns.length>0&&<span style={{ fontSize:11, background:"rgba(0,200,150,0.1)", border:"1px solid rgba(0,200,150,0.2)", color:C.green, borderRadius:20, padding:"2px 9px", fontWeight:700, fontFamily:FONT_MONO }}>{conns.length} connected</span>}
               </div>
-              <button onClick={()=>startConnect(pid)} style={{ background:"rgba(56,189,248,0.08)", border:`1px solid rgba(56,189,248,0.22)`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, color:C.blue, cursor:"pointer", fontFamily:FONT_BODY }}>+ Connect</button>
+              {meta.comingSoon ? (
+                <span style={{ background:"rgba(255,255,255,0.04)", border:`1px solid rgba(255,255,255,0.1)`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, color:C.faint, fontFamily:FONT_BODY, cursor:"default", userSelect:"none" }}>
+                  Coming Soon
+                </span>
+              ) : (
+                <button onClick={()=>startConnect(pid)} style={{ background:"rgba(56,189,248,0.08)", border:`1px solid rgba(56,189,248,0.22)`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, color:C.blue, cursor:"pointer", fontFamily:FONT_BODY }}>+ Connect</button>
+              )}
             </div>
             {isLoading&&<div style={{ display:"flex", gap:8, color:C.muted, fontSize:13, alignItems:"center", padding:"8px 0" }}><SpinnerAA size={14}/> Loading…</div>}
             {!isLoading&&conns.length===0&&(
@@ -1863,16 +1871,18 @@ function AdAccountsTab() {
         );
       })}
 
-      <div style={{ background:C.raised, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 18px", marginTop:4 }}>
-        <div style={{ fontSize:11, fontWeight:700, color:C.muted, fontFamily:FONT_MONO, letterSpacing:"0.06em", marginBottom:10, textTransform:"uppercase" }}>Required Environment Variables</div>
-        {AD_PLATFORM_IDS_AA.map(pid=>(
-          <div key={pid} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, fontFamily:FONT_MONO, color:C.faint, marginBottom:4 }}>
-            <PlatformBadgeAA pid={pid} size={16}/>
-            <span style={{ color:C.muted }}>{PLATFORM_META_AA[pid].label}:</span>
-            <span>{PLATFORM_META_AA[pid].envHint}</span>
-          </div>
-        ))}
-      </div>
+      {isPlatformAdmin(user?.role) && (
+        <div style={{ background:C.raised, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 18px", marginTop:4 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, fontFamily:FONT_MONO, letterSpacing:"0.06em", marginBottom:10, textTransform:"uppercase" }}>Required Environment Variables</div>
+          {AD_PLATFORM_IDS_AA.map(pid=>(
+            <div key={pid} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, fontFamily:FONT_MONO, color:C.faint, marginBottom:4 }}>
+              <PlatformBadgeAA pid={pid} size={16}/>
+              <span style={{ color:C.muted }}>{PLATFORM_META_AA[pid].label}:</span>
+              <span>{PLATFORM_META_AA[pid].envHint}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
