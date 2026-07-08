@@ -241,10 +241,35 @@ export const referralsAPI = {
   withdraw: (data: any)    => api.post("/wallet/withdraw", data),
 };
 
+// ── Saved payout bank accounts (shared by Wallet withdrawals + Affiliate apply) ─
+export const payoutAccountAPI = {
+  get:    ()           => api.get("/wallet/payout-account"),
+  banks:  ()           => api.get("/wallet/payout-account/banks"),
+  create: (data: { bankCode: string; bankName: string; accountNumber: string; accountName?: string }) =>
+    api.post("/wallet/payout-account", data),
+  update: (id: number, data: { bankCode: string; bankName: string; accountNumber: string; accountName?: string }) =>
+    api.patch(`/wallet/payout-account/${id}`, data),
+  remove: (id: number)  => api.delete(`/wallet/payout-account/${id}`),
+};
+
 // ── Affiliate Program (opt-in upgrade on top of the flat referral bounty) ──────
 export const affiliatesAPI = {
-  apply: ()      => api.post("/affiliates/apply"),
+  apply: (data: {
+    full_name: string;
+    promotional_channels: string[];
+    primary_channel_url: string;
+    audience_size_bucket: string;
+    promotion_plan: string;
+    payout_account_id: number;
+    agree_terms: boolean;
+    self_referral_ack: boolean;
+  }) => api.post("/affiliates/apply", data),
   me:    ()      => api.get("/affiliates/me"),
+};
+
+// ── Public demo video gallery (landing page) ───────────────────────────────────
+export const publicAPI = {
+  demoVideos: (category?: string) => api.get("/public/demo-videos", { params: { category } }),
 };
 
 // ── Legacy Admin API (preserved for backward compat — uses x-admin-secret) ────
@@ -259,6 +284,18 @@ export const adminAPI = {
   system:           ()                   => api.get("/admin/system"),
   chat:             (data: any)          => api.post("/admin/chat", data),
   broadcast:        (data: any)          => api.post("/admin/broadcast", data),
+
+  // Demo video gallery manager (multi-video)
+  demoVideos: {
+    list:    ()               => api.get("/admin/demo-video/all"),
+    upload:  (data: {
+      video_url: string; thumbnail_url?: string; title?: string;
+      description?: string; category?: string; sort_order?: number; publish?: boolean;
+    }) => api.post("/admin/demo-video/upload", data),
+    update:  (id: number, data: any) => api.patch(`/admin/demo-video/${id}`, data),
+    publish: (id: number, publish?: boolean) => api.patch(`/admin/demo-video/${id}/publish`, { publish }),
+    remove:  (id: number)     => api.delete(`/admin/demo-video/${id}`),
+  },
 };
 
 // ── Phase 10A: Super Admin API (JWT-based RBAC) ────────────────────────────────
@@ -303,6 +340,14 @@ export const superAdminAPI = {
   chat:               (data: any)                => api.post("/super-admin/chat", data),
   broadcast:          (data: { message: string; target?: string }) =>
     api.post("/super-admin/broadcast", data),
+
+  // Affiliate Applications (approve / reject / suspend)
+  affiliates: {
+    list:    (status?: string) => api.get("/super-admin/affiliates", { params: { status } }),
+    approve: (id: number)      => api.patch(`/super-admin/affiliates/${id}/approve`),
+    reject:  (id: number, reason: string) => api.patch(`/super-admin/affiliates/${id}/reject`, { reason }),
+    suspend: (id: number, reason?: string) => api.patch(`/super-admin/affiliates/${id}/suspend`, { reason }),
+  },
 };
 
 // ── Phase 10D+: Approval Requests API ─────────────────────────────────────────
