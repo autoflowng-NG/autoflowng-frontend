@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ArrowRight, Check, Zap } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../../lib/api";
 
 // ── Country → Currency fallback map ──────────────────────────────────────────
@@ -116,6 +117,9 @@ export function PricingSection() {
   const [currency, setCurrency] = useState("USD");
   const [regionalPlans, setRegionalPlans] = useState<RegionalPlan[]>([]);
   const sectionRef = useRef<HTMLElement>(null);
+
+  // Bug 2 fix: add navigate so CTA buttons can route to register with plan param
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function detectAndLoad() {
@@ -350,8 +354,9 @@ export function PricingSection() {
                   ))}
                 </ul>
 
-                {/* CTA — pinned to bottom of every card at the same level */}
+                {/* Bug 2 fix: CTA now navigates to /register?plan=<planId> on click */}
                 <button
+                  onClick={() => navigate(`/register?plan=${plan.id}`)}
                   className={`w-full py-2 md:py-4 rounded-xl flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm font-semibold transition-all group ${
                     plan.highlight
                       ? "hover:opacity-90"
