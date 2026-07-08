@@ -15,6 +15,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
 import { Reveal } from "../components/Reveal";
 import { useToast } from "@/hooks/use-toast";
+import PayoutAccountForm, { type PayoutAccount } from "../components/PayoutAccountForm";
+import { payoutAccountAPI } from "../lib/api";
+import { queryKeys } from "../lib/queryClient";
 import {
   Wallet2, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle2,
   XCircle, DollarSign, TrendingUp, Globe, Lock, AlertTriangle,
@@ -115,7 +118,8 @@ export default function Wallet() {
   const [tab, setTab] = useState<"overview" | "ledger" | "withdrawals">("overview");
   const [showForm, setShowForm] = useState(false);
   const [ledgerPage, setLedgerPage] = useState(1);
-  const [form, setForm] = useState({ amount: "", bankName: "", accountNumber: "", accountName: "" });
+  const [amount, setAmount] = useState("");
+  const [payoutAccount, setPayoutAccount] = useState<PayoutAccount | null>(null);
 
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ["wallet"],
@@ -136,17 +140,23 @@ export default function Wallet() {
     queryKey: ["regional", "reward"],
     queryFn:  () => walletAPI.reward(),
   });
+  const { data: savedPayoutAccount } = useQuery({
+    queryKey: queryKeys.payoutAccount,
+    queryFn:  () => payoutAccountAPI.get(),
+  });
 
   const withdrawMut = useMutation({
     mutationFn: (d: any) => walletAPI.withdraw(d),
     onSuccess: (res: any) => {
       toast({ title: "Withdrawal submitted", description: res.message });
       setShowForm(false);
-      setForm({ amount: "", bankName: "", accountNumber: "", accountName: "" });
+      setAmount("");
       qc.invalidateQueries({ queryKey: ["wallet"] });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
+
+  const effectiveAccount: PayoutAccount | null = payoutAccount || (savedPayoutAccount as any)?.account || null;
 
   const w = (wallet as any) || {};
   const available = w.availableBalance ?? 0;
@@ -157,15 +167,13 @@ export default function Wallet() {
   const symbol    = reward?.symbol || "₦";
 
   const handleWithdraw = () => {
-    if (!form.amount || !form.bankName || !form.accountNumber || !form.accountName) {
-      toast({ title: "All fields required", variant: "destructive" });
+    if (!amount || !effectiveAccount) {
+      toast({ title: "Amount and a saved payout account are required", variant: "destructive" });
       return;
     }
     withdrawMut.mutate({
-      amount:        parseFloat(form.amount),
-      bankName:      form.bankName,
-      accountNumber: form.accountNumber,
-      accountName:   form.accountName,
+      amount:          parseFloat(amount),
+      payoutAccountId: effectiveAccount.id,
     });
   };
 
@@ -268,38 +276,24 @@ export default function Wallet() {
             </div>
 
             {showForm && (
-              <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <input
-                    placeholder={`Amount (${currency})`}
-                    type="number"
-                    value={form.amount}
-                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                    style={S.input}
-                  />
-                  <input
-                    placeholder="Bank name (e.g. GTBank)"
-                    value={form.bankName}
-                    onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))}
-                    style={S.input}
-                  />
+              <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+                <input
+                  placeholder={`Amount (${currency})`}
+                  type="number"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  style={S.input}
+                />
+                <div>
+                  <div style={{ ...S.label, marginBottom: 8 }}>PAYOUT ACCOUNT</div>
+                  <PayoutAccountForm onSaved={acct => setPayoutAccount(acct)} />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <input
-                    placeholder="Account number"
-                    value={form.accountNumber}
-                    onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value }))}
-                    style={S.input}
-                  />
-                  <input
-                    placeholder="Account name"
-                    value={form.accountName}
-                    onChange={e => setForm(f => ({ ...f, accountName: e.target.value }))}
-                    style={S.input}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button onClick={handleWithdraw} disabled={withdrawMut.isPending} style={S.btn("#00C896", true)}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    onClick={handleWithdraw}
+                    disabled={withdrawMut.isPending || !effectiveAccount || !amount}
+                    style={S.btn("#00C896", true)}
+                  >
                     {withdrawMut.isPending ? <><RefreshCw size={13} className="animate-spin" /> Processing…</> : "Submit Withdrawal"}
                   </button>
                   <span style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace" }}>Fraud-checked · Admin reviewed · 24–48h</span>

@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Shield, Users, CreditCard, Activity, Settings2, Search,
   UserCheck, UserX, ChevronDown, Plus, Trash2, Eye,
-  BarChart2, Globe, CheckCircle2, XCircle, MessageSquare,
+  BarChart2, Globe, CheckCircle2, XCircle,
   RefreshCw, Lock, Unlock, ClipboardList, Crown,
   Phone, MapPin, FileText, X as XIcon, Loader2,
   Megaphone, Video, LifeBuoy, Clock,
@@ -834,78 +834,6 @@ function SystemTab() {
   );
 }
 
-// ── AI Chat Tab ────────────────────────────────────────────────────────────────
-
-function AdminAITab() {
-  const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
-  const [input, setInput]       = useState("");
-  const { toast } = useToast();
-
-  const chat = useMutation({
-    mutationFn: (msgs: any[]) => superAdminAPI.chat({ messages: msgs }),
-    onSuccess:  (data: any) => {
-      const text = data?.content?.[0]?.text || data?.text || "No response";
-      setMessages(m => [...m, { role: "assistant", text }]);
-    },
-    onError: (e: any) => toast({ title: "AI Error", description: e?.message, variant: "destructive" }),
-  });
-
-  const send = () => {
-    if (!input.trim()) return;
-    const updated = [...messages, { role: "user", text: input }];
-    setMessages(updated);
-    setInput("");
-    chat.mutate(updated.map(m => ({ role: m.role, content: m.text })));
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ ...S.glass, minHeight: 300, maxHeight: 480, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-        {messages.length === 0 && (
-          <div style={{ textAlign: "center", padding: "40px 20px", color: "rgba(232,238,255,0.25)", fontSize: 13 }}>
-            Ask about platform metrics, user trends, revenue, or operational decisions.
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{ ...S.muted, textTransform: "uppercase" }}>{m.role === "user" ? "You" : "Supreme Admin AI"}</div>
-            <div style={{
-              maxWidth: "85%", padding: "10px 14px", borderRadius: 12,
-              background: m.role === "user" ? "rgba(0,200,150,0.1)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${m.role === "user" ? "rgba(0,200,150,0.2)" : "rgba(255,255,255,0.08)"}`,
-              fontSize: 13, color: "#E8EEFF", lineHeight: 1.5, whiteSpace: "pre-wrap", fontFamily: "'DM Sans',sans-serif",
-            }}>
-              {m.text}
-            </div>
-          </div>
-        ))}
-        {chat.isPending && (
-          <div style={{ display: "flex", gap: 4, padding: "8px 14px", alignSelf: "flex-start" }}>
-            {[0,1,2].map(i => (
-              <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#A78BFA", animation: `pulse 1.2s ease ${i * 0.2}s infinite` }} />
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <input
-          placeholder="Ask about platform health, metrics, users…"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          style={{ ...S.input }}
-        />
-        <button
-          onClick={send}
-          disabled={!input.trim() || chat.isPending}
-          style={{ ...S.btn("167,139,250"), color: "#A78BFA", padding: "9px 18px", opacity: (!input.trim() || chat.isPending) ? 0.5 : 1 }}>
-          Send
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Approvals Tab ─────────────────────────────────────────────────────────────
 
 function ApprovalsTab() {
@@ -1089,6 +1017,386 @@ function ApprovalsTab() {
   );
 }
 
+// ── Affiliate Drawer — full application, audit line, stats + actions ───────────
+
+interface AffiliateDrawerProps {
+  row: any;
+  onClose: () => void;
+  onApprove: (id: number) => void;
+  onReject: (id: number) => void;
+  onSuspend: (id: number) => void;
+  approvePending: boolean;
+}
+
+function AffiliateDrawer({ row, onClose, onApprove, onReject, onSuspend, approvePending }: AffiliateDrawerProps) {
+  if (!row) return null;
+  const app = row.application || {};
+  const stats = row.stats || {};
+
+  const formatDate = (d?: string) =>
+    d ? new Date(d).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+  const statusColor = (s: string) =>
+    s === "active" ? "#00C896" : s === "pending" ? "#FBBF24" : s === "suspended" ? "#FB7185" : "#FB7185";
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, background: "rgba(4,6,15,0.75)", zIndex: 1000, backdropFilter: "blur(4px)" }}
+      />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 440,
+        background: "#08091A", borderLeft: "1px solid rgba(255,255,255,0.08)",
+        zIndex: 1001, overflowY: "auto", padding: 28,
+        fontFamily: "'DM Sans', sans-serif", color: "#E8EEFF",
+        display: "flex", flexDirection: "column", gap: 20,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>Affiliate Application</div>
+          <button
+            onClick={onClose}
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "6px 8px", cursor: "pointer", color: "rgba(232,238,255,0.5)" }}
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+
+        {/* Identity */}
+        <div style={{ paddingBottom: 16, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>
+              {app.full_name || row.user_name || row.user_email || `User #${row.user_id}`}
+            </div>
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: statusColor(row.status),
+              background: `${statusColor(row.status)}18`, borderRadius: 100, padding: "2px 7px",
+              fontFamily: "'DM Mono',monospace",
+            }}>
+              {(row.status || "").toUpperCase()}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: "rgba(232,238,255,0.4)" }}>{row.user_email}</div>
+          <div style={{ fontSize: 11, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", marginTop: 4 }}>
+            Applied {formatDate(row.applied_at)}
+          </div>
+        </div>
+
+        {/* Full application */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em" }}>APPLICATION</div>
+          {[
+            { label: "Primary channel URL", value: app.primary_channel_url },
+            { label: "Audience size",       value: app.audience_size_bucket },
+            { label: "Promotional channels",value: Array.isArray(app.promotional_channels) ? app.promotional_channels.join(", ") : app.promotional_channels },
+            { label: "Terms version agreed",value: app.terms_version },
+            { label: "Agreed at",           value: app.agreed_at ? formatDate(app.agreed_at) : null },
+            { label: "Self-referral ack",   value: app.self_referral_ack ? "Yes" : "No" },
+          ].map(({ label, value }) => (
+            <div key={label}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 2 }}>{label.toUpperCase()}</div>
+              <div style={{ fontSize: 12, color: value ? "#E8EEFF" : "rgba(232,238,255,0.25)" }}>{value || "—"}</div>
+            </div>
+          ))}
+          {app.promotion_plan && (
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 2 }}>PROMOTION PLAN</div>
+              <div style={{
+                fontSize: 12, color: "rgba(232,238,255,0.8)", background: "rgba(255,255,255,0.03)",
+                borderRadius: 8, padding: "8px 10px", fontStyle: "italic", lineHeight: 1.5,
+              }}>
+                "{app.promotion_plan}"
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Review audit line */}
+        {(row.reviewed_at || row.suspended_at || row.rejection_reason || row.suspended_reason) && (
+          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 14 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 8 }}>REVIEW AUDIT</div>
+            {row.reviewed_at && (
+              <div style={{ fontSize: 12, color: "rgba(232,238,255,0.7)", marginBottom: 4 }}>
+                Reviewed {formatDate(row.reviewed_at)} {row.reviewed_by_email && `by ${row.reviewed_by_email}`}
+              </div>
+            )}
+            {row.rejection_reason && (
+              <div style={{ fontSize: 12, color: "#FB7185", marginBottom: 4 }}>Rejection reason: {row.rejection_reason}</div>
+            )}
+            {row.suspended_at && (
+              <div style={{ fontSize: 12, color: "#FB7185", marginBottom: 4 }}>Suspended {formatDate(row.suspended_at)}</div>
+            )}
+            {row.suspended_reason && (
+              <div style={{ fontSize: 12, color: "#FB7185" }}>Suspension reason: {row.suspended_reason}</div>
+            )}
+          </div>
+        )}
+
+        {/* Stats grid */}
+        <div style={{ ...S.glass }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(232,238,255,0.35)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.08em", marginBottom: 14 }}>STATS</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {[
+              { label: "Referrals (total)",  value: stats.referrals_total ?? 0 },
+              { label: "Referrals (active)", value: stats.referrals_active ?? 0 },
+              { label: "Commission lifetime",value: `₦${Number(stats.commission_lifetime ?? 0).toLocaleString()}` },
+              { label: "Commission pending", value: `₦${Number(stats.commission_pending ?? 0).toLocaleString()}` },
+            ].map(({ label, value }) => (
+              <div key={label}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(232,238,255,0.3)", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: 2 }}>{label.toUpperCase()}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF" }}>{String(value)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 8 }}>
+          {row.status === "pending" && (
+            <>
+              <button
+                onClick={() => onApprove(row.id)}
+                disabled={approvePending}
+                style={{ ...S.btn("0,200,150"), color: "#00C896", opacity: approvePending ? 0.5 : 1 }}>
+                <CheckCircle2 size={10} /> Approve
+              </button>
+              <button
+                onClick={() => onReject(row.id)}
+                style={{ ...S.btn("251,113,133"), color: "#FB7185" }}>
+                <XCircle size={10} /> Reject
+              </button>
+            </>
+          )}
+          {row.status === "active" && (
+            <button
+              onClick={() => onSuspend(row.id)}
+              style={{ ...S.btn("251,113,133"), color: "#FB7185" }}>
+              <XCircle size={10} /> Suspend
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Affiliate Applications Tab ───────────────────────────────────────────────
+
+function AffiliateApplicationsTab() {
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState("pending");
+  const [selectedRow, setSelectedRow] = useState<any | null>(null);
+  const [rejectModal, setRejectModal] = useState<{ id: number } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [suspendModal, setSuspendModal] = useState<{ id: number } | null>(null);
+  const [suspendReason, setSuspendReason] = useState("");
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["super-admin", "affiliates", statusFilter],
+    queryFn: () => superAdminAPI.affiliates.list(statusFilter || undefined),
+  });
+
+  const rows = (data as any)?.affiliates || (data as any)?.applications || [];
+
+  const approve = useMutation({
+    mutationFn: (id: number) => superAdminAPI.affiliates.approve(id),
+    onSuccess: () => { toast({ title: "Affiliate approved" }); setSelectedRow(null); refetch(); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const reject = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => superAdminAPI.affiliates.reject(id, reason),
+    onSuccess: () => {
+      toast({ title: "Application rejected" });
+      setRejectModal(null);
+      setRejectReason("");
+      setSelectedRow(null);
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const suspend = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) => superAdminAPI.affiliates.suspend(id, reason),
+    onSuccess: () => {
+      toast({ title: "Affiliate suspended" });
+      setSuspendModal(null);
+      setSuspendReason("");
+      setSelectedRow(null);
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const statusColor = (s: string) =>
+    s === "active" ? "#00C896" : s === "pending" ? "#FBBF24" : s === "suspended" ? "#FB7185" : "#FB7185";
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={S.select}>
+          <option value="pending">Pending</option>
+          <option value="active">Active</option>
+          <option value="rejected">Rejected</option>
+          <option value="suspended">Suspended</option>
+          <option value="">All</option>
+        </select>
+        <span style={S.muted}>{rows.length} application{rows.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      {isLoading ? (
+        <div style={{ textAlign: "center", padding: 40 }}>
+          <Loader2 size={24} color="#00C896" style={{ animation: "spin 1s linear infinite" }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : rows.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px", color: "rgba(232,238,255,0.25)", fontSize: 13 }}>
+          No affiliate applications found
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {rows.map((r: any) => {
+            const app = r.application || {};
+            const stats = r.stats || {};
+            return (
+              <div
+                key={r.id}
+                onClick={() => setSelectedRow(r)}
+                style={{ ...S.glass, display: "flex", flexDirection: "column", gap: 10, cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#E8EEFF", fontFamily: "'Syne',sans-serif" }}>
+                        {app.full_name || r.user_name || r.user_email || `User #${r.user_id}`}
+                      </span>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700,
+                        color: statusColor(r.status),
+                        background: `${statusColor(r.status)}18`,
+                        borderRadius: 100, padding: "2px 7px",
+                        fontFamily: "'DM Mono',monospace",
+                      }}>
+                        {(r.status || "").toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "rgba(232,238,255,0.5)", fontFamily: "'DM Mono',monospace", marginBottom: 6 }}>
+                      {r.user_email} {app.primary_channel_url && `· ${app.primary_channel_url}`}
+                      {app.audience_size_bucket && ` · Audience: ${app.audience_size_bucket}`}
+                    </div>
+                    <div style={{ ...S.muted }}>
+                      Referrals: {stats.referrals_total ?? 0} · Lifetime earned: ₦{Number(stats.commission_lifetime ?? 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                    <Eye size={14} color="rgba(232,238,255,0.35)" />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedRow && (
+        <AffiliateDrawer
+          row={selectedRow}
+          onClose={() => setSelectedRow(null)}
+          onApprove={(id) => approve.mutate(id)}
+          onReject={(id) => setRejectModal({ id })}
+          onSuspend={(id) => setSuspendModal({ id })}
+          approvePending={approve.isPending}
+        />
+      )}
+
+      {/* Reject reason modal — permanent, requires 10-500 char reason */}
+      {rejectModal && (
+        <>
+          <div
+            onClick={() => setRejectModal(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(4,6,15,0.8)", zIndex: 2000, backdropFilter: "blur(4px)" }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "#08091A", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: 24, zIndex: 2001,
+            width: 380, display: "flex", flexDirection: "column", gap: 14,
+            fontFamily: "'DM Sans',sans-serif",
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>
+              Reject Application
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(232,238,255,0.6)" }}>
+              This is permanent — the applicant will not be able to reapply. Provide a reason (10-500 characters):
+            </div>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              placeholder="Reason for rejection…"
+              rows={3}
+              style={{ ...S.input, resize: "vertical" as any }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setRejectModal(null)}
+                style={{ ...S.btn("255,255,255"), color: "rgba(232,238,255,0.6)" }}>
+                Cancel
+              </button>
+              <button
+                onClick={() => reject.mutate({ id: rejectModal.id, reason: rejectReason })}
+                disabled={rejectReason.trim().length < 10 || rejectReason.trim().length > 500 || reject.isPending}
+                style={{ ...S.btn("251,113,133"), color: "#FB7185", opacity: (rejectReason.trim().length < 10 || reject.isPending) ? 0.5 : 1 }}>
+                Reject Permanently
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Suspend reason modal */}
+      {suspendModal && (
+        <>
+          <div
+            onClick={() => setSuspendModal(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(4,6,15,0.8)", zIndex: 2000, backdropFilter: "blur(4px)" }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "#08091A", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: 24, zIndex: 2001,
+            width: 380, display: "flex", flexDirection: "column", gap: 14,
+            fontFamily: "'DM Sans',sans-serif",
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Syne',sans-serif", color: "#E8EEFF" }}>
+              Suspend Affiliate
+            </div>
+            <textarea
+              value={suspendReason}
+              onChange={e => setSuspendReason(e.target.value)}
+              placeholder="Reason for suspension (optional)…"
+              rows={3}
+              style={{ ...S.input, resize: "vertical" as any }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setSuspendModal(null)}
+                style={{ ...S.btn("255,255,255"), color: "rgba(232,238,255,0.6)" }}>
+                Cancel
+              </button>
+              <button
+                onClick={() => suspend.mutate({ id: suspendModal.id, reason: suspendReason })}
+                disabled={suspend.isPending}
+                style={{ ...S.btn("251,113,133"), color: "#FB7185", opacity: suspend.isPending ? 0.5 : 1 }}>
+                Suspend
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -1102,9 +1410,9 @@ const TABS = [
   { id: "announcements",label: "Announcements",icon: Megaphone,    minRole: "admin"       },
   { id: "demo-video",   label: "Demo Video",   icon: Video,        minRole: "super_admin" },
   { id: "support",      label: "Support",      icon: LifeBuoy,     minRole: "admin"       },
-  { id: "ai",           label: "Admin AI",     icon: MessageSquare,minRole: "admin"       },
   { id: "sa-assistant", label: "SA Assistant", icon: Crown,        minRole: "super_admin" },
   { id: "approvals",    label: "Approvals",    icon: CheckCircle2, minRole: "super_admin" },
+  { id: "affiliates", label: "Affiliate Applications", icon: UserCheck, minRole: "super_admin" },
 ];
 
 
@@ -1132,6 +1440,14 @@ export default function SuperAdmin() {
   });
   const pendingCount: number = (pendingApprovalsData as any)?.requests?.length ?? 0;
 
+  const { data: pendingAffiliatesData } = useQuery({
+    queryKey: ["affiliates-badge", "pending"],
+    queryFn: () => superAdminAPI.affiliates.list("pending"),
+    refetchInterval: 30_000,
+    enabled: isSuperAdmin(userRole),
+  });
+  const pendingAffiliateCount: number = (pendingAffiliatesData as any)?.affiliates?.length ?? 0;
+
   const visibleTabs = TABS.filter(t => hasRole(userRole, t.minRole as PlatformRole));
 
   const renderTab = () => {
@@ -1143,12 +1459,12 @@ export default function SuperAdmin() {
       case "withdrawals": return <WithdrawalsTab userRole={userRole} />;
       case "audit-log":   return <AuditLogTab />;
       case "system":      return <SystemTab />;
-      case "ai":           return <AdminAITab />;
       case "announcements":return <AnnouncementManager />;
       case "demo-video":   return <DemoVideoManager />;
       case "support":      return <SupportAdminDashboard />;
       case "sa-assistant": return <SuperAdminAssistant />;
       case "approvals":    return <ApprovalsTab />;
+      case "affiliates":    return <AffiliateApplicationsTab />;
       default:             return <OverviewTab />;
     }
   };
@@ -1236,6 +1552,21 @@ export default function SuperAdmin() {
                       animation: "badge-pulse 2s ease-in-out infinite",
                     }}>
                       {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  )}
+                  {t.id === "affiliates" && pendingAffiliateCount > 0 && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      minWidth: 16, height: 16, borderRadius: 100,
+                      background: active ? "#F59E0B" : "#FB7185",
+                      color: "#04060F",
+                      fontSize: 9, fontWeight: 900,
+                      fontFamily: "'DM Mono',monospace",
+                      padding: "0 4px",
+                      lineHeight: 1,
+                      animation: "badge-pulse 2s ease-in-out infinite",
+                    }}>
+                      {pendingAffiliateCount > 99 ? "99+" : pendingAffiliateCount}
                     </span>
                   )}
                 </button>

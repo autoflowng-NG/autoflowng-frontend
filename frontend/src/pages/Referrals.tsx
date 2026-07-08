@@ -14,16 +14,18 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { referralsAPI, affiliatesAPI } from "../lib/api";
+import { referralsAPI, affiliatesAPI, payoutAccountAPI } from "../lib/api";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
 import { queryKeys, invalidate } from "../lib/queryClient";
 import { useAuth } from "../contexts/AuthContext";
 import { Reveal } from "../components/Reveal";
 import { Tilt } from "../components/Tilt";
 import { useToast } from "@/hooks/use-toast";
+import AffiliateApplicationForm from "../components/AffiliateApplicationForm";
+import PayoutAccountForm from "../components/PayoutAccountForm";
 import {
   Copy, Check, Users, DollarSign, Gift, TrendingUp,
-  ArrowRight, Clock, CheckCircle2, XCircle, ArrowUpRight, Wallet, Star, Lock,
+  ArrowRight, Clock, CheckCircle2, XCircle, ArrowUpRight, Wallet, Lock,
 } from "lucide-react";
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
@@ -145,29 +147,25 @@ export default function Referrals() {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawBankName, setWithdrawBankName] = useState("");
-  const [withdrawAccountNumber, setWithdrawAccountNumber] = useState("");
-  const [withdrawAccountName, setWithdrawAccountName] = useState("");
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
 
   const { data: stats } = useQuery({ queryKey: queryKeys.referralStats, queryFn: () => referralsAPI.stats() });
   const { data: refs = [] } = useQuery({ queryKey: queryKeys.referrals, queryFn: () => referralsAPI.list().then((d: any) => d.referrals || []) });
   const { data: balance } = useQuery({ queryKey: ["referrals", "balance"], queryFn: () => referralsAPI.balance() });
 
+  // Shared with the Payout Account card / PayoutAccountForm — same query key,
+  // so saving/editing there invalidates this read too, with no page refresh.
+  const { data: payoutAccountData } = useQuery({
+    queryKey: queryKeys.payoutAccount,
+    queryFn: () => payoutAccountAPI.get(),
+  });
+  const payoutAccount = (payoutAccountData as any)?.account || null;
+
   // Affiliate Program — opt-in upgrade layered on top of the flat bounty above.
   const { data: affiliate, isLoading: affiliateLoading } = useQuery({
     queryKey: queryKeys.affiliateMe,
     queryFn: () => affiliatesAPI.me(),
   });
-  const applyMut = useMutation({
-    mutationFn: () => affiliatesAPI.apply(),
-    onSuccess: () => {
-      toast({ title: "Application submitted", description: "We'll review it shortly." });
-      invalidate.affiliates();
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
   const withdrawMut = useMutation({
     mutationFn: (data: any) => referralsAPI.withdraw(data),
     onSuccess: () => {
@@ -175,9 +173,6 @@ export default function Referrals() {
       invalidate.referrals();
       setShowWithdrawForm(false);
       setWithdrawAmount("");
-      setWithdrawBankName("");
-      setWithdrawAccountNumber("");
-      setWithdrawAccountName("");
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
@@ -300,6 +295,19 @@ export default function Referrals() {
           </Card>
         </Reveal>
 
+        {/* ── Payout Account card ── */}
+        <Reveal delay={70}>
+          <Card accent={C.blue} style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
+              <SectionLabel color={C.blue}>PAYOUT ACCOUNT</SectionLabel>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                The bank account your referral and affiliate earnings are withdrawn to.
+              </div>
+            </div>
+            <PayoutAccountForm />
+          </Card>
+        </Reveal>
+
         {/* ── Withdraw card ── */}
         <Reveal delay={80}>
           <Card accent={C.green} style={{ marginBottom: 20 }}>
@@ -342,44 +350,35 @@ export default function Referrals() {
                   value={withdrawAmount}
                   onChange={e => setWithdrawAmount(e.target.value)}
                 />
-                <Input
-                  data-testid="input-withdraw-bank-name"
-                  type="text"
-                  placeholder="Bank name"
-                  value={withdrawBankName}
-                  onChange={e => setWithdrawBankName(e.target.value)}
-                />
-                <Input
-                  data-testid="input-withdraw-account-number"
-                  type="text"
-                  placeholder="Account number"
-                  value={withdrawAccountNumber}
-                  onChange={e => setWithdrawAccountNumber(e.target.value)}
-                />
-                <Input
-                  data-testid="input-withdraw-account-name"
-                  type="text"
-                  placeholder="Account name"
-                  value={withdrawAccountName}
-                  onChange={e => setWithdrawAccountName(e.target.value)}
-                />
+                {payoutAccount ? (
+                  <div style={{
+                    fontSize: 12, color: C.muted, fontFamily: "'DM Sans',sans-serif",
+                    background: C.raised, border: `1px solid ${C.border}`,
+                    borderRadius: 10, padding: "10px 14px",
+                  }}>
+                    Paying out to: <strong style={{ color: C.text }}>{payoutAccount.bank_name}</strong>{" "}
+                    •••• {String(payoutAccount.account_number || "").slice(-4)}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: C.amber, fontFamily: "'DM Sans',sans-serif" }}>
+                    Add a payout account above before requesting a withdrawal.
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 10 }}>
                   <button
                     data-testid="button-withdraw"
                     onClick={() => withdrawMut.mutate({
                       amount: Number(withdrawAmount),
-                      bankName: withdrawBankName,
-                      accountNumber: withdrawAccountNumber,
-                      accountName: withdrawAccountName,
+                      payoutAccountId: payoutAccount?.id,
                     })}
-                    disabled={withdrawMut.isPending}
+                    disabled={withdrawMut.isPending || !payoutAccount}
                     style={{
                       background: C.green, border: "none", borderRadius: 10,
                       padding: "10px 24px", color: "#04060F",
                       fontSize: 13, fontWeight: 700,
-                      cursor: withdrawMut.isPending ? "not-allowed" : "pointer",
+                      cursor: withdrawMut.isPending || !payoutAccount ? "not-allowed" : "pointer",
                       fontFamily: "'DM Sans',sans-serif",
-                      opacity: withdrawMut.isPending ? 0.7 : 1,
+                      opacity: withdrawMut.isPending || !payoutAccount ? 0.7 : 1,
                       transition: "opacity 0.15s",
                     }}
                   >
@@ -428,51 +427,16 @@ export default function Referrals() {
             {affiliateLoading ? (
               <Sk h={60} />
             ) : !affiliate?.enrolled ? (
-              <div>
-                <p style={{ fontSize: 13, color: C.muted, fontFamily: "'DM Sans',sans-serif", marginBottom: 14, maxWidth: 520 }}>
-                  Go beyond the one-time bounty: apply to become an affiliate and earn
-                  <strong style={{ color: C.text }}> 15% recurring commission</strong> on every referred
-                  customer's monthly plan, paid out on every renewal for up to 12 months. Applications are
-                  reviewed by our team before activation.
-                </p>
-                <button
-                  data-testid="button-apply-affiliate"
-                  onClick={() => applyMut.mutate()}
-                  disabled={applyMut.isPending}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    background: C.amber, border: "none", borderRadius: 10,
-                    padding: "10px 20px", color: "#04060F", fontSize: 13, fontWeight: 700,
-                    cursor: applyMut.isPending ? "not-allowed" : "pointer",
-                    fontFamily: "'DM Sans',sans-serif", opacity: applyMut.isPending ? 0.7 : 1,
-                  }}
-                >
-                  <Star size={14} />
-                  {applyMut.isPending ? "Submitting…" : "Apply to become an affiliate"}
-                </button>
-              </div>
+              <AffiliateApplicationForm />
             ) : affiliate.status === "pending" ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
                 <Clock size={16} color={C.amber} />
                 Your application is under review. We'll notify you once it's approved.
               </div>
             ) : affiliate.status === "rejected" ? (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.red, fontSize: 13, fontFamily: "'DM Sans',sans-serif", marginBottom: 12 }}>
-                  <XCircle size={16} />
-                  Application not approved{affiliate.rejectionReason ? `: ${affiliate.rejectionReason}` : "."}
-                </div>
-                <button
-                  onClick={() => applyMut.mutate()}
-                  disabled={applyMut.isPending}
-                  style={{
-                    background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10,
-                    padding: "8px 16px", color: C.text, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                  }}
-                >
-                  Re-apply
-                </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.red, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+                <XCircle size={16} />
+                Application not approved{affiliate.rejectionReason ? `: ${affiliate.rejectionReason}` : "."} This decision is final — reapplication is not available.
               </div>
             ) : affiliate.status === "suspended" ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.red, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
