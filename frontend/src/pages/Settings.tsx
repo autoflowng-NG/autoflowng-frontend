@@ -4,6 +4,9 @@
  * All hooks, API calls, mutations, imports, and logic preserved exactly.
  * Visual layer only: design tokens, card wrappers, tab sidebar, accent lines.
  * Profile tab remains inside Settings (not a separate page).
+ *
+ * Bug 3 fix: Added "Support" tab that renders SupportRequestForm so users
+ * can submit feedback/complaints from within Settings.
  */
 
 import React, { useState, useEffect } from "react";
@@ -18,8 +21,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   User, Lock, Bell, Shield, Trash2, Check, Eye, EyeOff,
   AlertCircle, Camera, Phone, MapPin, FileText, Building2,
-  UserPlus, X, Mail, Clock, RefreshCw,
+  UserPlus, X, Mail, Clock, RefreshCw, LifeBuoy,
 } from "lucide-react";
+// Bug 3 fix: import the already-built SupportRequestForm component
+import SupportRequestForm from "../components/SupportRequestForm";
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
 const C = {
@@ -769,13 +774,25 @@ function WorkspaceTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   SUPPORT TAB  — Bug 3 fix: wires SupportRequestForm into Settings
+══════════════════════════════════════════════════════════════════════ */
+function SupportTab() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <SupportRequestForm />
+    </div>
+  );
+}
+
 /* ── Tab registry ───────────────────────────────────────────────────── */
 const TABS = [
-  { id: "profile",       label: "Profile",       icon: User,     color: C.green },
-  { id: "security",      label: "Security",      icon: Lock,     color: C.blue },
-  { id: "workspace",     label: "Workspace",     icon: Building2,color: C.purple },
-  { id: "notifications", label: "Notifications", icon: Bell,     color: C.amber },
-  { id: "account",       label: "Account",       icon: Shield,   color: C.red },
+  { id: "profile",       label: "Profile",         icon: User,     color: C.green },
+  { id: "security",      label: "Security",         icon: Lock,     color: C.blue },
+  { id: "workspace",     label: "Workspace",        icon: Building2,color: C.purple },
+  { id: "notifications", label: "Notifications",    icon: Bell,     color: C.amber },
+  { id: "support",       label: "Help & Feedback",  icon: LifeBuoy, color: C.blue },
+  { id: "account",       label: "Account",          icon: Shield,   color: C.red },
 ];
 
 const TAB_CONTENT: Record<string, React.FC> = {
@@ -783,6 +800,7 @@ const TAB_CONTENT: Record<string, React.FC> = {
   security: SecurityTab,
   workspace: WorkspaceTab,
   notifications: NotificationsTab,
+  support: SupportTab,
   account: AccountTab,
 };
 

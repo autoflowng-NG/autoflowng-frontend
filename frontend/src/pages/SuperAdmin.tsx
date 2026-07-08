@@ -3,6 +3,10 @@
  *
  * Accessible by: super_admin, admin, operator (read-only sections), support (read-only)
  * Role-gated sections use canDo() checks to show/hide controls.
+ *
+ * Bug 1 fix: S.row now wraps on narrow viewports; identity block is full-width
+ *            on its own line, controls wrap below it on mobile.
+ * Bug 4a fix: Added TestimonialsModerationPanel tab to SuperAdmin (was missing).
  */
 
 import { useState, useCallback, useEffect } from "react";
@@ -23,7 +27,7 @@ import {
   BarChart2, Globe, CheckCircle2, XCircle,
   RefreshCw, Lock, Unlock, ClipboardList, Crown,
   Phone, MapPin, FileText, X as XIcon, Loader2,
-  Megaphone, Video, LifeBuoy, Clock,
+  Megaphone, Video, LifeBuoy, Clock, Star,
 } from "lucide-react";
 import PaystackBalanceWidget from "../components/PaystackBalanceWidget";
 import MFAEnforcementBanner from "../components/MFAEnforcement";
@@ -31,6 +35,8 @@ import OperationalAlertsBadge from "../components/OperationalAlertsBadge";
 import AnnouncementManager from "../components/AnnouncementManager";
 import DemoVideoManager from "../components/DemoVideoManager";
 import SupportAdminDashboard from "../components/SupportAdminDashboard";
+// Bug 4a fix: import the existing TestimonialsModerationPanel
+import TestimonialsModerationPanel from "../components/TestimonialsModerationPanel";
 
 // ── Shared Styles ──────────────────────────────────────────────────────────────
 
@@ -42,7 +48,8 @@ const S = {
   input:   { width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "9px 14px", color: "#E8EEFF", fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" } as React.CSSProperties,
   select:  { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 12px", color: "#E8EEFF", fontSize: 12, fontFamily: "'DM Mono',monospace", outline: "none" } as React.CSSProperties,
   btn:     (color: string) => ({ display: "flex", alignItems: "center", gap: 5, background: `rgba(${color},0.1)`, border: `1px solid rgba(${color},0.2)`, borderRadius: 8, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }) as React.CSSProperties,
-  row:     { display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" } as React.CSSProperties,
+  // Bug 1 fix: added flexWrap: "wrap" so the row wraps on narrow screens
+  row:     { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, padding: "11px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" } as React.CSSProperties,
 };
 
 // ── Role Badge ─────────────────────────────────────────────────────────────────
@@ -125,7 +132,6 @@ function UserProfileDrawer({ userId, onClose }: UserProfileDrawerProps) {
   if (!userId) return null;
 
   // Compute the user's current local time from their stored IANA timezone.
-  // Returns e.g. "3:42 PM (Africa/Lagos)" or "Timezone unknown" if tz is absent/invalid.
   const formatUserLocalTime = (tz: string | null | undefined): string => {
     if (!tz) return "Timezone unknown";
     try {
@@ -287,9 +293,7 @@ function OverviewTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Phase 10D: Paystack Balance Intelligence */}
       <PaystackBalanceWidget compact />
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14 }}>
         {statCards.map(s => (
           <div key={s.label} style={S.glass}>
@@ -409,64 +413,73 @@ function UsersTab({ userRole }: { userRole: string }) {
           <div style={{ textAlign: "center", padding: "32px", color: "rgba(232,238,255,0.25)", fontSize: 13 }}>No users found</div>
         ) : users.map((u: any) => (
           <div key={u.id} style={{ ...S.row, opacity: u.is_active === false ? 0.6 : 1 }}>
+            {/* Bug 1 fix: Avatar + identity block now has flexBasis: "100%" on its own line
+                via a wrapping approach. Avatar is always visible. Identity (name/email)
+                gets minWidth:0 + word wrapping so emails display fully on mobile.
+                Controls wrap onto a second line via flexWrap: "wrap" on S.row. */}
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: u.is_active === false ? "rgba(251,113,133,0.2)" : "linear-gradient(135deg,#00C896,#38BDF8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#04060F", flexShrink: 0 }}>
               {(u.name || u.email || "?")[0].toUpperCase()}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.name || u.email}</div>
-              <div style={S.muted}>{u.email} · {u.active_automations ?? 0} auto · {u.active_workflows ?? 0} wf</div>
+            {/* Identity block: flex:1 on wide, full-width on wrap so email is never clipped */}
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#E8EEFF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.name || u.email}</div>
+              {/* Bug 1 fix: email uses whiteSpace:"normal" so it wraps on mobile instead of getting clipped */}
+              <div style={{ ...S.muted, wordBreak: "break-all" }}>{u.email} · {u.active_automations ?? 0} auto · {u.active_workflows ?? 0} wf</div>
             </div>
 
-            <RoleBadge role={u.role} />
+            {/* Controls group: these wrap together onto the next line on narrow screens */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <RoleBadge role={u.role} />
 
-            {canRole ? (
-              <select value={u.role || "user"} onChange={e => updateRole.mutate({ id: u.id, role: e.target.value })}
-                style={{ ...S.select, fontSize: 10 }}>
-                {ALL_PLATFORM_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            ) : null}
+              {canRole ? (
+                <select value={u.role || "user"} onChange={e => updateRole.mutate({ id: u.id, role: e.target.value })}
+                  style={{ ...S.select, fontSize: 10 }}>
+                  {ALL_PLATFORM_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              ) : null}
 
-            {canManage ? (
-              <select value={u.plan || "trial"} onChange={e => updatePlan.mutate({ id: u.id, plan: e.target.value })}
-                style={{ ...S.select, fontSize: 10 }}>
-                {["trial","free","basic","pro","business","unlimited"].map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            ) : null}
+              {canManage ? (
+                <select value={u.plan || "trial"} onChange={e => updatePlan.mutate({ id: u.id, plan: e.target.value })}
+                  style={{ ...S.select, fontSize: 10 }}>
+                  {["trial","free","basic","pro","business","unlimited"].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              ) : null}
 
-            {canSuspend && (
-              u.is_active === false ? (
-                <button
-                  onClick={() => {
-                    if (isSuperAdmin(userRole)) {
-                      unsuspend.mutate(u.id);
-                    } else {
-                      setApprovalModal({ userId: String(u.id), email: u.email, action: "unsuspend" });
-                    }
-                  }}
-                  style={{ ...S.btn("56,189,248"), color: "#38BDF8" }}>
-                  <Unlock size={10} /> {isSuperAdmin(userRole) ? "Restore" : "Request Restore"}
+              {canSuspend && (
+                u.is_active === false ? (
+                  <button
+                    onClick={() => {
+                      if (isSuperAdmin(userRole)) {
+                        unsuspend.mutate(u.id);
+                      } else {
+                        setApprovalModal({ userId: String(u.id), email: u.email, action: "unsuspend" });
+                      }
+                    }}
+                    style={{ ...S.btn("56,189,248"), color: "#38BDF8" }}>
+                    <Unlock size={10} /> {isSuperAdmin(userRole) ? "Restore" : "Request Restore"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (isSuperAdmin(userRole)) {
+                        if (window.confirm(`Suspend ${u.email}?`)) suspend.mutate({ id: u.id });
+                      } else {
+                        setApprovalModal({ userId: String(u.id), email: u.email, action: "suspend" });
+                      }
+                    }}
+                    style={{ ...S.btn("251,113,133"), color: "#FB7185" }}>
+                    <Lock size={10} /> {isSuperAdmin(userRole) ? "Suspend" : "Request Suspend"}
+                  </button>
+                )
+              )}
+
+              {isSuperAdmin(userRole) && (
+                <button onClick={() => setViewingUserId(String(u.id))}
+                  style={{ ...S.btn("167,139,250"), color: "#A78BFA" }}>
+                  <Eye size={10} /> Profile
                 </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (isSuperAdmin(userRole)) {
-                      if (window.confirm(`Suspend ${u.email}?`)) suspend.mutate({ id: u.id });
-                    } else {
-                      setApprovalModal({ userId: String(u.id), email: u.email, action: "suspend" });
-                    }
-                  }}
-                  style={{ ...S.btn("251,113,133"), color: "#FB7185" }}>
-                  <Lock size={10} /> {isSuperAdmin(userRole) ? "Suspend" : "Request Suspend"}
-                </button>
-              )
-            )}
-
-            {isSuperAdmin(userRole) && (
-              <button onClick={() => setViewingUserId(String(u.id))}
-                style={{ ...S.btn("167,139,250"), color: "#A78BFA" }}>
-                <Eye size={10} /> Profile
-              </button>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -1309,7 +1322,7 @@ function AffiliateApplicationsTab() {
         />
       )}
 
-      {/* Reject reason modal — permanent, requires 10-500 char reason */}
+      {/* Reject reason modal */}
       {rejectModal && (
         <>
           <div
@@ -1399,20 +1412,22 @@ function AffiliateApplicationsTab() {
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
+// Bug 4a fix: Added "testimonials" tab entry to TABS array
 const TABS = [
-  { id: "overview",     label: "Overview",     icon: BarChart2,    minRole: "support"     },
-  { id: "users",        label: "Users",        icon: Users,        minRole: "support"     },
-  { id: "staff",        label: "Staff",        icon: UserCheck,    minRole: "admin"       },
-  { id: "payments",     label: "Payments",     icon: CreditCard,   minRole: "support"     },
-  { id: "withdrawals",  label: "Withdrawals",  icon: Activity,     minRole: "admin"       },
-  { id: "audit-log",    label: "Audit Log",    icon: ClipboardList,minRole: "admin"       },
-  { id: "system",       label: "System",       icon: Settings2,    minRole: "operator"    },
-  { id: "announcements",label: "Announcements",icon: Megaphone,    minRole: "admin"       },
-  { id: "demo-video",   label: "Demo Video",   icon: Video,        minRole: "super_admin" },
-  { id: "support",      label: "Support",      icon: LifeBuoy,     minRole: "admin"       },
-  { id: "sa-assistant", label: "SA Assistant", icon: Crown,        minRole: "super_admin" },
-  { id: "approvals",    label: "Approvals",    icon: CheckCircle2, minRole: "super_admin" },
-  { id: "affiliates", label: "Affiliate Applications", icon: UserCheck, minRole: "super_admin" },
+  { id: "overview",      label: "Overview",                  icon: BarChart2,    minRole: "support"     },
+  { id: "users",         label: "Users",                     icon: Users,        minRole: "support"     },
+  { id: "staff",         label: "Staff",                     icon: UserCheck,    minRole: "admin"       },
+  { id: "payments",      label: "Payments",                  icon: CreditCard,   minRole: "support"     },
+  { id: "withdrawals",   label: "Withdrawals",               icon: Activity,     minRole: "admin"       },
+  { id: "audit-log",     label: "Audit Log",                 icon: ClipboardList,minRole: "admin"       },
+  { id: "system",        label: "System",                    icon: Settings2,    minRole: "operator"    },
+  { id: "announcements", label: "Announcements",             icon: Megaphone,    minRole: "admin"       },
+  { id: "demo-video",    label: "Demo Video",                icon: Video,        minRole: "super_admin" },
+  { id: "support",       label: "Support",                   icon: LifeBuoy,     minRole: "admin"       },
+  { id: "sa-assistant",  label: "SA Assistant",              icon: Crown,        minRole: "super_admin" },
+  { id: "approvals",     label: "Approvals",                 icon: CheckCircle2, minRole: "super_admin" },
+  { id: "testimonials",  label: "Testimonials",              icon: Star,         minRole: "admin"       },
+  { id: "affiliates",    label: "Affiliate Applications",    icon: UserCheck,    minRole: "super_admin" },
 ];
 
 
@@ -1448,24 +1463,41 @@ export default function SuperAdmin() {
   });
   const pendingAffiliateCount: number = (pendingAffiliatesData as any)?.affiliates?.length ?? 0;
 
+  // Bug 4a fix: fetch pending testimonials count for the badge
+  const { data: pendingTestimonialsData } = useQuery({
+    queryKey: ["testimonials-badge", "pending"],
+    queryFn: () => {
+      const token = localStorage.getItem("autoflowng_token") || sessionStorage.getItem("autoflowng_token");
+      return fetch("/api/testimonials/admin/pending", {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.ok ? r.json() : { testimonials: [] });
+    },
+    refetchInterval: 60_000,
+    enabled: hasRole(userRole, "admin"),
+  });
+  const pendingTestimonialsCount: number = (pendingTestimonialsData as any)?.testimonials?.length ?? 0;
+
   const visibleTabs = TABS.filter(t => hasRole(userRole, t.minRole as PlatformRole));
 
   const renderTab = () => {
     switch (activeTab) {
-      case "overview":    return <OverviewTab />;
-      case "users":       return <UsersTab userRole={userRole} />;
-      case "staff":       return <StaffTab userRole={userRole} />;
-      case "payments":    return <PaymentsTab />;
-      case "withdrawals": return <WithdrawalsTab userRole={userRole} />;
-      case "audit-log":   return <AuditLogTab />;
-      case "system":      return <SystemTab />;
-      case "announcements":return <AnnouncementManager />;
-      case "demo-video":   return <DemoVideoManager />;
-      case "support":      return <SupportAdminDashboard />;
-      case "sa-assistant": return <SuperAdminAssistant />;
-      case "approvals":    return <ApprovalsTab />;
+      case "overview":      return <OverviewTab />;
+      case "users":         return <UsersTab userRole={userRole} />;
+      case "staff":         return <StaffTab userRole={userRole} />;
+      case "payments":      return <PaymentsTab />;
+      case "withdrawals":   return <WithdrawalsTab userRole={userRole} />;
+      case "audit-log":     return <AuditLogTab />;
+      case "system":        return <SystemTab />;
+      case "announcements": return <AnnouncementManager />;
+      case "demo-video":    return <DemoVideoManager />;
+      case "support":       return <SupportAdminDashboard />;
+      case "sa-assistant":  return <SuperAdminAssistant />;
+      case "approvals":     return <ApprovalsTab />;
+      // Bug 4a fix: render TestimonialsModerationPanel for the new "testimonials" tab
+      case "testimonials":  return <TestimonialsModerationPanel />;
       case "affiliates":    return <AffiliateApplicationsTab />;
-      default:             return <OverviewTab />;
+      default:              return <OverviewTab />;
     }
   };
 
@@ -1489,7 +1521,7 @@ export default function SuperAdmin() {
               </h1>
             </div>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-              {/* Global clock — WAT · UTC · London · New York for cross-region support ops */}
+              {/* Global clock */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 8, padding: "5px 10px" }}>
                 <Clock size={11} color="#F59E0B" />
                 {([
@@ -1510,7 +1542,6 @@ export default function SuperAdmin() {
               <RoleBadge role={userRole} />
             </div>
           </div>
-          {/* Phase 10D: MFA enforcement banner */}
           <MFAEnforcementBanner role={userRole} className="mb-2" />
         </Reveal>
 
@@ -1543,27 +1574,34 @@ export default function SuperAdmin() {
                     <span style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       minWidth: 16, height: 16, borderRadius: 100,
-                      background: active ? "#F59E0B" : "#FB7185",
-                      color: "#04060F",
-                      fontSize: 9, fontWeight: 900,
-                      fontFamily: "'DM Mono',monospace",
-                      padding: "0 4px",
-                      lineHeight: 1,
+                      background: active ? "#F59E0B" : "#FB7185", color: "#04060F",
+                      fontSize: 9, fontWeight: 900, fontFamily: "'DM Mono',monospace",
+                      padding: "0 4px", lineHeight: 1,
                       animation: "badge-pulse 2s ease-in-out infinite",
                     }}>
                       {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  )}
+                  {/* Bug 4a fix: testimonials pending badge */}
+                  {t.id === "testimonials" && pendingTestimonialsCount > 0 && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      minWidth: 16, height: 16, borderRadius: 100,
+                      background: active ? "#F59E0B" : "#A78BFA", color: "#04060F",
+                      fontSize: 9, fontWeight: 900, fontFamily: "'DM Mono',monospace",
+                      padding: "0 4px", lineHeight: 1,
+                      animation: "badge-pulse 2s ease-in-out infinite",
+                    }}>
+                      {pendingTestimonialsCount > 99 ? "99+" : pendingTestimonialsCount}
                     </span>
                   )}
                   {t.id === "affiliates" && pendingAffiliateCount > 0 && (
                     <span style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       minWidth: 16, height: 16, borderRadius: 100,
-                      background: active ? "#F59E0B" : "#FB7185",
-                      color: "#04060F",
-                      fontSize: 9, fontWeight: 900,
-                      fontFamily: "'DM Mono',monospace",
-                      padding: "0 4px",
-                      lineHeight: 1,
+                      background: active ? "#F59E0B" : "#FB7185", color: "#04060F",
+                      fontSize: 9, fontWeight: 900, fontFamily: "'DM Mono',monospace",
+                      padding: "0 4px", lineHeight: 1,
                       animation: "badge-pulse 2s ease-in-out infinite",
                     }}>
                       {pendingAffiliateCount > 99 ? "99+" : pendingAffiliateCount}

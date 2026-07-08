@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../contexts/AuthContext";
 import { PageTransition } from "../components/PageTransition";
@@ -20,6 +20,10 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Bug 2 fast-follow fix: read ?plan= query param so the selected plan is known at registration
+  const [searchParams] = useSearchParams();
+  const selectedPlan = searchParams.get("plan") || "";
+
   const { register, handleSubmit, watch, formState: { errors } } = useForm<RegForm>();
   const pw = watch("password", "");
 
@@ -37,7 +41,8 @@ export default function Register() {
   const onSubmit = async (data: RegForm) => {
     setLoading(true); setError("");
     try {
-      await authRegister(data);
+      // Pass selectedPlan through so onboarding/billing flows can use it
+      await authRegister({ ...data, plan: selectedPlan || undefined } as any);
       toast({ title: "Account created!", description: "Welcome to AUTOFLOWNG." });
       nav("/dashboard");
     } catch (e: any) {
@@ -58,7 +63,14 @@ export default function Register() {
         </div>
         <div className="af-glass" style={{ borderRadius: 24, padding: "36px 32px", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, transparent, #38BDF8, #A78BFA, transparent)" }} />
-          <h1 style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", marginBottom: 28, color: "#E8EEFF" }}>Create your account</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne',sans-serif", letterSpacing: "-0.04em", marginBottom: selectedPlan ? 12 : 28, color: "#E8EEFF" }}>Create your account</h1>
+
+          {/* Show selected plan badge if plan was passed via URL */}
+          {selectedPlan && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(0,200,150,0.1)", border: "1px solid rgba(0,200,150,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 20, fontSize: 11, fontWeight: 700, color: "#00C896", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <Check size={10} /> {selectedPlan} plan selected
+            </div>
+          )}
 
           {error && (
             <div style={{ display: "flex", gap: 8, background: "rgba(251,113,133,0.08)", border: "1px solid rgba(251,113,133,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, color: "#FB7185", fontSize: 13 }}>
