@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { referralsAPI } from "../lib/api";
+import { referralsAPI, affiliatesAPI } from "../lib/api";
 import { PageTransition, Stagger, StaggerItem } from "../components/PageTransition";
 import { queryKeys, invalidate } from "../lib/queryClient";
 import { useAuth } from "../contexts/AuthContext";
@@ -23,7 +23,7 @@ import { Tilt } from "../components/Tilt";
 import { useToast } from "@/hooks/use-toast";
 import {
   Copy, Check, Users, DollarSign, Gift, TrendingUp,
-  ArrowRight, Clock, CheckCircle2, XCircle, ArrowUpRight, Wallet,
+  ArrowRight, Clock, CheckCircle2, XCircle, ArrowUpRight, Wallet, Star, Lock,
 } from "lucide-react";
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
@@ -154,6 +154,20 @@ export default function Referrals() {
   const { data: refs = [] } = useQuery({ queryKey: queryKeys.referrals, queryFn: () => referralsAPI.list().then((d: any) => d.referrals || []) });
   const { data: balance } = useQuery({ queryKey: ["referrals", "balance"], queryFn: () => referralsAPI.balance() });
 
+  // Affiliate Program — opt-in upgrade layered on top of the flat bounty above.
+  const { data: affiliate, isLoading: affiliateLoading } = useQuery({
+    queryKey: queryKeys.affiliateMe,
+    queryFn: () => affiliatesAPI.me(),
+  });
+  const applyMut = useMutation({
+    mutationFn: () => affiliatesAPI.apply(),
+    onSuccess: () => {
+      toast({ title: "Application submitted", description: "We'll review it shortly." });
+      invalidate.affiliates();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
   const withdrawMut = useMutation({
     mutationFn: (data: any) => referralsAPI.withdraw(data),
     onSuccess: () => {
@@ -280,7 +294,7 @@ export default function Referrals() {
               </>
             ) : (
               <div style={{ fontSize: 13, color: C.faint, fontFamily: "'DM Sans',sans-serif" }}>
-                No referral code yet. Upgrade your plan to get one.
+                Setting up your referral link — refresh in a moment.
               </div>
             )}
           </Card>
@@ -385,6 +399,146 @@ export default function Referrals() {
                   </button>
                 </div>
               </div>
+            )}
+          </Card>
+        </Reveal>
+
+        {/* ── Affiliate Program (opt-in upgrade) ── */}
+        <Reveal delay={90}>
+          <Card accent={C.amber} style={{ marginBottom: 20, border: `1px solid rgba(251,191,36,0.15)` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <SectionLabel color={C.amber}>AFFILIATE PROGRAM</SectionLabel>
+              {affiliate?.enrolled && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                  fontFamily: "'DM Mono',monospace", borderRadius: 100, padding: "3px 10px",
+                  color: affiliate.status === "active" ? C.green
+                    : affiliate.status === "pending" ? C.amber
+                    : C.red,
+                  background: affiliate.status === "active" ? "rgba(0,200,150,0.08)"
+                    : affiliate.status === "pending" ? "rgba(251,191,36,0.08)"
+                    : "rgba(251,113,133,0.08)",
+                  border: `1px solid ${affiliate.status === "active" ? "rgba(0,200,150,0.2)" : affiliate.status === "pending" ? "rgba(251,191,36,0.2)" : "rgba(251,113,133,0.2)"}`,
+                }}>
+                  {affiliate.status?.toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            {affiliateLoading ? (
+              <Sk h={60} />
+            ) : !affiliate?.enrolled ? (
+              <div>
+                <p style={{ fontSize: 13, color: C.muted, fontFamily: "'DM Sans',sans-serif", marginBottom: 14, maxWidth: 520 }}>
+                  Go beyond the one-time bounty: apply to become an affiliate and earn
+                  <strong style={{ color: C.text }}> 15% recurring commission</strong> on every referred
+                  customer's monthly plan, paid out on every renewal for up to 12 months. Applications are
+                  reviewed by our team before activation.
+                </p>
+                <button
+                  data-testid="button-apply-affiliate"
+                  onClick={() => applyMut.mutate()}
+                  disabled={applyMut.isPending}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: C.amber, border: "none", borderRadius: 10,
+                    padding: "10px 20px", color: "#04060F", fontSize: 13, fontWeight: 700,
+                    cursor: applyMut.isPending ? "not-allowed" : "pointer",
+                    fontFamily: "'DM Sans',sans-serif", opacity: applyMut.isPending ? 0.7 : 1,
+                  }}
+                >
+                  <Star size={14} />
+                  {applyMut.isPending ? "Submitting…" : "Apply to become an affiliate"}
+                </button>
+              </div>
+            ) : affiliate.status === "pending" ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.muted, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+                <Clock size={16} color={C.amber} />
+                Your application is under review. We'll notify you once it's approved.
+              </div>
+            ) : affiliate.status === "rejected" ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.red, fontSize: 13, fontFamily: "'DM Sans',sans-serif", marginBottom: 12 }}>
+                  <XCircle size={16} />
+                  Application not approved{affiliate.rejectionReason ? `: ${affiliate.rejectionReason}` : "."}
+                </div>
+                <button
+                  onClick={() => applyMut.mutate()}
+                  disabled={applyMut.isPending}
+                  style={{
+                    background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10,
+                    padding: "8px 16px", color: C.text, fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                  }}
+                >
+                  Re-apply
+                </button>
+              </div>
+            ) : affiliate.status === "suspended" ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.red, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+                <Lock size={16} />
+                Your affiliate account is suspended{affiliate.suspendedReason ? `: ${affiliate.suspendedReason}` : ". Contact support for details."}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace", marginBottom: 4 }}>WITHDRAWABLE</div>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 900, fontFamily: "'Syne',sans-serif", color: C.green }}>
+                      ₦{Number(affiliate.commissionWithdrawable || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace", marginBottom: 4 }}>
+                      IN 7-DAY HOLD
+                    </div>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 900, fontFamily: "'Syne',sans-serif", color: C.amber }}>
+                      ₦{Number(affiliate.commissionHolding || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <div style={{ fontSize: 11, color: C.faint, fontFamily: "'DM Mono',monospace", marginBottom: 4 }}>LIFETIME EARNED</div>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 900, fontFamily: "'Syne',sans-serif", color: C.text }}>
+                      ₦{Number(affiliate.commissionLifetimeEarned || 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {affiliate.referrals?.length > 0 && (
+                  <div>
+                    <div style={{
+                      display: "grid", gridTemplateColumns: "1fr 90px 90px 100px",
+                      gap: 12, padding: "6px 12px", borderBottom: `1px solid ${C.border}`, marginBottom: 4,
+                    }}>
+                      {["CUSTOMER", "MONTH", "STATUS", "PLAN"].map(h => (
+                        <div key={h} style={{ fontSize: 10, fontWeight: 700, color: C.faint, fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em" }}>
+                          {h}
+                        </div>
+                      ))}
+                    </div>
+                    {affiliate.referrals.map((r: any, i: number) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 100px", gap: 12, padding: "8px 12px" }}>
+                        <div style={{ fontSize: 13, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>
+                          {r.referred_name || r.referred_email}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono',monospace" }}>
+                          {r.months_commissioned}/12
+                        </div>
+                        <div style={{
+                          fontSize: 10, fontWeight: 700, alignSelf: "center",
+                          color: r.status === "active" ? C.green : r.status === "completed" ? C.blue : r.status === "churned" ? C.red : C.faint,
+                          fontFamily: "'DM Mono',monospace", textTransform: "uppercase",
+                        }}>
+                          {r.status}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono',monospace" }}>
+                          {r.referred_plan?.toUpperCase() || "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </Reveal>
