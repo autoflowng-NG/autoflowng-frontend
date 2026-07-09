@@ -34,25 +34,32 @@ import {
 } from "lucide-react";
 
 // ── API helpers ───────────────────────────────────────────────────────────────
+// NOTE: this backend authenticates via `Authorization: Bearer <token>` (see
+// requireAuth in middleware/index.js), not cookies. The rest of the app reads
+// the token from localStorage under 'autoflowng_token' (see api/analyticsApi.ts,
+// api/executionsApi.ts) — mirror that here so these calls stop 401'ing.
+
+const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem("autoflowng_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const api = {
   get: (path: string) =>
-    fetch(path, { credentials: "include" }).then(r => {
+    fetch(path, { headers: { ...authHeaders() } }).then(r => {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json();
     }),
   post: (path: string, body?: unknown) =>
     fetch(path, {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }).then(r => r.json()),
   patch: (path: string, body: unknown) =>
     fetch(path, {
       method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     }).then(r => r.json()),
 };
